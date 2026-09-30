@@ -376,6 +376,28 @@ const allowedOrigins = APP_BASE_URL.split(",")
     .map((v) => v.trim())
     .filter(Boolean);
 
+// Nettoie une adresse : "https://XERA1.xyz/" devient "https://xera1.xyz"
+function normalizeOrigin(value) {
+    try {
+        return new URL(String(value || "").trim()).origin.toLowerCase();
+    } catch (_) {
+        return "";
+    }
+}
+
+// Liste CORS : adresses nettoyees + variante avec / sans "www."
+const corsAllowedOrigins = new Set();
+allowedOrigins.forEach((raw) => {
+    const origin = normalizeOrigin(raw);
+    if (!origin) return;
+    corsAllowedOrigins.add(origin);
+    const variant = new URL(origin);
+    variant.hostname = variant.hostname.startsWith("www.")
+        ? variant.hostname.slice(4)
+        : "www." + variant.hostname;
+    corsAllowedOrigins.add(variant.origin);
+});
+
 function isLoopbackOrigin(origin) {
     try {
         const url = new URL(String(origin || "").trim());
@@ -388,19 +410,35 @@ function isLoopbackOrigin(origin) {
     }
 }
 
+function isOriginAllowed(req) {
+    const origin = req.headers.origin;
+    if (!origin) return true; // webhooks, curl, appels serveur a serveur
+    const normalized = normalizeOrigin(origin);
+    if (corsAllowedOrigins.has(normalized) || isLoopbackOrigin(origin)) {
+        return true;
+    }
+    // Ton propre site qui appelle son propre serveur est toujours accepte
+    return normalized === normalizeOrigin(getRequestOrigin(req));
+}
+
+// Refus explicite : 403 clair, jamais 500
+app.use((req, res, next) => {
+    if (isOriginAllowed(req)) return next();
+    console.warn(
+        "[CORS] origine refusee:",
+        req.headers.origin,
+        "| host:",
+        req.headers.host,
+    );
+    return res.status(403).json({
+        error: "origin_not_allowed",
+        message: "Origine non autorisee.",
+    });
+});
+
 app.use(
     cors({
-        origin(origin, callback) {
-            if (!origin) {
-                callback(null, true);
-                return;
-            }
-            if (allowedOrigins.includes(origin) || isLoopbackOrigin(origin)) {
-                callback(null, true);
-                return;
-            }
-            callback(new Error("Origin not allowed by CORS"));
-        },
+        origin: true, // le controle est deja fait juste au-dessus
         methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     }),
 );
@@ -2488,6 +2526,7 @@ function isUuidString(value) {
 }
 
 function sendCheckoutErrorResponse(res, error, fallbackMessage, context = {}) {
+    const returnPath = context.returnPath || "/";
     const sourceCode = String(error?.code || "").trim() || "UNKNOWN";
     const requestId = context.requestId || crypto.randomUUID();
     const stage = String(context.stage || "checkout");
@@ -5230,7 +5269,7 @@ async function handleKPaySupportCheckout(req, res) {
                 res,
                 new Error("Clés KPay non configurées sur le serveur."),
                 "Le service de paiement KPay n'est pas encore configuré sur Vercel. Les variables KPAY_PUBLIC_KEY et KPAY_SECRET_KEY doivent être définies dans l'environnement Vercel.",
-                { returnPath: rawReturnPath || "/" },
+                { returnPath: "/" },
             );
         }
 
