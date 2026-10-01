@@ -67,10 +67,38 @@ function getBearerToken(req) {
 }
 
 function getSafeRedirectBase() {
-    return String(process.env.APP_BASE_URL || "http://localhost:3000").replace(
-        /\/$/,
-        "",
-    );
+    const configured =
+        process.env.APP_FRONTEND_URL ||
+        process.env.APP_BASE_URL ||
+        "http://localhost:3000";
+    return String(configured).split(",")[0].trim().replace(/\/$/, "");
+}
+
+function getOAuthCallbackUri(tool, config) {
+    if (tool === "fata" && config.redirectUri) {
+        return String(config.redirectUri).trim();
+    }
+    const callbackBase = String(
+        process.env.OAUTH_CALLBACK_BASE_URL ||
+            process.env.APP_BASE_URL ||
+            "http://localhost:3000",
+    )
+        .split(",")[0]
+        .trim()
+        .replace(/\/$/, "");
+    return `${callbackBase}/api/auth/${tool}/callback`;
+}
+
+function buildFataReturnUrl(params = {}) {
+    const fallback = `${getSafeRedirectBase()}/profile`;
+    const target = String(process.env.FATA_APP_RETURN_URL || fallback).trim();
+    const url = new URL(target);
+    for (const [key, value] of Object.entries(params)) {
+        if (value !== undefined && value !== null && String(value) !== "") {
+            url.searchParams.set(key, String(value));
+        }
+    }
+    return url.toString();
 }
 
 // POST /api/auth/:tool/start
@@ -98,19 +126,33 @@ router.post("/:tool/start", async (req, res) => {
         }
 
         const state = crypto.randomBytes(16).toString("hex");
-        const { challengeId, codeChallenge, codeVerifier, nonce } =
-            req.body || {};
+        const requestBody = req.body || {};
+        const { challengeId } = requestBody;
+        let codeVerifier = requestBody.codeVerifier || null;
+        let codeChallenge = requestBody.codeChallenge || null;
+        let nonce = requestBody.nonce || null;
+        let storedChallengeId = challengeId || null;
 
-        if (tool === "fata" && challengeId) {
-            try {
-                resolveChallengeConfig(challengeId);
-            } catch (error) {
-                return res
-                    .status(400)
-                    .json({
-                        error: error.message || "Challenge Fata invalide",
-                    });
+        if (tool === "fata") {
+            if (!config.clientId || !config.authUrl || !config.issuer) {
+                return res.status(503).json({
+                    error: "Configuration OAuth Fata indisponible",
+                });
             }
+            try {
+                storedChallengeId = resolveChallengeConfig(challengeId).id;
+            } catch (error) {
+                return res.status(400).json({
+                    error: error.message || "Challenge Fata invalide",
+                });
+            }
+
+            codeVerifier = crypto.randomBytes(32).toString("base64url");
+            codeChallenge = crypto
+                .createHash("sha256")
+                .update(codeVerifier)
+                .digest("base64url");
+            nonce = crypto.randomBytes(32).toString("base64url");
         }
 
         const { error: stateError } = await supabase
@@ -119,9 +161,9 @@ router.post("/:tool/start", async (req, res) => {
                 user_id: user.id,
                 state,
                 tool,
-                challenge_id: challengeId || null,
-                code_verifier: codeVerifier || null,
-                nonce: nonce || null,
+                challenge_id: storedChallengeId,
+                code_verifier: codeVerifier,
+                nonce,
             });
 
         if (stateError) {
@@ -131,17 +173,24 @@ router.post("/:tool/start", async (req, res) => {
                 .json({ error: "Impossible de démarrer la connexion OAuth" });
         }
 
-        const redirectUri = `${getSafeRedirectBase()}/api/auth/${tool}/callback`;
-        let authUrl = `${config.authUrl}?client_id=${encodeURIComponent(config.clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(config.scope)}&state=${encodeURIComponent(state)}&response_type=code`;
+        const redirectUri = getOAuthCallbackUri(tool, config);
+        const authorizationUrl = new URL(config.authUrl);
+        authorizationUrl.searchParams.set("client_id", config.clientId);
+        authorizationUrl.searchParams.set("redirect_uri", redirectUri);
+        authorizationUrl.searchParams.set("scope", config.scope);
+        authorizationUrl.searchParams.set("state", state);
+        authorizationUrl.searchParams.set("response_type", "code");
 
         if (codeChallenge) {
-            authUrl += `&code_challenge=${encodeURIComponent(codeChallenge)}&code_challenge_method=S256`;
+            authorizationUrl.searchParams.set("code_challenge", codeChallenge);
+            authorizationUrl.searchParams.set(
+                "code_challenge_method",
+                "S256",
+            );
         }
-        if (nonce) {
-            authUrl += `&nonce=${encodeURIComponent(nonce)}`;
-        }
+        if (nonce) authorizationUrl.searchParams.set("nonce", nonce);
 
-        return res.json({ authUrl });
+        return res.json({ authUrl: authorizationUrl.toString() });
     } catch (error) {
         console.error("[OAuth] start error:", error);
         return res
@@ -193,16 +242,38 @@ router.get("/:tool/callback", async (req, res) => {
     const config = getConfig(tool);
 
     const isFata = tool === "fata";
-    const sendOAuthError = (statusCode, message) => {
+    let callbackChallengeId = null;
+    const sendOAuthError = (statusCode, message, challengeId = callbackChallengeId) => {
         if (isFata) {
-            const redirectUrl = `${getSafeRedirectBase()}/profile?fata=error&reason=${encodeURIComponent(message)}`;
+            const redirectUrl = buildFataReturnUrl({
+                fata: "error",
+                reason: message,
+                challengeId,
+            });
             return res.redirect(redirectUrl);
         }
         return res.status(statusCode).json({ error: message });
     };
 
     if (oauthError) {
-        const errorMsg = oauthErrorDesc || oauthError || "Autorisation refusée par l'utilisateur";
+        const errorMsg =
+            oauthErrorDesc ||
+            oauthError ||
+            "Autorisation refusée par l'utilisateur";
+        if (isFata && state) {
+            const { data: rejectedState } = await supabase
+                .from("oauth_states")
+                .select("challenge_id")
+                .eq("state", state)
+                .eq("tool", tool)
+                .maybeSingle();
+            callbackChallengeId = rejectedState?.challenge_id || null;
+            await supabase
+                .from("oauth_states")
+                .delete()
+                .eq("state", state)
+                .eq("tool", tool);
+        }
         console.warn(`[OAuth] Provider error callback for ${tool}:`, errorMsg);
         return sendOAuthError(400, errorMsg);
     }
@@ -222,8 +293,24 @@ router.get("/:tool/callback", async (req, res) => {
         if (stateError || !storedState) {
             return sendOAuthError(400, "State invalide");
         }
+        callbackChallengeId = storedState.challenge_id || null;
 
-        const redirectUri = `${getSafeRedirectBase()}/api/auth/${tool}/callback`;
+        if (
+            isFata &&
+            (!storedState.challenge_id ||
+                !storedState.code_verifier ||
+                !storedState.nonce)
+        ) {
+            return sendOAuthError(400, "Contexte OIDC Fata incomplet");
+        }
+        if (isFata && !config.clientSecret) {
+            return sendOAuthError(
+                503,
+                "Configuration du client secret Fata indisponible côté serveur",
+            );
+        }
+
+        const redirectUri = getOAuthCallbackUri(tool, config);
         const tokenParams = new URLSearchParams({
             client_id: config.clientId,
             client_secret: config.clientSecret,
@@ -255,7 +342,7 @@ router.get("/:tool/callback", async (req, res) => {
 
         const tokenData = await tokenResponse.json();
         if (!tokenData.access_token) {
-            console.error("[OAuth] Échec échange token:", tokenData);
+            console.error("[OAuth] Token response missing access token");
             return sendOAuthError(500, "Impossible de récupérer le token OAuth");
         }
 
@@ -267,7 +354,7 @@ router.get("/:tool/callback", async (req, res) => {
 
             try {
                 const decoded = await verifyIdToken(tokenData.id_token, config);
-                if (storedState.nonce && decoded.nonce !== storedState.nonce) {
+                if (!storedState.nonce || decoded.nonce !== storedState.nonce) {
                     return sendOAuthError(400, "Nonce invalide");
                 }
 
@@ -393,15 +480,19 @@ router.get("/:tool/callback", async (req, res) => {
             console.warn("[OAuth] ingestion enqueue warning:", ingestionError);
         }
 
-        let redirectUrl = `${getSafeRedirectBase()}/profile?connection=success`;
         if (tool === "fata") {
-            redirectUrl += "&fata=success";
-            if (storedState.challenge_id) {
-                redirectUrl += `&challengeId=${encodeURIComponent(storedState.challenge_id)}`;
-            }
+            return res.redirect(
+                buildFataReturnUrl({
+                    connection: "success",
+                    fata: "success",
+                    challengeId: storedState.challenge_id,
+                }),
+            );
         }
 
-        return res.redirect(redirectUrl);
+        return res.redirect(
+            `${getSafeRedirectBase()}/profile?connection=success`,
+        );
     } catch (error) {
         console.error("[OAuth] callback error:", error);
         return sendOAuthError(500, "Erreur pendant le callback OAuth");

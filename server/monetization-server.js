@@ -29,9 +29,10 @@ dotenv.config();
 
 const {
     APP_BASE_URL = "http://localhost:3000",
+    APP_FRONTEND_URL = "",
     PORT = 5050,
     SUPABASE_URL = "https://ssbuagqwjptyhavinkxg.supabase.co",
-    SUPABASE_SERVICE_ROLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNzYnVhZ3F3anB0eWhhdmlua3hnIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2OTk1MjUzMywiZXhwIjoyMDg1NTI4NTMzfQ._aEaTXFxqpfx64bts6Z7FoP3L4oHMGcqoi08yREU33s",
+    SUPABASE_SERVICE_ROLE_KEY,
     VAPID_PUBLIC_KEY = "BDyU4kv_cnxruA5n_i3kw0-ipEXZTINrLmwVAhyyFhXsIVC6eImDqhkLVLs77Fl-TJdyOJVZsnp-k6z_7bu0bTM",
     VAPID_PRIVATE_KEY = "6dmRHoFpyGEFgL487qqwBc9BQ184TC8N9Yd3siS94Skpka",
     PUSH_CONTACT_EMAIL = "mailto:hello@xera1.xyz",
@@ -367,12 +368,8 @@ app.post("/api/account/delete", async (req, res) => {
     }
 });
 
-// Routes OAuth
-app.use("/api/auth", (req, res, next) => {
-    return require("./oauth-handler")(req, res, next);
-});
-
-const allowedOrigins = APP_BASE_URL.split(",")
+const allowedOrigins = [APP_BASE_URL, APP_FRONTEND_URL]
+    .flatMap((value) => String(value || "").split(","))
     .map((v) => v.trim())
     .filter(Boolean);
 
@@ -442,6 +439,11 @@ app.use(
         methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     }),
 );
+
+// Routes OAuth: keep body parsing and CORS in front of these handlers.
+app.use("/api/auth", (req, res, next) => {
+    return require("./oauth-handler")(req, res, next);
+});
 
 const APP_PROFILE_CACHE_TTL_MS = Math.max(
     5000,
@@ -570,6 +572,7 @@ function escapeHtmlAttr(value) {
 const PRODUCTION_FALLBACK_ORIGIN = "https://xera1.xyz";
 const PRIMARY_ORIGIN = (() => {
     const fromEnv =
+        APP_FRONTEND_URL.split(",")[0]?.trim() ||
         allowedOrigins[0] ||
         (APP_BASE_URL ? String(APP_BASE_URL).split(",")[0] : "");
     const clean = stripTrailingSlash(fromEnv);

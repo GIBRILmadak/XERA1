@@ -7,7 +7,9 @@ function normalizeText(value) {
 function getFataChallengeConfig() {
     const config = {
         realChallengeId: normalizeText(process.env.FATA_REAL_CHALLENGE_ID),
-        testChallengeId: normalizeText(process.env.FATA_TEST_CHALLENGE_ID),
+        testChallengeId: normalizeText(
+            process.env.FATA_TEST_CHALLENGE_ID || "xera1-test",
+        ),
         req_arc: normalizeText(process.env.FATA_REQ_ARC || "req_arc"),
         req_preuve: normalizeText(process.env.FATA_REQ_PREUVE || "req_preuve"),
         req_jalon: normalizeText(process.env.FATA_REQ_JALON || "req_jalon"),

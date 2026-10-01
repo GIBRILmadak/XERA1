@@ -16,6 +16,22 @@ const {
 } = require("../server/fata-api-client");
 
 describe("Fata × XERA1 Contract & Logic Unit Tests", () => {
+    test("The documented test challenge is enabled by default", () => {
+        const previous = process.env.FATA_TEST_CHALLENGE_ID;
+        delete process.env.FATA_TEST_CHALLENGE_ID;
+        try {
+            const challenge = resolveChallengeConfig("xera1-test");
+            assert.strictEqual(challenge.id, "xera1-test");
+            assert.strictEqual(challenge.is_test, true);
+            assert.strictEqual(challenge.req_arc, "req_arc");
+            assert.strictEqual(challenge.req_preuve, "req_preuve");
+            assert.strictEqual(challenge.req_jalon, "req_jalon");
+        } finally {
+            if (previous === undefined) delete process.env.FATA_TEST_CHALLENGE_ID;
+            else process.env.FATA_TEST_CHALLENGE_ID = previous;
+        }
+    });
+
     test("Fata Challenge Config Resolution", () => {
         // Set test env var
         process.env.FATA_TEST_CHALLENGE_ID = "xera1-test";

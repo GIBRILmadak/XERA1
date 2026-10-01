@@ -3,42 +3,32 @@
 (function (window) {
     "use strict";
 
-    const FATA_STORAGE_KEY_VERIFIER = "xera1_fata_code_verifier";
-    const FATA_STORAGE_KEY_NONCE = "xera1_fata_nonce";
     const FATA_STORAGE_KEY_CHALLENGE = "xera1_fata_challenge_id";
 
-    function generateRandomString(length) {
-        const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
-        const randomValues = new Uint8Array(length);
-        window.crypto.getRandomValues(randomValues);
-        let result = "";
-        for (let i = 0; i < length; i++) {
-            result += charset[randomValues[i] % charset.length];
+    function getApiBaseUrl() {
+        const configured = String(window.XERA_API_BASE_URL || "").trim();
+        if (configured) return configured.replace(/\/+$/, "");
+
+        const { hostname, port, protocol } = window.location;
+        if (
+            (hostname === "localhost" || hostname === "127.0.0.1") &&
+            port === "5502"
+        ) {
+            return `${protocol}//${hostname}:3000`;
         }
-        return result;
+        return "";
     }
 
-    async function sha256(plain) {
-        const encoder = new TextEncoder();
-        const data = encoder.encode(plain);
-        return window.crypto.subtle.digest("SHA-256", data);
+    function apiUrl(path) {
+        return `${getApiBaseUrl()}${path}`;
     }
 
-    function base64UrlEncode(arrayBuffer) {
-        const bytes = new Uint8Array(arrayBuffer);
-        let binary = "";
-        for (let i = 0; i < bytes.byteLength; i++) {
-            binary += String.fromCharCode(bytes[i]);
-        }
-        return window.btoa(binary)
-            .replace(/\+/g, "-")
-            .replace(/\//g, "_")
-            .replace(/=+$/, "");
-    }
-
-    async function generatePkceChallenge(codeVerifier) {
-        const buffer = await sha256(codeVerifier);
-        return base64UrlEncode(buffer);
+    function getLoginPath() {
+        const { hostname, port } = window.location;
+        return (hostname === "localhost" || hostname === "127.0.0.1") &&
+            port === "5502"
+            ? "/login.html"
+            : "/login";
     }
 
     function parseUrlParams() {
@@ -46,8 +36,11 @@
         const params = new URLSearchParams(search);
         return {
             fata: params.get("fata"),
-            challengeId: params.get("challengeId"),
+            challengeId:
+                params.get("challengeId") ||
+                sessionStorage.getItem(FATA_STORAGE_KEY_CHALLENGE),
             connection: params.get("connection"),
+            reason: params.get("reason"),
         };
     }
 
@@ -60,41 +53,43 @@
                 }
             } catch (_) {}
         }
-        return localStorage.getItem("sb-ssbuagqwjptyhavinkxg-auth-token") || "";
+        const storedSession =
+            localStorage.getItem("sb-ssbuagqwjptyhavinkxg-auth-token") || "";
+        try {
+            return JSON.parse(storedSession).access_token || "";
+        } catch (_) {
+            return storedSession;
+        }
     }
 
     async function startFataOidcFlow(overrideChallengeId) {
         const urlParams = parseUrlParams();
-        const challengeId = overrideChallengeId || urlParams.challengeId || sessionStorage.getItem(FATA_STORAGE_KEY_CHALLENGE) || "xera1-test";
-
-        const codeVerifier = generateRandomString(64);
-        const codeChallenge = await generatePkceChallenge(codeVerifier);
-        const nonce = generateRandomString(32);
-
-        sessionStorage.setItem(FATA_STORAGE_KEY_VERIFIER, codeVerifier);
-        sessionStorage.setItem(FATA_STORAGE_KEY_NONCE, nonce);
+        const challengeId =
+            overrideChallengeId ||
+            urlParams.challengeId ||
+            sessionStorage.getItem(FATA_STORAGE_KEY_CHALLENGE) ||
+            "xera1-test";
         sessionStorage.setItem(FATA_STORAGE_KEY_CHALLENGE, challengeId);
 
-        const token = await getAuthToken();
-        if (!token) {
-            alert("Veuillez vous connecter à XERA1 avant de lier votre compte Fata.");
-            window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`;
-            return;
-        }
-
         try {
-            const response = await fetch("/api/auth/fata/start", {
+            const token = await getAuthToken();
+            if (!token) {
+                alert(
+                    "Veuillez vous connecter à XERA1 avant de lier votre compte Fata.",
+                );
+                const redirect =
+                    window.location.pathname + window.location.search;
+                window.location.href = `${getLoginPath()}?redirect=${encodeURIComponent(redirect)}`;
+                return;
+            }
+
+            const response = await fetch(apiUrl("/api/auth/fata/start"), {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                     Authorization: `Bearer ${token}`,
                 },
-                body: JSON.stringify({
-                    challengeId,
-                    codeChallenge,
-                    codeVerifier,
-                    nonce,
-                }),
+                body: JSON.stringify({ challengeId }),
             });
 
             if (!response.ok) {
@@ -103,14 +98,18 @@
             }
 
             const data = await response.json();
-            if (data && data.authUrl) {
-                window.location.href = data.authUrl;
-            } else {
+            if (!data || !data.authUrl) {
                 throw new Error("URL d'autorisation Fata invalide");
             }
+            window.location.href = data.authUrl;
         } catch (error) {
             console.error("[Fata OIDC Error]:", error);
             alert(`Échec de démarrage de la connexion Fata: ${error.message}`);
+            const connectBtn = document.querySelector(".fata-connect-btn");
+            if (connectBtn) {
+                connectBtn.disabled = false;
+                connectBtn.textContent = "Connecter mon compte Fata";
+            }
         }
     }
 
@@ -119,7 +118,7 @@
         if (!token) return null;
 
         try {
-            const response = await fetch("/api/fata/status", {
+            const response = await fetch(apiUrl("/api/fata/status"), {
                 headers: {
                     Authorization: `Bearer ${token}`,
                 },
@@ -145,17 +144,37 @@
 
         const urlParams = parseUrlParams();
 
-        if (urlParams.fata === "success" || urlParams.challengeId) {
+        if (
+            urlParams.fata === "success" ||
+            urlParams.fata === "error" ||
+            urlParams.challengeId
+        ) {
             if (panel) {
                 panel.classList.add("is-open");
                 if (trigger) trigger.setAttribute("aria-expanded", "true");
             }
         }
 
+        if (urlParams.fata === "error" && connectionNote) {
+            connectionNote.hidden = false;
+            connectionNote.textContent =
+                urlParams.reason ||
+                "La connexion Fata a échoué. Vous pouvez réessayer.";
+        }
+
         if (trigger && panel) {
-            trigger.addEventListener("click", function () {
-                const isOpen = panel.classList.toggle("is-open");
-                trigger.setAttribute("aria-expanded", String(isOpen));
+            trigger.setAttribute(
+                "aria-expanded",
+                String(panel.classList.contains("is-open")),
+            );
+            trigger.addEventListener("click", async function () {
+                const status = await checkFataStatus();
+                if (status && status.connected) {
+                    const isOpen = panel.classList.toggle("is-open");
+                    trigger.setAttribute("aria-expanded", String(isOpen));
+                    return;
+                }
+                startFataOidcFlow();
             });
         }
 

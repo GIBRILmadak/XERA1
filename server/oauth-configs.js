@@ -8,35 +8,24 @@ function readEnv(...keys) {
     return "";
 }
 
-const FATA_ISSUER = readEnv(
-    "FATA_OIDC_ISSUER",
-    "FATA_ISSUER",
-    "https://fata.app/oidc",
-).replace(/\/$/, "");
-const FATA_API_BASE = readEnv(
-    "FATA_API_BASE_URL",
-    "FATA_API_BASE",
-    "https://fata.app/api",
-).replace(/\/$/, "");
-const FATA_DISCOVERY_URL = readEnv(
-    "FATA_OIDC_DISCOVERY_URL",
-    `${FATA_ISSUER}/.well-known/openid-configuration`,
-);
+function readEnvOrDefault(defaultValue, ...keys) {
+    return readEnv(...keys) || defaultValue;
+}
 
 function buildOauthConfigs() {
-    const FATA_ISSUER = readEnv(
+    const FATA_ISSUER = readEnvOrDefault(
+        "https://fata.app/oidc",
         "FATA_OIDC_ISSUER",
         "FATA_ISSUER",
-        "https://fata.app/oidc",
     ).replace(/\/$/, "");
-    const FATA_API_BASE = readEnv(
+    const FATA_API_BASE = readEnvOrDefault(
+        "https://fata.app/api",
         "FATA_API_BASE_URL",
         "FATA_API_BASE",
-        "https://fata.app/api",
     ).replace(/\/$/, "");
-    const FATA_DISCOVERY_URL = readEnv(
-        "FATA_OIDC_DISCOVERY_URL",
+    const FATA_DISCOVERY_URL = readEnvOrDefault(
         `${FATA_ISSUER}/.well-known/openid-configuration`,
+        "FATA_OIDC_DISCOVERY_URL",
     );
 
     return {
@@ -69,17 +58,31 @@ function buildOauthConfigs() {
             scope: "https://www.googleapis.com/auth/cloud-platform.read-only",
         },
         fata: {
-            clientId: readEnv("FATA_CLIENT_ID", "CLIENT_ID"),
+            clientId: readEnvOrDefault(
+                "xera1-26f84726",
+                "FATA_CLIENT_ID",
+                "CLIENT_ID",
+            ),
             clientSecret: readEnv(
                 "FATA_CLIENT_SECRET",
                 "CLIENT_SECRET",
             ),
             issuer: FATA_ISSUER,
             discoveryUrl: FATA_DISCOVERY_URL,
-            authUrl: readEnv("FATA_OIDC_AUTH_URL", "https://fata.app/oidc/authorize"),
-            tokenUrl: readEnv("FATA_OIDC_TOKEN_URL", "https://fata.app/oidc/token"),
-            jwksUrl: readEnv("FATA_OIDC_JWKS_URL", "https://fata.app/oidc/jwks"),
+            authUrl: readEnvOrDefault(
+                "https://fata.app/oidc/authorize",
+                "FATA_OIDC_AUTH_URL",
+            ),
+            tokenUrl: readEnvOrDefault(
+                "https://fata.app/oidc/token",
+                "FATA_OIDC_TOKEN_URL",
+            ),
+            jwksUrl: readEnvOrDefault(
+                "https://fata.app/oidc/jwks",
+                "FATA_OIDC_JWKS_URL",
+            ),
             apiBase: FATA_API_BASE,
+            redirectUri: readEnv("FATA_OIDC_REDIRECT_URI"),
             scope: "openid profile action-completions:connect",
         },
     };

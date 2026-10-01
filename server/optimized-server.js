@@ -12,6 +12,7 @@ const oauthHandler = require("./oauth-handler");
 
 const {
     APP_BASE_URL = "http://localhost:3000",
+    APP_FRONTEND_URL = "",
     PORT = 5050,
     SUPABASE_URL,
     SUPABASE_SERVICE_ROLE_KEY,
@@ -53,13 +54,12 @@ if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 const app = express();
 
-app.use("/api/auth", oauthHandler);
-
 // Middleware optimisé
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
-const allowedOrigins = APP_BASE_URL.split(",")
+const allowedOrigins = [APP_BASE_URL, APP_FRONTEND_URL]
+    .flatMap((value) => String(value || "").split(","))
     .map((v) => v.trim())
     .filter(Boolean);
 app.use(
@@ -69,8 +69,13 @@ app.use(
     }),
 );
 
+app.use("/api/auth", oauthHandler);
+
 const PRIMARY_ORIGIN =
-    allowedOrigins[0] || APP_BASE_URL.split(",")[0] || "http://localhost:3000";
+    APP_FRONTEND_URL.split(",")[0]?.trim() ||
+    allowedOrigins[0] ||
+    APP_BASE_URL.split(",")[0] ||
+    "http://localhost:3000";
 
 // Configuration du cache et headers optimisés
 const CACHE_DURATION = 365 * 24 * 60 * 60; // 1 an en secondes
@@ -219,6 +224,60 @@ app.get("/api/health", (req, res) => {
         sessionTimeout: "4h",
         cache: "enabled",
     });
+});
+
+// Fata linkage and challenge status for the authenticated XERA1 user.
+app.get("/api/fata/status", async (req, res) => {
+    const token = getBearerToken(req);
+    if (!token) {
+        return res.status(401).json({ error: "Utilisateur non identifié" });
+    }
+
+    try {
+        const {
+            data: { user },
+            error: authError,
+        } = await supabase.auth.getUser(token);
+        if (authError || !user) {
+            return res.status(401).json({ error: "Utilisateur non identifié" });
+        }
+
+        const [linkageResult, pendingResult, qualificationResult] =
+            await Promise.all([
+                supabase
+                    .from("fata_linkages")
+                    .select("*")
+                    .eq("user_id", user.id)
+                    .maybeSingle(),
+                supabase
+                    .from("fata_pending_events")
+                    .select("*")
+                    .eq("user_id", user.id)
+                    .order("created_at", { ascending: false }),
+                supabase
+                    .from("fata_qualifications")
+                    .select("*")
+                    .eq("user_id", user.id)
+                    .maybeSingle(),
+            ]);
+
+        const queryError =
+            linkageResult.error ||
+            pendingResult.error ||
+            qualificationResult.error;
+        if (queryError) throw queryError;
+
+        const linkage = linkageResult.data || null;
+        return res.json({
+            connected: Boolean(linkage),
+            linkage,
+            qualification: qualificationResult.data || null,
+            pendingEvents: pendingResult.data || [],
+        });
+    } catch (error) {
+        console.error("Fata status error:", error?.message || "query failed");
+        return res.status(500).json({ error: "Failed to fetch Fata status" });
+    }
 });
 
 // Importer les fonctions du serveur original
