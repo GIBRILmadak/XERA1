@@ -260,26 +260,23 @@
 
         <!-- Popover Hub Profil -->
         <div id="profile-hub-popover" class="profile-hub-popover">
-            <div class="hub-user-header">
-                <img id="hub-user-avatar" class="hub-user-avatar" src="icons/logo.png" alt="Avatar" />
+            <!-- En-tête profil cliquable → mène au profil + édition -->
+            <a href="profile-personal.html" class="hub-user-header hub-user-header--link" title="Voir et modifier mon profil">
+                <div class="hub-avatar-wrap">
+                    <img id="hub-user-avatar" class="hub-user-avatar" src="icons/logo.png" alt="Avatar" />
+                    <span class="hub-avatar-edit-hint"><i class="fas fa-pen"></i></span>
+                </div>
                 <div class="hub-user-info">
                     <span id="hub-user-name" class="hub-user-name">Bâtisseur XERA1</span>
                     <span id="hub-user-handle" class="hub-user-handle">@builder</span>
                     <span id="hub-pro-badge" class="hub-badge-pro" style="display: none;">
                         <i class="fas fa-certificate"></i> PRO
                     </span>
+                    <span class="hub-edit-label"><i class="fas fa-pencil-alt"></i> Modifier le profil</span>
                 </div>
-            </div>
+            </a>
 
             <div class="hub-menu-group">
-                <button type="button" class="hub-menu-item" onclick="navigateTo('discover')">
-                    <i class="fas fa-compass"></i>
-                    <span>Découvrir le Feed</span>
-                </button>
-                <button type="button" class="hub-menu-item" onclick="handleProfileNavigation()">
-                    <i class="fas fa-user-circle"></i>
-                    <span>Mon Profil & Trajectoire</span>
-                </button>
                 <button type="button" class="hub-menu-item" id="nav-pro-page" onclick="window.navigateToProfessionalPage?.()" style="display: none;">
                     <i class="fas fa-building"></i>
                     <span>Page Pro / Entreprise</span>
