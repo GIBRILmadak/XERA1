@@ -19782,3 +19782,46 @@ select:focus-visible {
 
 /* Transitions homogènes */
 a, button, input, select, textarea { transition-timing-function: cubic-bezier(0.16,1,0.3,1); }
+/* FIX MESSAGES LAYOUT SCROLL */
+body.messages-screen {
+    overflow: hidden !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+}
+
+body.messages-screen nav {
+    height: 68px !important;
+    box-sizing: border-box;
+}
+
+body.messages-screen #messages {
+    height: calc(100vh - 68px) !important;
+    height: calc(100dvh - 68px) !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+body.messages-screen .messages-container {
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+    flex: 1 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    min-height: 0 !important;
+}
+
+body.messages-screen .messages-mount {
+    flex: 1 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    min-height: 0 !important;
+}
+
+body.messages-screen .messages-page {
+    flex: 1 !important;
+    height: 100% !important;
+    min-height: 0 !important;
+}

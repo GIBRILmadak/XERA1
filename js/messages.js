@@ -600,7 +600,8 @@
                 <aside class="threads-panel" id="threads-panel">
                     <div class="messages-head">
                         <div class="messages-head-title-wrap">
-                            <div class="messages-brand-mark">X</div>
+                            
+                            <button type="button" class="btn-ghost messages-home-btn" onclick="location.href='index.html'" aria-label="Accueil" style="width: 34px; height: 34px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.05); color: var(--text-secondary); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s ease; margin-right: 0.5rem;"><i class="fa-solid fa-house"></i></button>
                             <h3>Messages</h3>
                         </div>
                         <button type="button" id="messages-refresh-btn" class="btn-ghost messages-refresh-btn" aria-label="Actualiser">
