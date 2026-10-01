@@ -4,25 +4,164 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Paiements KPay | XERA1</title>
+    <meta name="theme-color" content="#050505">
     <link rel="icon" type="image/png" href="icons/logo.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
-    <link rel="stylesheet" href="css/admin.css">
+    <link rel="stylesheet" href="css/glamour-payments.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.111.0/dist/umd/supabase.js"></script>
 </head>
-<body>
-<div class="lang-switcher-nav">
-                <select id="header-lang-select" class="nav-lang-select" aria-label="Language selection">
-                    <option value="fr">FR</option>
-                    <option value="en">EN</option>
-                </select>
+<body class="pay-page-wrapper">
+    <!-- Navigation -->
+    <nav style="position:fixed;top:0;left:0;right:0;height:68px;background:rgba(5,5,5,0.88);backdrop-filter:blur(24px) saturate(180%);border-bottom:1px solid rgba(255,255,255,0.07);z-index:1000;display:flex;align-items:center;justify-content:space-between;padding:0 clamp(1rem,5vw,2.5rem)">
+        <a href="index.html" style="display:flex;align-items:center;gap:0.6rem;text-decoration:none;color:#f5f5f5;font-weight:700;font-size:1.1rem;font-family:'Outfit',sans-serif">
+            <img src="icons/logo.png" style="width:28px;height:28px;object-fit:contain" alt="XERA1">
+            XΞRA1
+        </a>
+        <a href="javascript:history.back()" style="display:flex;align-items:center;gap:0.5rem;color:#888;text-decoration:none;font-size:0.85rem;transition:color 0.2s" onmouseover="this.style.color='#f5f5f5'" onmouseout="this.style.color='#888'">
+            <i class="fas fa-arrow-left"></i> Retour
+        </a>
+    </nav>
+
+    <!-- Hero -->
+    <div class="pay-hero pay-animate">
+        <span class="pay-hero-eyebrow"><i class="fas fa-bolt"></i>&nbsp; KPay — Paiements XERA1</span>
+        <h1 class="pay-hero-title">Votre portefeuille numérique</h1>
+        <p class="pay-hero-sub">Gérez vos dépôts, retraits et l'historique de vos transactions en toute sécurité.</p>
+    </div>
+
+    <!-- Statistiques -->
+    <div class="pay-stats-row pay-animate pay-animate--d1" id="kpay-stats-row">
+        <div class="pay-stat-card">
+            <div class="pay-stat-label"><i class="fas fa-wallet" style="margin-right:0.4rem"></i>Solde disponible</div>
+            <div class="pay-stat-value" id="kpay-balance">— CFA</div>
+            <div class="pay-stat-trend"><i class="fas fa-circle" style="font-size:0.5rem"></i> Mis à jour maintenant</div>
+        </div>
+        <div class="pay-stat-card">
+            <div class="pay-stat-label"><i class="fas fa-arrow-down" style="margin-right:0.4rem"></i>Revenus totaux</div>
+            <div class="pay-stat-value" id="kpay-total-in">— CFA</div>
+        </div>
+        <div class="pay-stat-card">
+            <div class="pay-stat-label"><i class="fas fa-arrow-up" style="margin-right:0.4rem"></i>Retraits totaux</div>
+            <div class="pay-stat-value" id="kpay-total-out">— CFA</div>
+        </div>
+        <div class="pay-stat-card">
+            <div class="pay-stat-label"><i class="fas fa-receipt" style="margin-right:0.4rem"></i>Transactions</div>
+            <div class="pay-stat-value" id="kpay-tx-count">—</div>
+        </div>
+    </div>
+
+    <!-- Mobile Money -->
+    <div class="pay-mobile-money-section pay-animate pay-animate--d2">
+        <h2 class="pay-section-title">Mobile Money</h2>
+        <p class="pay-section-sub">Sélectionnez votre opérateur pour effectuer un dépôt ou un retrait.</p>
+
+        <div class="pay-operators-grid">
+            <div class="pay-operator-card" onclick="selectOperator('mtn')" id="op-mtn">
+                <div class="pay-operator-logo">🟡</div>
+                <div class="pay-operator-name">MTN Mobile Money</div>
+                <div class="pay-operator-country">Côte d'Ivoire · Ghana · RDC</div>
             </div>
-    <main id="kpay-payments-page" class="settings-container admin-page" style="margin-top:40px"></main>
+            <div class="pay-operator-card" onclick="selectOperator('orange')" id="op-orange">
+                <div class="pay-operator-logo">🟠</div>
+                <div class="pay-operator-name">Orange Money</div>
+                <div class="pay-operator-country">CI · Sénégal · Mali · Cameroun</div>
+            </div>
+            <div class="pay-operator-card" onclick="selectOperator('airtel')" id="op-airtel">
+                <div class="pay-operator-logo">🔴</div>
+                <div class="pay-operator-name">Airtel Money</div>
+                <div class="pay-operator-country">RDC · Zambie · Kenya</div>
+            </div>
+            <div class="pay-operator-card" onclick="selectOperator('moov')" id="op-moov">
+                <div class="pay-operator-logo">🔵</div>
+                <div class="pay-operator-name">Moov Money</div>
+                <div class="pay-operator-country">CI · Bénin · Togo · Burkina</div>
+            </div>
+        </div>
+
+        <div class="pay-mm-form" id="pay-mm-form">
+            <div class="pay-form-row">
+                <div class="pay-form-group">
+                    <label class="pay-form-label">Type d'opération</label>
+                    <select class="pay-form-input" id="pay-op-type">
+                        <option value="deposit">Dépôt</option>
+                        <option value="withdraw">Retrait</option>
+                    </select>
+                </div>
+                <div class="pay-form-group">
+                    <label class="pay-form-label">Opérateur sélectionné</label>
+                    <input type="text" class="pay-form-input" id="pay-op-name" value="Aucun opérateur sélectionné" readonly style="opacity:0.6">
+                </div>
+            </div>
+            <div class="pay-form-row">
+                <div class="pay-form-group">
+                    <label class="pay-form-label">Numéro de téléphone</label>
+                    <input type="tel" class="pay-form-input" id="pay-phone" placeholder="+225 07 XX XX XX XX">
+                </div>
+                <div class="pay-form-group">
+                    <label class="pay-form-label">Montant (CFA)</label>
+                    <input type="number" class="pay-form-input" id="pay-amount" placeholder="Ex: 5000" min="500">
+                </div>
+            </div>
+            <button type="button" class="pay-cta-btn pay-cta-btn--primary" onclick="submitKpayTransaction()" style="margin-top:0.5rem">
+                <i class="fas fa-paper-plane"></i> Confirmer la transaction
+            </button>
+        </div>
+    </div>
+
+    <!-- Transactions -->
+    <div class="pay-transactions-section pay-animate pay-animate--d3">
+        <h2 class="pay-section-title">Historique des transactions</h2>
+        <p class="pay-section-sub">Vos 50 dernières opérations KPay.</p>
+        <div class="pay-table-wrap">
+            <div id="kpay-payments-page">
+                <!-- Rendu dynamiquement par renderKpayPaymentsPage() -->
+                <div class="pay-empty-state">
+                    <div class="pay-empty-icon"><i class="fas fa-receipt"></i></div>
+                    <div class="pay-empty-text">Chargement des transactions...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="js/router.js"></script>
     <script src="js/supabase-config.js"></script>
     <script src="js/monetization-utils.js"></script>
     <script src="js/app-supabase.js"></script>
     <script>
-        document.addEventListener('DOMContentLoaded', () => window.renderKpayPaymentsPage?.());
+        let selectedOperator = null;
+
+        function selectOperator(op) {
+            selectedOperator = op;
+            document.querySelectorAll('.pay-operator-card').forEach(c => c.classList.remove('active'));
+            const card = document.getElementById('op-' + op);
+            if (card) card.classList.add('active');
+            const names = { mtn: 'MTN Mobile Money', orange: 'Orange Money', airtel: 'Airtel Money', moov: 'Moov Money' };
+            const nameInput = document.getElementById('pay-op-name');
+            if (nameInput) { nameInput.value = names[op] || op; nameInput.style.opacity = '1'; }
+        }
+
+        function submitKpayTransaction() {
+            if (!selectedOperator) { alert('Veuillez sélectionner un opérateur.'); return; }
+            const phone = document.getElementById('pay-phone').value.trim();
+            const amount = document.getElementById('pay-amount').value;
+            const opType = document.getElementById('pay-op-type').value;
+            if (!phone) { alert('Veuillez entrer votre numéro de téléphone.'); return; }
+            if (!amount || Number(amount) < 500) { alert('Le montant minimum est de 500 CFA.'); return; }
+            // Déléguer au système existant si disponible
+            if (typeof window.handleKpayTransaction === 'function') {
+                window.handleKpayTransaction({ operator: selectedOperator, phone, amount: Number(amount), type: opType });
+            } else {
+                alert('Système de paiement en cours de chargement. Veuillez réessayer dans quelques secondes.');
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            window.renderKpayPaymentsPage?.();
+        });
     </script>
     <script src="js/i18n.js"></script>
     <script src="js/seo-schema.js"></script>
