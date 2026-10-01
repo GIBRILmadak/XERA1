@@ -12,3 +12,5 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 
+walkthrough.artifact.md
+*.artifact.md
