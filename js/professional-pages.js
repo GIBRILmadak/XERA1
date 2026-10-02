@@ -808,71 +808,23 @@ class XERAProfessionalManager {
                 return;
             }
 
-            // Détection renforcée du statut PRO
             const isSuperAdmin =
                 window.currentUser?.id ===
                 "b0f9f893-1706-4721-899c-d26ad79afc86";
-            const isUserPro =
-                isSuperAdmin ||
-                (window.isProUser && window.isProUser(window.currentUser)) ||
-                this.isNonPersonalAccount(window.currentUser);
-
-            const userMetadata = window.currentUser?.user_metadata || {};
-            const isProByMetadata =
-                userMetadata.plan === "pro" ||
-                userMetadata.plan === "professional" ||
-                userMetadata.role === "pro" ||
-                userMetadata.role === "professional" ||
-                userMetadata.subscription_tier === "pro" ||
-                userMetadata.subscription_tier === "professional";
 
             if (navBtn) {
-                if (hasPage || isUserPro || isProByMetadata) {
-                    if (hasPage) {
-                        this.myPageSlug = pages[0].slug;
-                    }
+                this.myPageSlug = hasPage ? pages[0].slug : null;
+                navBtn.style.setProperty("display", "flex", "important");
+                navBtn.title = hasPage
+                    ? "Basculer vers ma Page Pro"
+                    : "Créer une Page Pro";
 
-                    navBtn.style.setProperty("display", "flex", "important");
-                    navBtn.title = hasPage
-                        ? "Accéder à ma Page Pro"
-                        : "Configurer ma Page Pro";
+                console.log(
+                    "[Pro] Entrée Page Pro disponible. Slug:",
+                    this.myPageSlug,
+                );
 
-                    // Fallback href pour SEO et robustesse
-                    navBtn.href = this.myPageSlug
-                        ? `profile.html?pro=${this.myPageSlug}`
-                        : "profile.html";
-
-                    console.log(
-                        "[Pro] Affichage du bouton Pro activé. Slug:",
-                        this.myPageSlug,
-                    );
-                } else {
-                    this.myPageSlug = null;
-                    // On ne cache que si on est CERTAIN que ce n'est pas un pro
-                    if (!isUserPro && !isProByMetadata) {
-                        navBtn.style.display = "none";
-                    }
-                }
-
-                // Supprimer les anciens listeners pour éviter les doubles appels
-                const newNavBtn = navBtn.cloneNode(true);
-                navBtn.parentNode.replaceChild(newNavBtn, navBtn);
-
-                newNavBtn.onclick = (e) => {
-                    console.log(
-                        "[Pro] Nav button clicked (via onclick listener)",
-                    );
-                    e.preventDefault();
-                    e.stopPropagation();
-
-                    if (window.navigateToProfessionalPage) {
-                        window.navigateToProfessionalPage();
-                    } else {
-                        this.navigateToMyPage();
-                    }
-                };
-
-                newNavBtn._proInitDone = true;
+                navBtn._proInitDone = true;
             }
 
             // Afficher l'onglet Talents si c'est un profil Pro/Institution
@@ -4730,7 +4682,7 @@ class XERAProfessionalOnboarding {
                 title: "Nom de votre Page",
                 desc: "Choisissez un nom qui représente votre marque ou organisation officielle.",
                 icon: "fa-building",
-                content: `<input type="text" id="onboarding-name" class="form-input" placeholder="Ex: XERA1 Corp" value="${this.data.name}">`,
+                content: `<input type="text" id="onboarding-name" class="form-input" placeholder="Ex: MA PAGE corp" value="${this.data.name}">`,
             },
             {
                 title: "Secteurs d'activité",
@@ -5292,25 +5244,6 @@ if (typeof window !== "undefined") {
             window.professionalManager.initNavigation().catch(console.warn);
             console.log("XERA1 Professional Manager initialized.");
 
-            // Delegated click handler so the nav button works even if re-rendered
-            if (!window._proNavDelegationHooked) {
-                document.addEventListener(
-                    "click",
-                    (ev) => {
-                        const btn = ev.target.closest
-                            ? ev.target.closest("#nav-pro-page")
-                            : null;
-                        if (btn) {
-                            console.log(
-                                "[Pro] Global click intercepted on #nav-pro-page",
-                            );
-                            window.navigateToProfessionalPage(ev);
-                        }
-                    },
-                    true,
-                );
-                window._proNavDelegationHooked = true;
-            }
         } else {
             // Si pas encore de client, on réessaie (peut arriver si le CDN est lent)
             setTimeout(initManager, 200);

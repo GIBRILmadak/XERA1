@@ -1,88 +1,304 @@
 /**
  * XERA1 Navigation Hub & Profile Popover System
- * Streamlines the top navigation bar into a modern, minimalist header with a Profile Hub.
+ * Keeps the account switcher and member identity in sync with the signed-in user.
  */
 
 (() => {
+    function getProfileHubTriggers() {
+        return Array.from(
+            document.querySelectorAll(
+                '#nav-profile-hub-trigger, #nav-profile, [data-quick-action="profile"], [data-profile-hub-trigger]',
+            ),
+        );
+    }
+
     function initNavigationHub() {
-        const profileTrigger = document.getElementById("nav-profile-hub-trigger") || document.getElementById("nav-profile");
+        const profileTriggers = getProfileHubTriggers();
         const profilePopover = document.getElementById("profile-hub-popover");
 
-        if (!profileTrigger || !profilePopover) return;
+        if (!profileTriggers.length || !profilePopover) return;
 
-        // Toggle popover on profile click
-        profileTrigger.addEventListener("click", (e) => {
-            e.stopPropagation();
-            const isOpen = profilePopover.classList.contains("is-open");
-            closeAllNavPanels();
-            if (!isOpen) {
-                profilePopover.classList.add("is-open");
-                profileTrigger.setAttribute("aria-expanded", "true");
-                syncProfileHubData();
-            }
-        });
+        profilePopover.setAttribute("aria-hidden", "true");
 
-        // Close on click outside or Escape
-        document.addEventListener("click", (e) => {
-            if (!profilePopover.contains(e.target) && !profileTrigger.contains(e.target)) {
-                profilePopover.classList.remove("is-open");
-                profileTrigger.setAttribute("aria-expanded", "false");
-            }
-        });
+        const quickProfileAction = document.querySelector(
+            '[data-quick-action="profile"]',
+        );
 
-        document.addEventListener("keydown", (e) => {
-            if (e.key === "Escape") {
-                profilePopover.classList.remove("is-open");
-                profileTrigger.setAttribute("aria-expanded", "false");
-            }
-        });
+        profileTriggers.forEach((profileTrigger) => {
+            profileTrigger.setAttribute("aria-haspopup", "true");
+            profileTrigger.setAttribute("aria-expanded", "false");
+            profileTrigger.setAttribute("aria-controls", profilePopover.id);
 
-        // Close popover when any link inside it is clicked
-        profilePopover.querySelectorAll("a, button, [role='button']").forEach((el) => {
-            el.addEventListener("click", () => {
-                profilePopover.classList.remove("is-open");
-                profileTrigger.setAttribute("aria-expanded", "false");
+            // The desktop quick action already calls toggleProfileHub() from router.js.
+            // Binding a second click handler would toggle the panel twice.
+            if (profileTrigger === quickProfileAction) return;
+
+            profileTrigger.addEventListener("click", (event) => {
+                event.stopPropagation();
+                toggleProfileHub();
             });
+
+            if (profileTrigger.matches('[role="button"]:not(button)')) {
+                profileTrigger.addEventListener("keydown", (event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        toggleProfileHub();
+                    }
+                });
+            }
         });
+
+        document.addEventListener("click", (event) => {
+            if (
+                !profilePopover.contains(event.target) &&
+                !profileTriggers.some((trigger) => trigger.contains(event.target))
+            ) {
+                closeProfileHub();
+            }
+        });
+
+        document.addEventListener("keydown", (event) => {
+            if (event.key === "Escape") closeProfileHub();
+        });
+
+        profilePopover
+            .querySelectorAll("a, button, [role='button']")
+            .forEach((element) => {
+                element.addEventListener("click", closeProfileHub);
+            });
+    }
+
+    function getStoredUser() {
+        try {
+            const userString =
+                localStorage.getItem("xera_user") ||
+                localStorage.getItem("rize_user") ||
+                localStorage.getItem("rize_user_session");
+            return userString ? JSON.parse(userString) : null;
+        } catch (_) {
+            return null;
+        }
+    }
+
+    function getCurrentHubUser() {
+        const currentUser = window.currentUser || {};
+        const storedUser = getStoredUser() || {};
+        const currentMetadata = currentUser.user_metadata || {};
+        const storedMetadata = storedUser.user_metadata || {};
+        const cachedProfile =
+            currentUser.profile ||
+            (Array.isArray(window.allUsers)
+                ? window.allUsers.find((candidate) => candidate.id === currentUser.id)
+                : null) ||
+            {};
+        const username =
+            currentUser.username ||
+            currentMetadata.username ||
+            cachedProfile.username ||
+            storedUser.username ||
+            storedMetadata.username ||
+            "";
+
+        return {
+            ...storedUser,
+            ...currentUser,
+            username,
+            user_metadata: { ...storedMetadata, ...currentMetadata },
+            avatar_url:
+                currentUser.avatar_url ||
+                currentUser.avatar ||
+                currentMetadata.avatar_url ||
+                currentMetadata.avatar ||
+                currentMetadata.picture ||
+                cachedProfile.avatar_url ||
+                cachedProfile.avatar ||
+                storedUser.avatar_url ||
+                storedUser.avatar ||
+                storedMetadata.avatar_url ||
+                storedMetadata.avatar ||
+                storedMetadata.picture ||
+                "",
+            name:
+                currentUser.name ||
+                currentMetadata.full_name ||
+                currentMetadata.name ||
+                cachedProfile.name ||
+                storedUser.name ||
+                storedMetadata.full_name ||
+                storedMetadata.name ||
+                "",
+        };
+    }
+
+    function setImageSource(image, source, fallbackSource = "") {
+        if (!image) return;
+        const nextSource = String(source || fallbackSource || "").trim();
+        if (!nextSource) return;
+        image.onerror = () => {
+            image.onerror = null;
+            if (fallbackSource && nextSource !== fallbackSource) {
+                image.src = fallbackSource;
+            }
+        };
+        image.src = nextSource;
+    }
+
+    function syncProfileHubData() {
+        const user = getCurrentHubUser();
+        const metadata = user.user_metadata || {};
+        const username = String(user.username || "").trim().replace(/^@/, "");
+        const displayName =
+            username ||
+            String(user.name || metadata.display_name || "").trim() ||
+            String(user.email || "").split("@")[0] ||
+            "Mon profil";
+        const handle = document.getElementById("hub-user-handle");
+        const name = document.getElementById("hub-user-name");
+        const avatar = document.getElementById("hub-user-avatar");
+        const navAvatar = document.getElementById("nav-profile-avatar");
+        const proBadge = document.getElementById("hub-pro-badge");
+        const proButton =
+            document.querySelector("[data-profile-hub-pro-page]") ||
+            document.getElementById("nav-pro-page");
+
+        if (name) name.textContent = displayName;
+        if (handle) {
+            const shouldShowHandle = username && username !== displayName;
+            handle.textContent = shouldShowHandle ? `@${username}` : "";
+            handle.hidden = !shouldShowHandle;
+        }
+
+        const avatarUrl = String(user.avatar_url || "").trim();
+        if (avatarUrl && typeof window.setNavProfileAvatar === "function") {
+            window.setNavProfileAvatar(avatarUrl, user.id || null);
+        }
+        setImageSource(avatar, navAvatar?.src || avatar?.src || avatarUrl);
+        if (avatar) avatar.alt = `Avatar de ${displayName}`;
+        if (navAvatar) navAvatar.alt = `Avatar de ${displayName}`;
+
+        const isPro =
+            user.is_pro ||
+            user.role === "pro" ||
+            user.role === "professional" ||
+            user.subscription_tier === "pro" ||
+            user.subscription_tier === "professional" ||
+            String(user.account_type || metadata.account_type || "")
+                .toLowerCase()
+                .includes("pro") ||
+            (typeof window.isProUser === "function" && window.isProUser(user));
+        if (proBadge) proBadge.style.display = isPro ? "inline-flex" : "none";
+
+        if (proButton) {
+            proButton.style.display = user.id ? "flex" : "none";
+            proButton.title = "Ouvrir ou créer une Page Pro";
+        }
+
+        syncProfessionalPage(user, proButton);
+    }
+
+    async function syncProfessionalPage(user, button) {
+        if (!button) return;
+
+        const label = button.querySelector("[data-pro-page-name]");
+        const logo = button.querySelector("[data-pro-page-avatar]");
+        const defaultIcon = button.querySelector("[data-pro-page-icon]");
+        const setDefault = () => {
+            if (label) label.textContent = "Page Pro";
+            if (logo) {
+                logo.hidden = true;
+                logo.removeAttribute("src");
+            }
+            if (defaultIcon) defaultIcon.hidden = false;
+            delete button.dataset.proSlug;
+            button.title = "Ouvrir ou créer une Page Pro";
+            button.setAttribute("aria-label", "Page Pro");
+        };
+
+        setDefault();
+        if (!user?.id) return;
+
+        const client = window.supabaseClient || window.supabase;
+        if (!client?.from) return;
+
+        try {
+            const { data: page, error } = await client
+                .from("professional_pages")
+                .select("id, owner_id, slug, name, avatar_url")
+                .eq("owner_id", user.id)
+                .limit(1)
+                .maybeSingle();
+
+            if (error || !page) return;
+
+            const pageName = String(page.name || "Page Pro").trim();
+            if (label) label.textContent = pageName;
+            if (logo && page.avatar_url) {
+                logo.hidden = false;
+                setImageSource(logo, page.avatar_url);
+                logo.onerror = () => {
+                    logo.hidden = true;
+                    if (defaultIcon) defaultIcon.hidden = false;
+                    logo.onerror = null;
+                };
+                if (defaultIcon) defaultIcon.hidden = true;
+            }
+            button.title = `Basculer vers ${pageName}`;
+            button.setAttribute("aria-label", `Basculer vers ${pageName}`);
+            if (page.slug) button.dataset.proSlug = page.slug;
+        } catch (error) {
+            console.warn("Impossible de charger la Page Pro du profil:", error);
+        }
+    }
+
+    function openProfileHub() {
+        const profileTriggers = getProfileHubTriggers();
+        const profilePopover = document.getElementById("profile-hub-popover");
+        if (!profileTriggers.length || !profilePopover) return false;
+
+        closeAllNavPanels();
+        profilePopover.classList.add("is-open");
+        profilePopover.setAttribute("aria-hidden", "false");
+        profileTriggers.forEach((trigger) =>
+            trigger.setAttribute("aria-expanded", "true"),
+        );
+        syncProfileHubData();
+        return true;
+    }
+
+    function closeProfileHub() {
+        const profileTriggers = getProfileHubTriggers();
+        const profilePopover = document.getElementById("profile-hub-popover");
+        if (profilePopover) {
+            profilePopover.classList.remove("is-open");
+            profilePopover.setAttribute("aria-hidden", "true");
+        }
+        profileTriggers.forEach((trigger) =>
+            trigger.setAttribute("aria-expanded", "false"),
+        );
+    }
+
+    function toggleProfileHub() {
+        const profilePopover = document.getElementById("profile-hub-popover");
+        if (profilePopover?.classList.contains("is-open")) {
+            closeProfileHub();
+            return true;
+        }
+        return openProfileHub();
     }
 
     function closeAllNavPanels() {
-        const profilePopover = document.getElementById("profile-hub-popover");
+        closeProfileHub();
         const notificationPanel = document.getElementById("notification-panel");
         const fataPanel = document.getElementById("fata-challenge-panel");
 
-        if (profilePopover) profilePopover.classList.remove("is-open");
         if (notificationPanel) notificationPanel.classList.remove("active", "is-open");
         if (fataPanel) fataPanel.classList.remove("is-open");
     }
 
-    function syncProfileHubData() {
-        try {
-            const userStr = localStorage.getItem("xera_user") || localStorage.getItem("rize_user");
-            if (userStr) {
-                const user = JSON.parse(userStr);
-                const nameEl = document.getElementById("hub-user-name");
-                const handleEl = document.getElementById("hub-user-handle");
-                const avatarEl = document.getElementById("hub-user-avatar");
-                const proBadge = document.getElementById("hub-pro-badge");
-
-                if (nameEl) nameEl.textContent = user.name || user.username || "Bâtisseur XERA1";
-                if (handleEl) handleEl.textContent = `@${user.username || user.id || "builder"}`;
-                if (avatarEl && (user.avatar || user.avatar_url)) {
-                    avatarEl.src = user.avatar || user.avatar_url;
-                }
-                if (proBadge) {
-                    const isPro = user.is_pro || user.role === "pro" || user.subscription_tier === "pro";
-                    proBadge.style.display = isPro ? "inline-flex" : "none";
-                }
-            }
-        } catch (_) {
-            /* no-op */
-        }
-    }
-
-    if (document.readyState === "loading") {
-        document.addEventListener("DOMContentLoaded", initNavigationHub);
+    if (document.readyState === "loading" || document.readyState === "interactive") {
+        document.addEventListener("DOMContentLoaded", initNavigationHub, {
+            once: true,
+        });
     } else {
         initNavigationHub();
     }
@@ -90,6 +306,9 @@
     window.XeraNavHub = {
         initNavigationHub,
         closeAllNavPanels,
-        syncProfileHubData
+        closeProfileHub,
+        openProfileHub,
+        toggleProfileHub,
+        syncProfileHubData,
     };
 })();

@@ -668,6 +668,12 @@
         const actions = document.createElement("div");
         actions.className = "desktop-quick-actions";
         actions.innerHTML = `
+            <button type="button" class="desktop-quick-action" data-quick-action="feed" title="Ouvrir le feed" aria-label="Ouvrir le feed">
+                <i class="fas fa-rss" aria-hidden="true"></i><span>Feed</span>
+            </button>
+            <button type="button" class="desktop-quick-action" data-quick-action="profile" title="Ouvrir mon profil" aria-label="Ouvrir mon profil">
+                <i class="fas fa-user" aria-hidden="true"></i><span>Profil</span>
+            </button>
             <button type="button" class="desktop-quick-action" data-quick-action="messages" title="Ouvrir la messagerie">
                 <i class="fas fa-comments" aria-hidden="true"></i><span>Messages</span>
             </button>
@@ -688,6 +694,31 @@
             document.body.appendChild(actions);
         }
 
+        actions
+            .querySelector('[data-quick-action="feed"]')
+            .addEventListener("click", () => {
+                if (typeof window.navigateTo === "function") {
+                    window.navigateTo("discover");
+                } else {
+                    window.location.href = "index.html";
+                }
+            });
+        actions
+            .querySelector('[data-quick-action="profile"]')
+            .addEventListener("click", () => {
+                if (window.XeraNavHub?.toggleProfileHub()) return;
+
+                const profileTrigger = document.getElementById(
+                    "nav-profile-hub-trigger",
+                );
+                if (profileTrigger) {
+                    profileTrigger.click();
+                } else if (typeof window.handleProfileNavigation === "function") {
+                    window.handleProfileNavigation();
+                } else {
+                    window.location.href = "profile.html";
+                }
+            });
         actions
             .querySelector('[data-quick-action="messages"]')
             .addEventListener("click", () => {

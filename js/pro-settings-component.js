@@ -363,7 +363,7 @@
                                     name: "name",
                                     value: formData.name,
                                     onChange: handleInputChange,
-                                    placeholder: "Ex: XERA1 Corp",
+                                    placeholder: "Ex: MA PAGE corp",
                                     className: "form-input",
                                 }),
                             ]),

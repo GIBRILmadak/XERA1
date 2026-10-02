@@ -122,6 +122,20 @@ function openDedicatedSearch(initialQuery = "") {
         renderSearchLanding();
         input.focus();
     };
+    overlay.addEventListener(
+        "click",
+        (event) => {
+            if (
+                event.target.closest(
+                    ".search-result-item, .dedicated-search-media-card",
+                )
+            ) {
+                // Let the result's own handler navigate or act before closing.
+                setTimeout(closeDedicatedSearch, 0);
+            }
+        },
+        true,
+    );
     input.addEventListener("input", () => {
         const query = input.value.trim();
         clearTimeout(dedicatedSearchTimeout);
@@ -156,9 +170,32 @@ function openDedicatedSearch(initialQuery = "") {
 }
 
 function closeDedicatedSearch() {
-    document.querySelector(".dedicated-search-overlay")?.remove();
-    document.body.style.overflow = document.body.dataset.searchOverflow || "";
-    delete document.body.dataset.searchOverflow;
+    clearTimeout(dedicatedSearchTimeout);
+    clearTimeout(searchTimeout);
+    searchRequestId += 1;
+
+    const overlay = document.querySelector(".dedicated-search-overlay");
+    const hasSearchOverflow = Object.prototype.hasOwnProperty.call(
+        document.body.dataset,
+        "searchOverflow",
+    );
+    const overlayInput = overlay?.querySelector("input");
+    if (overlayInput) overlayInput.value = "";
+    overlay?.querySelector("#dedicated-search-body")?.replaceChildren();
+    overlay?.remove();
+
+    const searchInput = document.getElementById("search-input");
+    if (searchInput) searchInput.value = "";
+    const results = document.getElementById("search-results");
+    if (results) {
+        results.replaceChildren();
+        results.style.display = "none";
+    }
+    hideSearchSkeleton();
+    if (overlay || hasSearchOverflow) {
+        document.body.style.overflow = document.body.dataset.searchOverflow || "";
+        delete document.body.dataset.searchOverflow;
+    }
 }
 
 function renderSearchLanding() {
@@ -240,6 +277,16 @@ function initializeSearch() {
         if (!e.target.closest(".search-container")) {
             searchResultsContainer.style.display = "none";
             hideSearchSkeleton();
+        }
+    });
+    searchResultsContainer.addEventListener("click", (event) => {
+        if (
+            event.target.closest(
+                ".search-result-item, .dedicated-search-media-card",
+            )
+        ) {
+            // A deferred close preserves the inline result action/navigation.
+            setTimeout(closeDedicatedSearch, 0);
         }
     });
 }
@@ -456,7 +503,7 @@ function displaySearchResults(
                 ? `openSearchProPage('${escapeHtml(user.professional_page.slug)}')`
                 : `navigateToUserProfile('${user.id}')`;
             html += `
-                <div class="search-result-item" onclick="${userClickAction}; document.getElementById('search-results').style.display='none';">
+                <div class="search-result-item" onclick="${userClickAction};">
                     <img src="${escapeHtml(avatar)}" class="search-result-avatar" alt="${escapeHtml(name)}">
                     <div class="search-result-info">
                         <div class="search-result-name">${typeof window.renderUsernameWithBadge === "function" ? window.renderUsernameWithBadge(highlightMatch(name, query), user.id) : highlightMatch(name, query)}</div>
@@ -494,7 +541,7 @@ function displaySearchResults(
                     : `<img class="dedicated-search-media-preview" src="${escapeHtml(mediaUrl)}" alt="${escapeHtml(title)}" loading="lazy">`
                 : '<div class="dedicated-search-media-preview dedicated-search-media-placeholder">◈</div>';
             html += `
-                <div class="dedicated-search-media-card" onclick="${clickAction}; document.querySelector('.dedicated-search-overlay')?.remove();">
+                <div class="dedicated-search-media-card" onclick="${clickAction};">
                     ${mediaPreview}
                     <span class="dedicated-search-media-title">${highlightMatch(title, query)}</span>
                     <span class="dedicated-search-media-meta">${escapeHtml(authorName)} • J${escapeHtml(item.day_number || "0")}</span>
@@ -512,7 +559,17 @@ function displaySearchResults(
 function setupFloatingSearchButton(sourceInput) {
     const nav = document.querySelector("nav");
     if (!nav || document.getElementById("nav-search-float")) return;
+    // The index page already has search in the desktop quick actions and feed UI.
+    // initializeSearch() runs before router.js creates those quick actions.
+    if (document.body.classList.contains("index-page")) return;
     if (document.getElementById("nav-profile-hub-trigger")) return;
+    if (
+        document.querySelector(
+            '.desktop-quick-actions [data-quick-action="search"]',
+        )
+    ) {
+        return;
+    }
     const button = document.createElement("button");
     button.id = "nav-search-float";
     button.type = "button";

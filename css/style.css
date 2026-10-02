@@ -758,6 +758,10 @@ body:not(.index-page) .profile-hub-popover {
     display: none !important;
 }
 
+body:not(.index-page) .profile-hub-popover.is-open {
+    display: block !important;
+}
+
 nav {
     position: fixed;
     top: 0;
@@ -868,6 +872,24 @@ nav {
 @media (max-width: 768px) {
     .desktop-quick-actions {
         display: none !important;
+    }
+}
+
+@media (min-width: 769px) and (max-width: 1050px) {
+    .desktop-quick-actions {
+        gap: 0.25rem;
+        right: 17rem;
+    }
+
+    .desktop-quick-action {
+        width: 38px;
+        min-width: 38px;
+        justify-content: center;
+        padding: 0.45rem;
+    }
+
+    .desktop-quick-action span {
+        display: none;
     }
 }
 
@@ -18675,6 +18697,19 @@ nav {
     color: var(--text-primary);
 }
 
+.hub-pro-page-avatar {
+    width: 22px;
+    height: 22px;
+    flex: 0 0 22px;
+    border-radius: 7px;
+    object-fit: cover;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.hub-pro-page-item [hidden] {
+    display: none !important;
+}
+
 .hub-divider {
     height: 1px;
     background: rgba(255, 255, 255, 0.08);
@@ -18736,6 +18771,13 @@ nav {
         border-radius: 12px;
         width: 100%;
         min-width: 0;
+    }
+
+    button.xera-bottom-item {
+        appearance: none;
+        border: 0;
+        background: transparent;
+        font-family: inherit;
     }
 
     .xera-bottom-item.active,

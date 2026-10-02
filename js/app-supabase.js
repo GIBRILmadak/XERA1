@@ -2528,7 +2528,8 @@ function setNavProfileAvatar(rawAvatar, userId = null) {
         document.getElementById("nav-profile-avatar") ||
         document.getElementById("navAvatar") ||
         document.querySelector("#nav-profile .profile-nav-avatar") ||
-        document.querySelector("nav .profile-nav-avatar");
+        document.querySelector("nav .profile-nav-avatar") ||
+        document.getElementById("hub-user-avatar");
     if (!navAvatar) return;
     const resolvedUserId =
         userId || window.currentUser?.id || window.currentUserId || null;
@@ -10826,20 +10827,6 @@ function renderProfileProjectProgressBoard(arcs, contents, profileUserId) {
     const summaries = buildProfileArcProgressSummaries(arcs, contents);
     if (summaries.length === 0) return "";
 
-    const activeCount = summaries.filter(
-        (item) =>
-            item.arc?.status !== "completed" &&
-            item.arc?.status !== "abandoned",
-    ).length;
-    const totalUpdates = summaries.reduce(
-        (sum, item) => sum + Number(item.updates || 0),
-        0,
-    );
-    const averageProgress = Math.round(
-        summaries.reduce((sum, item) => sum + Number(item.progress || 0), 0) /
-            Math.max(1, summaries.length),
-    );
-
     const statusLabels = {
         in_progress: "En cours",
         completed: "Terminé",
@@ -10848,19 +10835,6 @@ function renderProfileProjectProgressBoard(arcs, contents, profileUserId) {
 
     return `
 <section class="profile-progress-board">
-            <div class="profile-progress-board-head">
-                <div>
-                    <span class="profile-section-kicker">Suivi de projet</span>
-                    <h3>Avancement visible</h3>
-                    <p>Un aperçu clair des projets, de leurs updates et de leur dernière activité.</p>
-                </div>
-                <div class="profile-progress-board-stats">
-                    <span>${activeCount} actif${activeCount > 1 ? "s" : ""}</span>
-                    <span>${totalUpdates} update${totalUpdates > 1 ? "s" : ""}</span>
-                    <span>${averageProgress}% moyen</span>
-                </div>
-            </div>
-
             <div class="profile-progress-board-grid">
                 ${summaries
                     .slice(0, 4)
@@ -16198,6 +16172,25 @@ ${
     const publicSignalHtml = showPublicStats
         ? `${profileSignalStatsHtml}${progressSnapshotHtml}`
         : renderProfileHiddenSection("stats");
+
+    const workspaceContentsById = new Map();
+    const addWorkspaceContents = (items, source) => {
+        (items || []).forEach((content, index) => {
+            if (!content) return;
+            const contentId = content.contentId || content.content_id || content.id;
+            const key = contentId ? String(contentId) : String(source) + ":" + String(index);
+            workspaceContentsById.set(key, content);
+        });
+    };
+    addWorkspaceContents(contents, "cache");
+    addWorkspaceContents(displayContents, "rendered");
+    window.profileWorkspaceContext = {
+        profileUserId: userId,
+        contents: showPublicActivity
+            ? Array.from(workspaceContentsById.values())
+            : [],
+        arcs: allArcs,
+    };
 
     const timelinesHtml =
         window.selectedArcId && selectedArc

@@ -46,7 +46,7 @@
         <script src="js/seo-schema.js"></script>
 
         <!-- Styles globaux -->
-        <link rel="stylesheet" href="css/style.css?v=20260902-4" />
+        <link rel="stylesheet" href="css/style.css?v=20261002-2" />
         <link rel="stylesheet" href="css/search-notification.css" />
         <link rel="stylesheet" href="css/arcs.css" />
         <link rel="stylesheet" href="css/streaming-analytics.css" />
@@ -270,8 +270,8 @@
                     <span class="hub-avatar-edit-hint"><i class="fas fa-pen"></i></span>
                 </div>
                 <div class="hub-user-info">
-                    <span id="hub-user-name" class="hub-user-name">Bâtisseur XERA1</span>
-                    <span id="hub-user-handle" class="hub-user-handle">@builder</span>
+                    <span id="hub-user-name" class="hub-user-name">Mon profil</span>
+                    <span id="hub-user-handle" class="hub-user-handle" hidden></span>
                     <span id="hub-pro-badge" class="hub-badge-pro" style="display: none;">
                         <i class="fas fa-certificate"></i> PRO
                     </span>
@@ -280,9 +280,10 @@
             </a>
 
             <div class="hub-menu-group">
-                <button type="button" class="hub-menu-item" id="nav-pro-page" onclick="window.navigateToProfessionalPage?.()" style="display: none;">
-                    <i class="fas fa-building"></i>
-                    <span>Page Pro / Entreprise</span>
+                <button type="button" class="hub-menu-item hub-pro-page-item" id="nav-pro-page" onclick="window.navigateToProfessionalPage?.()">
+                    <i class="fas fa-building" data-pro-page-icon aria-hidden="true"></i>
+                    <img class="hub-pro-page-avatar" data-pro-page-avatar alt="" hidden />
+                    <span data-pro-page-name>Page Pro</span>
                 </button>
                 <button type="button" class="hub-menu-item" onclick="location.href='subscription-plans.html'">
                     <i class="fas fa-wallet"></i>
@@ -383,7 +384,7 @@
         </section>
 
         <!-- Configuration Supabase -->
-        <script src="js/router.js"></script>
+        <script src="js/router.js?v=20261002-2"></script>
         <script src="js/supabase-config.js"></script>
         <script src="js/monetization-utils.js"></script>
         <script src="js/monetization.js?v=20260319-1"></script>
@@ -397,7 +398,7 @@
         <script src="js/ux-enhancements.js"></script>
         <script src="js/app-enhancements.js"></script>
         <!-- Modules de fonctionnalités -->
-        <script src="js/search.js"></script>
+        <script src="js/search.js?v=20261002-2"></script>
         <script src="js/notifications.js?v=20260502-1"></script>
         <script src="js/messages.js?v=20260502-3"></script>
         <script src="js/file-upload.js"></script>
@@ -418,7 +419,8 @@
         <script src="js/pro-settings-component.js?v=20260723-1" defer></script>
         <!-- Script principal avec intégration Supabase -->
         <script src="js/c2pa-utils.js"></script>
-        <script src="js/app-supabase.js?v=20260903-1"></script>
+        <script src="js/app-supabase.js?v=20261002-2"></script>
+        <script src="js/profile-workspace.js?v=20261002-3" defer></script>
 
         <style>
             /* Styles pour masquer le profil par défaut si c'est un compte Pro */
@@ -447,7 +449,7 @@
         <script src="js/ui-motion.js" defer></script>
         <script src="js/i18n.js"></script>
         <script src="js/seo-schema.js"></script>
-        <script src="js/navigation-hub.js" defer></script>
+        <script src="js/navigation-hub.js?v=20261002-5" defer></script>
         <script src="js/fata-integration.js?v=20261001-1" defer></script>
 </body>
 </html>
