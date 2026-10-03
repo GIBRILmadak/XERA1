@@ -5251,7 +5251,6 @@ if (typeof window !== "undefined") {
             window.professionalManager = new XERAProfessionalManager(client);
             window.professionalManager.initNavigation().catch(console.warn);
             console.log("XERA1 Professional Manager initialized.");
-
         } else {
             // Si pas encore de client, on réessaie (peut arriver si le CDN est lent)
             setTimeout(initManager, 200);
