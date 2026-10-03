@@ -638,8 +638,8 @@
                             <button type="button" class="chat-header-icon-btn" id="chat-search-btn" aria-label="Rechercher dans la discussion">
                                 <i class="fa-solid fa-magnifying-glass"></i>
                             </button>
-                            <button type="button" class="chat-header-icon-btn" id="chat-profile-btn" aria-label="Profil">
-                                <i class="fa-solid fa-user"></i>
+                            <button type="button" class="chat-header-icon-btn" id="chat-call-btn" aria-label="Appeler">
+                                <i class="fa-solid fa-phone"></i>
                             </button>
                             <div class="chat-header-menu-wrap">
                                 <button type="button" class="chat-header-icon-btn" id="chat-menu-btn" aria-label="Options de discussion">
@@ -673,11 +673,14 @@
                                     class="form-input chat-input-textarea"
                                     maxlength="${DM_BODY_MAX}"
                                     autocomplete="off"
-                                    placeholder="Écrire un message..."
+                                    placeholder="Write a message..."
                                     rows="1"
                                 ></textarea>
-                                <button type="submit" class="chat-send-btn" id="chat-send-btn" aria-label="Envoyer le message">
-                                    <i class="fa-solid fa-paper-plane"></i>
+                                <button type="button" class="chat-emoji-btn" id="chat-emoji-btn" aria-label="Emoji">
+                                    <i class="fa-regular fa-face-smile"></i>
+                                </button>
+                                <button type="submit" class="chat-send-btn" id="chat-send-btn" aria-label="Send">
+                                    <i class="fa-solid fa-microphone"></i>
                                 </button>
                             </div>
                             <div class="chat-compose-hint" id="chat-compose-hint">
@@ -977,7 +980,19 @@
         const canSend = canCompose && !isBusy && (hasText || hasAttachment);
 
         if (input) input.disabled = !canCompose || isBusy;
-        if (sendBtn) sendBtn.disabled = !canSend;
+        if (sendBtn) {
+            sendBtn.disabled = !canCompose || isBusy;
+            const icon = sendBtn.querySelector("i");
+            if (icon) {
+                if (hasText || hasAttachment) {
+                    icon.className = "fa-solid fa-paper-plane";
+                    sendBtn.classList.add("active");
+                } else {
+                    icon.className = "fa-solid fa-microphone";
+                    sendBtn.classList.remove("active");
+                }
+            }
+        }
         if (attachBtn) attachBtn.disabled = !canCompose || isBusy;
         if (hint) {
             const mobile = isMobileDevice();
@@ -1099,10 +1114,15 @@
                 : "";
 
         return `
-            <div class="${bubbleClass}" data-message-id="${escapeHtml(message.id)}">
-                ${senderHtml}
-                ${renderMessageBody(message)}
-                <div class="chat-time">${escapeHtml(messageTime)}</div>
+            <div class="message-bubble-wrap ${mine ? 'outgoing' : 'incoming'}" data-message-id="${escapeHtml(message.id)}">
+                <div class="message-bubble">
+                    ${senderHtml}
+                    ${renderMessageBody(message)}
+                    <div class="message-meta">
+                        <span class="chat-time">${escapeHtml(messageTime)}</span>
+                        ${mine ? '<span class="message-status-icon read"><i class="fa-solid fa-check-double"></i></span>' : ''}
+                    </div>
+                </div>
             </div>
         `;
     }
@@ -1573,7 +1593,7 @@
         if (
             state.lastRenderedConversationId === conversationId &&
             state.lastRenderedMessagesSignature === listSignature &&
-            chat.querySelector(".chat-bubble")
+            chat.querySelector(".message-bubble-wrap")
         ) {
             syncComposerState();
             return;
@@ -1583,7 +1603,7 @@
         const wasNearBottom =
             chat.scrollHeight - chat.scrollTop - chat.clientHeight < 96;
         const existingNodes = new Map();
-        chat.querySelectorAll(".chat-bubble[data-message-id]").forEach(
+        chat.querySelectorAll(".message-bubble-wrap[data-message-id]").forEach(
             (node) => {
                 existingNodes.set(node.getAttribute("data-message-id"), node);
             },
