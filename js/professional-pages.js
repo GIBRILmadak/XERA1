@@ -3388,6 +3388,14 @@ class XERAProfessionalManager {
                         #pro-page .pro-avatar-overlap { width: 72px; height: 72px; margin-top: -42px; }
                         #pro-page .pro-name-row h2 { font-size: 1.28rem; }
                     }
+
+                    /* Match the personal profile's true-black page canvas. */
+                    body.is-pro { background-color: #050505 !important; }
+                    #pro-page,
+                    #pro-page .pro-page-container,
+                    #pro-page .pro-page-wrapper {
+                        background: #050505 !important;
+                    }
                 `;
 
             try {
@@ -3400,7 +3408,7 @@ class XERAProfessionalManager {
             }
 
             proContainer.innerHTML = `
-                <div class="min-h-screen bg-[#0b0f17] text-slate-100">
+                <div class="min-h-screen bg-[#050505] text-slate-100">
                     <main class="w-full max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-6">
                     <div class="pro-page-wrapper pro-page-fade-in">
                         <!-- HEADER -->

@@ -153,9 +153,7 @@ function updateOpenGraphTags(context = {}) {
             ogTitle = `${profile.username || "Profil"} | XERA`;
             ogDescription = profile.bio || "Découvrez ce profil sur XERA";
             ogImage = getAbsoluteImageUrl(
-                profile.profileImage ||
-                    profile.avatar_url ||
-                    "icons/logo.png",
+                profile.profileImage || profile.avatar_url || "icons/logo.png",
             );
             ogType = "profile";
         }
@@ -10119,6 +10117,11 @@ function getProfileContentTypeLabel(content) {
 
 function renderProfileContentMedia(content, options = {}) {
     const compact = options.compact === true;
+    const mediaContentId =
+        content?.contentId || content?.content_id || content?.id || "";
+    const mediaUserId =
+        options.profileUserId || content?.userId || content?.user_id || "";
+    const mediaContextAttrs = `data-profile-media-content-id="${escapeHtml(mediaContentId)}" data-profile-media-user-id="${escapeHtml(mediaUserId)}"`;
     const mediaUrls = Array.isArray(content?.mediaUrls)
         ? content.mediaUrls.filter(Boolean)
         : [];
@@ -10133,7 +10136,7 @@ function renderProfileContentMedia(content, options = {}) {
 
     if (content?.type === "video") {
         return `
-            <div class="timeline-media profile-update-media ${compact ? "is-compact" : ""}" style="position: relative;">
+            <div class="timeline-media profile-update-media ${compact ? "is-compact" : ""}" ${mediaContextAttrs} style="position: relative;">
                 <video src="${primaryMediaUrl}" controls playsinline preload="metadata"></video>
                 ${c2paBadge}
                 ${extraCount}
@@ -10143,7 +10146,7 @@ function renderProfileContentMedia(content, options = {}) {
 
     if (content?.type === "image") {
         return `
-            <div class="timeline-media profile-update-media ${compact ? "is-compact" : ""}" style="position: relative;">
+            <div class="timeline-media profile-update-media ${compact ? "is-compact" : ""}" ${mediaContextAttrs} style="position: relative;">
                 <img src="${primaryMediaUrl}" alt="${escapeHtml(content?.title || "Media update")}" loading="lazy" decoding="async">
                 ${c2paBadge}
                 ${extraCount}
@@ -10160,6 +10163,29 @@ function renderProfileContentMedia(content, options = {}) {
     }
 
     return "";
+}
+
+function bindProfileImmersiveMedia(container) {
+    if (!container || container.dataset.profileImmersiveMediaBound === "true") {
+        return;
+    }
+    container.dataset.profileImmersiveMediaBound = "true";
+    container.addEventListener("click", (event) => {
+        const target = event.target instanceof Element ? event.target : null;
+        const mediaTarget = target?.closest("img, video");
+        const mediaContext = target?.closest(
+            "[data-profile-media-content-id]",
+        );
+        if (!mediaTarget || !mediaContext) return;
+
+        event.preventDefault();
+        event.stopPropagation();
+        openImmersive(
+            mediaContext.dataset.profileMediaUserId,
+            mediaContext.dataset.profileMediaContentId,
+            { profileOnly: true },
+        );
+    });
 }
 
 function renderProfileUpdateCard(
@@ -10230,9 +10256,9 @@ function renderProfileUpdateCard(
             `;
         }
 
-        const mediaHtml = content.media_url
+            const mediaHtml = content.media_url
             ? `
-            <div style="margin: 15px 0; border-radius: 12px; overflow: hidden; border: 1px solid var(--border-color);">
+                <div data-profile-media-content-id="${escapeHtml(content.contentId || content.content_id || content.id || "")}" data-profile-media-user-id="${escapeHtml(profileUserId)}" style="margin: 15px 0; border-radius: 12px; overflow: hidden; border: 1px solid var(--border-color);">
                 <img src="${content.media_url}" style="width: 100%; max-height: 400px; object-fit: cover;">
             </div>
         `
@@ -10283,7 +10309,10 @@ function renderProfileUpdateCard(
         content.description || content.title || "Nouvelle mise a jour";
     const descriptionHtml = renderRichDescription(descriptionSource);
     const titleHtml = escapeHtml(content.title || "Mise a jour");
-    const mediaHtml = renderProfileContentMedia(content, { compact });
+    const mediaHtml = renderProfileContentMedia(content, {
+        compact,
+        profileUserId,
+    });
     const contextItems = [];
 
     if (!selectedArcMode && content.arc?.title) {
@@ -13466,9 +13495,9 @@ window.recordSearchPreference = recordSearchPreference;
 /**
  * Retourne le multiplicateur de boost basé sur le plan du créateur
  * Free: 1.0 (pas de boost)
- * Standard: 1.125 (+12.5% en moyenne)
- * Medium: 1.275 (+27.5% en moyenne)
- * Pro: 1.50 (+50%)
+ * Standard: 1.125 (+12.5% du score)
+ * Medium: 1.5 (+50% du score)
+ * Pro: 5.0 (+400% du score)
  */
 function getPlanBoostMultiplier(userId) {
     if (!userId || typeof allUsers === "undefined") return 1.0;
@@ -13485,9 +13514,9 @@ function getPlanBoostMultiplier(userId) {
 
     switch (plan) {
         case "pro":
-            return 1.5; // +50%
+            return 5.0; // Score de visibilité multiplié par 5
         case "medium":
-            return 1.275; // +27.5%
+            return 1.5; // Score de visibilité multiplié par 1,5
         case "standard":
             return 1.125; // +12.5%
         default:
@@ -14428,8 +14457,8 @@ async function renderImmersiveFeed(contents) {
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                                     <span title="${(Number(content.views) || 0).toLocaleString("fr-FR")}">${formatCompactCount(content.views || 0)}</span>
                                 </div>
-                                <button class="${courageClass}" data-content-id="${content.contentId}" onclick="event.stopPropagation(); toggleCourage('${content.contentId}', this)" title="Encourager">
-                                    <img src="${courageIcon}" width="16" height="16">
+                                <button type="button" class="${courageClass} immersive-courage-btn" data-content-id="${content.contentId}" aria-label="Encourager cette publication" onclick="event.stopPropagation(); toggleCourage('${content.contentId}', this)">
+                                    <img class="immersive-courage-icon" src="${courageIcon}" width="18" height="18" alt="" aria-hidden="true">
                                     <span class="courage-count" data-count="${Number(content.encouragementsCount) || 0}" title="${(Number(content.encouragementsCount) || 0).toLocaleString("fr-FR")}">${formatCompactCount(content.encouragementsCount || 0)}</span>
                                 </button>
                             </div>
@@ -14493,7 +14522,11 @@ async function renderImmersiveContent(userId) {
     return renderImmersiveFeed(contents);
 }
 
-async function openImmersive(startUserId, startContentId = null) {
+async function openImmersive(
+    startUserId,
+    startContentId = null,
+    options = {},
+) {
     console.log("Opening immersive for user:", startUserId);
 
     // Vérifier si les données sont chargées
@@ -14533,34 +14566,93 @@ async function openImmersive(startUserId, startContentId = null) {
     }
 
     try {
-        // Get ALL content sorted by date, then personalize
-        let allContents = await waitForImmersiveFeedContent();
-        if (!window.__immersiveOpen || allContents.length === 0) return;
-        console.log("All contents found:", allContents.length);
-
-        // Ensure the clicked content is first in the personalized feed
         let startIndex = -1;
-        if (startContentId) {
-            startIndex = allContents.findIndex(
-                (c) => c.contentId === startContentId,
+        let allContents = [];
+        const profileOnlyUserId = options.profileOnly
+            ? String(options.userId || startUserId || "")
+            : "";
+
+        if (profileOnlyUserId) {
+            allContents = getUserContentLocal(profileOnlyUserId)
+                .filter((content) => {
+                    const authorId = String(
+                        content.userId || content.user_id || profileOnlyUserId,
+                    );
+                    const mediaUrls = [
+                        ...(Array.isArray(content.mediaUrls)
+                            ? content.mediaUrls
+                            : []),
+                        ...(Array.isArray(content.media_urls)
+                            ? content.media_urls
+                            : []),
+                        content.mediaUrl,
+                        content.media_url,
+                    ];
+                    return (
+                        authorId === profileOnlyUserId &&
+                        String(content.type || "").toLowerCase() !== "live" &&
+                        mediaUrls.some((url) => String(url || "").trim())
+                    );
+                })
+                .sort(
+                    (left, right) =>
+                        new Date(
+                            right.createdAt || right.created_at || 0,
+                        ).getTime() -
+                        new Date(
+                            left.createdAt || left.created_at || 0,
+                        ).getTime(),
+                );
+
+            const clickedIndex = allContents.findIndex(
+                (content) =>
+                    String(content.contentId || content.content_id || content.id) ===
+                    String(startContentId || ""),
             );
-        } else {
-            const latest = getLatestContent(startUserId);
-            startIndex = latest
-                ? allContents.findIndex((c) => c.contentId === latest.contentId)
-                : -1;
-        }
-        if (startIndex > 0) {
-            const [pinned] = allContents.splice(startIndex, 1);
-            allContents.unshift(pinned);
+            if (clickedIndex < 0) {
+                closeImmersive();
+                return;
+            }
+
+            allContents = allContents.slice(clickedIndex);
             startIndex = 0;
-            if (pinned && pinned.userId) {
-                startUserId = pinned.userId;
+            startUserId = profileOnlyUserId;
+        } else {
+            // Global feed remains personalized; only profile entry points pass profileOnly.
+            allContents = await waitForImmersiveFeedContent();
+            if (!window.__immersiveOpen) return;
+            console.log("All contents found:", allContents.length);
+
+            if (startContentId) {
+                startIndex = allContents.findIndex(
+                    (content) => content.contentId === startContentId,
+                );
+            } else {
+                const latest = getLatestContent(startUserId);
+                startIndex = latest
+                    ? allContents.findIndex(
+                          (content) => content.contentId === latest.contentId,
+                      )
+                    : -1;
+            }
+            if (startIndex > 0) {
+                const [pinned] = allContents.splice(startIndex, 1);
+                allContents.unshift(pinned);
+                startIndex = 0;
+                if (pinned && pinned.userId) {
+                    startUserId = pinned.userId;
+                }
+            }
+            if (startIndex < 0 && allContents[0]) {
+                startIndex = 0;
+                startUserId = allContents[0].userId || startUserId;
             }
         }
-        if (startIndex < 0 && allContents[0]) {
-            startIndex = 0;
-            startUserId = allContents[0].userId || startUserId;
+
+        if (!window.__immersiveOpen) return;
+        if (allContents.length === 0) {
+            closeImmersive();
+            return;
         }
         console.log(
             "Start index:",
@@ -14812,6 +14904,11 @@ async function openImmersive(startUserId, startContentId = null) {
 
 function closeImmersive() {
     const overlay = document.getElementById("immersive-overlay");
+    if (!overlay) return;
+    overlay.querySelectorAll("video.immersive-video").forEach((video) => {
+        video.pause();
+        video.muted = true;
+    });
     overlay.style.display = "none";
     overlay.classList.remove("immersive-clean-mode");
     document.body.style.overflow = "auto";
@@ -15960,12 +16057,26 @@ async function renderProfileTimeline(userId) {
             : false;
 
     // ... Boutons existants ...
+    const canAccessMonetizationDashboard =
+        isOwnProfile &&
+        ["medium", "pro"].includes(String(user.plan || "").toLowerCase()) &&
+        isPlanActiveByDate(user);
     const settingsButtonHtml = isOwnProfile
         ? `
 <button class="badge settings-badge" onclick="window.launchLive('${userId}')" title="Lancer un live">
             <div class="badge-icon"><img src="icons/live.svg" alt="Live" style="width:100%;height:100%;"></div>
             <span>Live</span>
 </button>
+${
+    canAccessMonetizationDashboard
+        ? `
+<button class="badge settings-badge" onclick="window.location.href='creator-dashboard.html'" title="Monétisation">
+            <div class="badge-icon"><i class="fas fa-wallet" aria-hidden="true"></i></div>
+            <span>Monétisation</span>
+</button>
+`
+        : ""
+}
 ${
     !window.userHasProPage
         ? `
@@ -16177,8 +16288,11 @@ ${
     const addWorkspaceContents = (items, source) => {
         (items || []).forEach((content, index) => {
             if (!content) return;
-            const contentId = content.contentId || content.content_id || content.id;
-            const key = contentId ? String(contentId) : String(source) + ":" + String(index);
+            const contentId =
+                content.contentId || content.content_id || content.id;
+            const key = contentId
+                ? String(contentId)
+                : String(source) + ":" + String(index);
             workspaceContentsById.set(key, content);
         });
     };
@@ -16817,6 +16931,15 @@ async function renderProfileIntoContainer(userId) {
 
         // Injecter les widgets de croissance virale
         injectViralGrowthWidgets(userId);
+
+        bindProfileImmersiveMedia(profileContainer);
+        profileContainer.classList.remove("profile-content-enter");
+        void profileContainer.offsetWidth;
+        profileContainer.classList.add("profile-content-enter");
+        setTimeout(
+            () => profileContainer.classList.remove("profile-content-enter"),
+            300,
+        );
     };
 
     if (
@@ -16899,10 +17022,17 @@ function getProfileSkeletonMarkup(user = null) {
             </div>
 </div>
     `;
+    const feedSkeleton = `
+        <div class="profile-skeleton-feed" aria-hidden="true">
+            <div class="profile-skeleton-feed-card"><div class="skeleton skeleton-card-sm"></div><div class="skeleton skeleton-text"></div><div class="skeleton skeleton-text" style="width:65%"></div></div>
+            <div class="profile-skeleton-feed-card"><div class="skeleton skeleton-card-sm"></div><div class="skeleton skeleton-text"></div><div class="skeleton skeleton-text" style="width:65%"></div></div>
+            <div class="profile-skeleton-feed-card"><div class="skeleton skeleton-card-sm"></div><div class="skeleton skeleton-text"></div><div class="skeleton skeleton-text" style="width:65%"></div></div>
+        </div>
+    `;
 
     if (isProfessionalAccount) {
         return `
-<div class="loading-state-container profile-skeleton profile-skeleton--professional" role="status" aria-busy="true" aria-live="polite">
+<div class="loading-state-container profile-skeleton profile-skeleton--professional" role="status" aria-label="Chargement du profil" aria-busy="true" aria-live="polite">
             <div class="skeleton skeleton-banner" aria-hidden="true" style="height: 220px; border-radius: 28px;"></div>
 
             <div class="profile-skeleton-header" style="margin-top: -58px; align-items: flex-end;">
@@ -16929,12 +17059,13 @@ function getProfileSkeletonMarkup(user = null) {
                 ${timelineItem(2)}
                 ${timelineItem(3)}
             </div>
+            ${feedSkeleton}
 </div>
     `;
     }
 
     return `
-<div class="loading-state-container profile-skeleton" role="status" aria-busy="true" aria-live="polite">
+<div class="loading-state-container profile-skeleton" role="status" aria-label="Chargement du profil" aria-busy="true" aria-live="polite">
             <div class="skeleton skeleton-banner" aria-hidden="true"></div>
 
             <div class="profile-skeleton-header">
@@ -16961,6 +17092,7 @@ function getProfileSkeletonMarkup(user = null) {
                 ${timelineItem(2)}
                 ${timelineItem(3)}
             </div>
+            ${feedSkeleton}
 </div>
     `;
 }

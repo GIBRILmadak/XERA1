@@ -43,23 +43,35 @@
     }
 
     function getContents(userId) {
-        var result = [];
+        var sources = [];
+        var hasMatchingProfileContext = false;
         try {
             var profileContext = window.profileWorkspaceContext;
             if (profileContext && String(profileContext.profileUserId) === String(userId) && Array.isArray(profileContext.contents)) {
-                result = profileContext.contents;
-            } else if (typeof window.getUserContentLocal === "function") {
-                result = window.getUserContentLocal(userId) || [];
-            } else if (window.userContents && Array.isArray(window.userContents[userId])) {
-                result = window.userContents[userId];
+                hasMatchingProfileContext = true;
+                sources.push(profileContext.contents);
+            }
+            if (!hasMatchingProfileContext) {
+                if (typeof window.getUserContentLocal === "function") {
+                    sources.push(window.getUserContentLocal(userId) || []);
+                } else if (window.userContents && Array.isArray(window.userContents[userId])) {
+                    sources.push(window.userContents[userId]);
+                }
             }
         } catch (error) {
-            result = [];
+            sources = [];
         }
         var isAdmin = typeof window.isSuperAdmin === "function" && window.isSuperAdmin();
-        return result.filter(function (content) {
-            return content && (isAdmin || !content.isDeleted);
-        }).sort(function (left, right) {
+        var unique = new Map();
+        sources.flat().forEach(function (content, index) {
+            if (!content || (!isAdmin && content.isDeleted)) return;
+            var id = content.contentId || content.content_id || content.id;
+            var key = id
+                ? String(id)
+                : [content.createdAt || content.created_at || "", content.title || "", index].join(":");
+            unique.set(key, content);
+        });
+        return Array.from(unique.values()).sort(function (left, right) {
             return new Date(right.createdAt || right.created_at || 0).getTime() -
                 new Date(left.createdAt || left.created_at || 0).getTime();
         });
@@ -309,6 +321,8 @@
     function buildUpdateFeed(panel, contents, userId) {
         var timeline = panel.querySelector(".timeline.profile-content-shell");
         if (timeline) timeline.remove();
+        var previousView = panel.querySelector(".profile-updates-view");
+        if (previousView) previousView.remove();
 
         var view = makeElement("section", "profile-updates-view");
         var toolbar = makeElement("div", "profile-updates-toolbar");
@@ -392,6 +406,7 @@
             item.dataset.profileTags = getContentTags(content).join(" ");
             item.dataset.profileType = String(getTypeLabel(content)).toLowerCase();
             item.dataset.profileUpdateIndex = String(index);
+            item.dataset.profileContentId = content.contentId || content.content_id || content.id || "";
 
             var cardHtml = "";
             try {
@@ -485,6 +500,30 @@
         if (empty) empty.hidden = visible > 0;
     }
 
+    function getContentSignature(contents) {
+        return contents.map(function (content, index) {
+            return content.contentId || content.content_id || content.id ||
+                [content.createdAt || content.created_at || "", content.title || "", index].join(":");
+        }).join("|");
+    }
+
+    function syncOverviewUpdates(workspace, contents) {
+        var latestGrid = workspace.querySelector("[data-profile-latest-updates]");
+        if (!latestGrid) return;
+        latestGrid.replaceChildren();
+
+        var feedItems = workspace.querySelectorAll("[data-profile-update-feed] .profile-update-feed-item");
+        contents.slice(0, 3).forEach(function (_content, index) {
+            if (feedItems[index]) latestGrid.appendChild(feedItems[index].cloneNode(true));
+        });
+
+        if (!contents.length) {
+            var empty = makeElement("div", "profile-content-empty");
+            empty.innerHTML = "<h3>Aucune publication récente</h3><p>Les mises à jour visibles apparaîtront ici.</p>";
+            latestGrid.appendChild(empty);
+        }
+    }
+
     function setActiveTab(root, name, pushHistory) {
         var valid = ["overview", "projects", "updates"];
         if (valid.indexOf(name) === -1) name = "overview";
@@ -559,7 +598,7 @@
 
         var projectHeading = makeElement("div", "profile-workspace-section-heading");
         projectHeading.innerHTML = '<div><span class="profile-section-kicker">Build in Public</span><h3>Projets actifs</h3></div>' +
-            '<button type="button" class="profile-workspace-link" data-profile-tab-target="projects">Tous les projets →</button>';
+            '<a class="profile-workspace-link" href="#profile-workspace-panel-projects" data-profile-tab-target="projects">Tous les projets →</a>';
         overview.appendChild(projectHeading);
 
         var overviewGrid = makeElement("div", "profile-workspace-project-grid profile-workspace-project-grid--overview");
@@ -568,7 +607,7 @@
 
         var latestHeading = makeElement("div", "profile-workspace-section-heading");
         latestHeading.innerHTML = '<div><span class="profile-section-kicker">Updates récentes</span><h3>Dernières publications</h3></div>' +
-            '<button type="button" class="profile-workspace-link" data-profile-tab-target="updates">Voir le fil complet →</button>';
+            '<a class="profile-workspace-link" href="#profile-workspace-panel-updates" data-profile-tab-target="updates">Voir le fil complet →</a>';
         overview.appendChild(latestHeading);
         var latestGrid = makeElement("div", "profile-workspace-latest");
         latestGrid.dataset.profileLatestUpdates = "true";
@@ -623,6 +662,7 @@
                 return node !== hero && node.matches(".profile-privacy-card, .profile-privacy-muted");
             });
         var activityRestricted = hero.classList.contains("profile-privacy-locked") || !!privacyNoticeSource;
+        workspace.dataset.profileActivityRestricted = activityRestricted ? "true" : "false";
         var privacyNotice = null;
         if (activityRestricted) {
             privacyNotice = makeElement("div", "profile-privacy-muted");
@@ -716,11 +756,8 @@
             }
             syncOverviewProjects(workspace);
             buildUpdateFeed(updates, contents, userId);
-
-            contents.slice(0, 3).forEach(function (content) {
-                var source = updates.querySelectorAll(".profile-update-feed-item")[contents.indexOf(content)];
-                if (source) latestGrid.appendChild(source.cloneNode(true));
-            });
+            workspace.dataset.profileContentsSignature = getContentSignature(contents);
+            syncOverviewUpdates(workspace, contents);
         }
 
         var filterBar = projects.querySelector(".profile-workspace-project-toolbar");
@@ -745,15 +782,31 @@
         root.dataset.profileWorkspaceEvents = "true";
 
         root.addEventListener("click", function (event) {
+            var media = event.target.closest(".profile-update-media");
+            if (media && !event.target.closest("button, a")) {
+                var feedItem = media.closest(".profile-update-feed-item");
+                var contentId = feedItem && feedItem.dataset.profileContentId;
+                var userId = getProfileUserId(root);
+                if (contentId && typeof window.openImmersive === "function") {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    event.stopImmediatePropagation();
+                    window.openImmersive(userId, contentId, {
+                        scope: "profile",
+                        contents: getContents(userId),
+                    });
+                }
+                return;
+            }
             var tab = event.target.closest("[data-profile-tab]");
             var tabTarget = event.target.closest("[data-profile-tab-target]");
-            var openTab = event.target.closest("[data-profile-tab-target]");
             if (tab) {
                 setActiveTab(root, tab.dataset.profileTab, true);
                 return;
             }
-            if (tabTarget || openTab) {
-                setActiveTab(root, (tabTarget || openTab).dataset.profileTabTarget, true);
+            if (tabTarget) {
+                event.preventDefault();
+                setActiveTab(root, tabTarget.dataset.profileTabTarget, true);
                 return;
             }
             var reset = event.target.closest("[data-profile-filter-reset]");
@@ -800,7 +853,7 @@
                 applyUpdateFilters(root, true);
                 syncFilterUrl(root, "project", filter);
             }
-        });
+        }, true);
 
         root.addEventListener("change", function (event) {
             var select = event.target.closest("[data-profile-filter]");
@@ -857,6 +910,19 @@
             var projectGrid = workspace.querySelector("[data-profile-projects]");
             var overviewWidgets = workspace.querySelector("[data-profile-overview-widgets]");
             var ownProfile = isProfileOwner(root, userId);
+            if (workspace.dataset.profileActivityRestricted !== "true") {
+                var contents = getContents(userId);
+                var signature = getContentSignature(contents);
+                if (signature !== workspace.dataset.profileContentsSignature) {
+                    var updatesPanel = workspace.querySelector('[data-profile-panel="updates"]');
+                    if (updatesPanel) {
+                        buildUpdateFeed(updatesPanel, contents, userId);
+                        applyUpdateFilters(workspace, true);
+                    }
+                    syncOverviewUpdates(workspace, contents);
+                    workspace.dataset.profileContentsSignature = signature;
+                }
+            }
             var lateProjectSources = Array.prototype.slice.call(root.querySelectorAll(".profile-progress-board, #user-arcs-section, .arcs-section, .projects-grid"))
                 .filter(function (section) { return !section.closest(".profile-workspace"); });
             if (projectGrid && lateProjectSources.length) {

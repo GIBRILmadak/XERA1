@@ -956,56 +956,68 @@ const SUPPORT_COMMISSION_RATE = 0.25;
 // Source: KPay dashboard → Applications → Edit → country selector (screenshot verified).
 const SUPPORTED_MOBILE_MONEY_PROVIDERS = new Set([
     // Bénin
-    "MTN_MOMO_BEN", "MOOV_BEN",
+    "MTN_MOMO_BEN",
+    "MOOV_BEN",
     // Cameroun
-    "MTN_MOMO_CMR", "ORANGE_CMR",
+    "MTN_MOMO_CMR",
+    "ORANGE_CMR",
     // Congo-Brazzaville
-    "MTN_MOMO_COG", "AIRTEL_COG",
+    "MTN_MOMO_COG",
+    "AIRTEL_COG",
     // Côte d'Ivoire
-    "MTN_MOMO_CIV", "ORANGE_CIV",
+    "MTN_MOMO_CIV",
+    "ORANGE_CIV",
     // Gabon
     "AIRTEL_GAB",
     // Kenya
     "MPESA_KEN",
     // Ouganda
-    "AIRTEL_OAPI_UGA", "MTN_MOMO_UGA",
+    "AIRTEL_OAPI_UGA",
+    "MTN_MOMO_UGA",
     // RD Congo
-    "VODACOM_MPESA_COD", "MTN_MOMO_COD", "AIRTEL_COD", "ORANGE_COD",
+    "VODACOM_MPESA_COD",
+    "MTN_MOMO_COD",
+    "AIRTEL_COD",
+    "ORANGE_COD",
     // Rwanda
-    "MTN_MOMO_RWA", "AIRTEL_RWA",
+    "MTN_MOMO_RWA",
+    "AIRTEL_RWA",
     // Sénégal
-    "FREE_SEN", "ORANGE_SEN",
+    "FREE_SEN",
+    "ORANGE_SEN",
     // Sierra Leone
     "ORANGE_SLE",
     // Zambie
-    "AIRTEL_OAPI_ZMB", "MTN_MOMO_ZMB", "ZAMTEL_ZMB",
+    "AIRTEL_OAPI_ZMB",
+    "MTN_MOMO_ZMB",
+    "ZAMTEL_ZMB",
 ]);
 
 const MOBILE_MONEY_PROVIDER_LABELS = {
-    MTN_MOMO_BEN:       "MTN MoMo (Bénin)",
-    MOOV_BEN:           "Moov Money (Bénin)",
-    MTN_MOMO_CMR:       "MTN MoMo (Cameroun)",
-    ORANGE_CMR:         "Orange Money (Cameroun)",
-    MTN_MOMO_COG:       "MTN MoMo (Congo-Brazzaville)",
-    AIRTEL_COG:         "Airtel Money (Congo-Brazzaville)",
-    MTN_MOMO_CIV:       "MTN MoMo (Côte d'Ivoire)",
-    ORANGE_CIV:         "Orange Money (Côte d'Ivoire)",
-    AIRTEL_GAB:         "Airtel Money (Gabon)",
-    MPESA_KEN:          "M-Pesa (Kenya)",
-    AIRTEL_OAPI_UGA:    "Airtel Money (Ouganda)",
-    MTN_MOMO_UGA:       "MTN MoMo (Ouganda)",
-    VODACOM_MPESA_COD:  "Vodacom M-Pesa (RD Congo)",
-    MTN_MOMO_COD:       "MTN MoMo (RD Congo)",
-    AIRTEL_COD:         "Airtel Money (RD Congo)",
-    ORANGE_COD:         "Orange Money (RD Congo)",
-    MTN_MOMO_RWA:       "MTN MoMo (Rwanda)",
-    AIRTEL_RWA:         "Airtel Money (Rwanda)",
-    FREE_SEN:           "Free Money (Sénégal)",
-    ORANGE_SEN:         "Orange Money (Sénégal)",
-    ORANGE_SLE:         "Orange Money (Sierra Leone)",
-    AIRTEL_OAPI_ZMB:    "Airtel Money (Zambie)",
-    MTN_MOMO_ZMB:       "MTN MoMo (Zambie)",
-    ZAMTEL_ZMB:         "Zamtel (Zambie)",
+    MTN_MOMO_BEN: "MTN MoMo (Bénin)",
+    MOOV_BEN: "Moov Money (Bénin)",
+    MTN_MOMO_CMR: "MTN MoMo (Cameroun)",
+    ORANGE_CMR: "Orange Money (Cameroun)",
+    MTN_MOMO_COG: "MTN MoMo (Congo-Brazzaville)",
+    AIRTEL_COG: "Airtel Money (Congo-Brazzaville)",
+    MTN_MOMO_CIV: "MTN MoMo (Côte d'Ivoire)",
+    ORANGE_CIV: "Orange Money (Côte d'Ivoire)",
+    AIRTEL_GAB: "Airtel Money (Gabon)",
+    MPESA_KEN: "M-Pesa (Kenya)",
+    AIRTEL_OAPI_UGA: "Airtel Money (Ouganda)",
+    MTN_MOMO_UGA: "MTN MoMo (Ouganda)",
+    VODACOM_MPESA_COD: "Vodacom M-Pesa (RD Congo)",
+    MTN_MOMO_COD: "MTN MoMo (RD Congo)",
+    AIRTEL_COD: "Airtel Money (RD Congo)",
+    ORANGE_COD: "Orange Money (RD Congo)",
+    MTN_MOMO_RWA: "MTN MoMo (Rwanda)",
+    AIRTEL_RWA: "Airtel Money (Rwanda)",
+    FREE_SEN: "Free Money (Sénégal)",
+    ORANGE_SEN: "Orange Money (Sénégal)",
+    ORANGE_SLE: "Orange Money (Sierra Leone)",
+    AIRTEL_OAPI_ZMB: "Airtel Money (Zambie)",
+    MTN_MOMO_ZMB: "MTN MoMo (Zambie)",
+    ZAMTEL_ZMB: "Zamtel (Zambie)",
 };
 
 function areKPayPayoutsEnabled() {
@@ -1785,7 +1797,11 @@ async function initiateKPayPayment(
         try {
             jsonError = JSON.parse(errorText);
         } catch (_) {}
-        const exactMsg = jsonError?.message || jsonError?.error || errorText || response.statusText;
+        const exactMsg =
+            jsonError?.message ||
+            jsonError?.error ||
+            errorText ||
+            response.statusText;
         const err = new Error(`KPay: ${exactMsg}`);
         err.kpayStatus = response.status;
         err.kpayDetails = jsonError;
@@ -2456,7 +2472,10 @@ function resolveTransactionCommissionAmount(row) {
 }
 
 function normalizeMobileMoneyProvider(value) {
-    const upper = String(value || "").trim().toUpperCase().replace(/[\s-]+/g, "_");
+    const upper = String(value || "")
+        .trim()
+        .toUpperCase()
+        .replace(/[\s-]+/g, "_");
     if (SUPPORTED_MOBILE_MONEY_PROVIDERS.has(upper)) return upper;
     return null;
 }
@@ -2584,13 +2603,15 @@ function sendCheckoutErrorResponse(res, error, fallbackMessage, context = {}) {
     setResponseHeader(res, "X-Xera1-Error-Code", sourceCode);
 
     const message = String(error?.message || "");
-    const safeKpayMessage = (message.startsWith("KPay:") || message.startsWith("KPay API error:"))
-        ? message
-        : fallbackMessage;
+    const safeKpayMessage =
+        message.startsWith("KPay:") || message.startsWith("KPay API error:")
+            ? message
+            : fallbackMessage;
 
     const acceptsJson =
         String(res.req?.headers?.accept || "").includes("application/json") ||
-        String(res.req?.headers?.["x-requested-with"] || "").toLowerCase() === "xmlhttprequest";
+        String(res.req?.headers?.["x-requested-with"] || "").toLowerCase() ===
+            "xmlhttprequest";
 
     if (acceptsJson) {
         return res.status(error?.kpayStatus || 400).json({
@@ -2729,7 +2750,6 @@ async function buildCreatorWalletOverview(userId) {
     const [
         profileResult,
         transactionsResult,
-        videoPayoutsResult,
         payoutSettingsResult,
         withdrawalsResult,
     ] = await Promise.all([
@@ -2746,35 +2766,23 @@ async function buildCreatorWalletOverview(userId) {
                 "id, type, amount_gross, amount_net_creator, amount_commission_xera, currency, status, description, metadata, created_at",
             )
             .eq("to_user_id", userId)
-            .in("type", ["support", "video_rpm"])
+            .eq("type", "support")
             .in("status", ["pending", "succeeded"])
             .order("created_at", { ascending: false }),
-        supabase
-            .from("video_payouts")
-            .select(
-                "id, period_month, views, rpm_rate, amount_gross, amount_net_creator, amount_commission_xera, status, paid_at, created_at",
-            )
-            .eq("creator_id", userId)
-            .in("status", ["pending", "processing", "paid"])
-            .order("period_month", { ascending: false }),
         fetchCreatorPayoutSettings(userId),
         fetchCreatorWithdrawalRequests(userId, { limit: 20 }),
     ]);
 
     if (profileResult.error) throw profileResult.error;
     if (transactionsResult.error) throw transactionsResult.error;
-    if (videoPayoutsResult.error) throw videoPayoutsResult.error;
 
     const profile = profileResult.data || null;
     const revenueTransactions = transactionsResult.data || [];
-    const videoPayouts = videoPayoutsResult.data || [];
     const payoutSettings = payoutSettingsResult || null;
     const withdrawals = withdrawalsResult || [];
 
     let supportAvailable = 0;
     let supportPending = 0;
-    let videoAvailable = 0;
-    let videoPending = 0;
 
     revenueTransactions.forEach((tx) => {
         if (!tx) return;
@@ -2783,29 +2791,7 @@ async function buildCreatorWalletOverview(userId) {
             if (tx.status === "succeeded") supportAvailable += net;
             if (tx.status === "pending") supportPending += net;
         }
-        if (tx.type === "video_rpm") {
-            if (tx.status === "succeeded") videoAvailable += net;
-            if (tx.status === "pending") videoPending += net;
-        }
     });
-
-    // Correction de la logique de revenus vidéo si les transactions ne sont pas encore créées
-    const hasVideoRevenueTransactions = revenueTransactions.some(
-        (tx) => tx.type === "video_rpm",
-    );
-    if (!hasVideoRevenueTransactions) {
-        // Si pas de transactions de type video_rpm, on se base sur les payouts calculés
-        videoAvailable = 0;
-        videoPending = 0;
-        videoPayouts.forEach((payout) => {
-            if (!payout) return;
-            const net = roundMoney(payout.amount_net_creator);
-            if (payout.status === "paid") videoAvailable += net;
-            if (["pending", "processing"].includes(payout.status)) {
-                videoPending += net;
-            }
-        });
-    }
 
     let pendingWithdrawals = 0;
     let paidWithdrawals = 0;
@@ -2819,8 +2805,8 @@ async function buildCreatorWalletOverview(userId) {
         }
     });
 
-    const creditedBalance = roundMoney(supportAvailable + videoAvailable);
-    const pendingIncoming = roundMoney(supportPending + videoPending);
+    const creditedBalance = roundMoney(supportAvailable);
+    const pendingIncoming = roundMoney(supportPending);
     const availableBalance = roundMoney(
         Math.max(0, creditedBalance - pendingWithdrawals - paidWithdrawals),
     );
@@ -2838,8 +2824,6 @@ async function buildCreatorWalletOverview(userId) {
             lifetimeNetRevenue: roundMoney(creditedBalance + paidWithdrawals),
             supportAvailable: roundMoney(supportAvailable),
             supportPending: roundMoney(supportPending),
-            videoAvailable: roundMoney(videoAvailable),
-            videoPending: roundMoney(videoPending),
             minimumWithdrawalUsd: WITHDRAWAL_MIN_USD,
             canRequestWithdrawal:
                 availableBalance >= WITHDRAWAL_MIN_USD * 2 &&
@@ -3065,15 +3049,13 @@ async function activateSubscription({
     const periodEndIso = periodEnd.toISOString();
 
     let badgeToApply = badgeForPlan;
-    let followersCount = 0;
     try {
         const { data: profile } = await supabase
             .from("users")
-            .select("badge, followers_count")
+            .select("badge")
             .eq("id", userId)
             .maybeSingle();
         const existingBadge = String(profile?.badge || "").toLowerCase();
-        followersCount = Number(profile?.followers_count || 0);
         const protectedBadges = new Set([
             "staff",
             "team",
@@ -3088,9 +3070,7 @@ async function activateSubscription({
     } catch (e) {
         // Ignore profile read errors; continue with default badge
     }
-    const isMonetized =
-        ["medium", "pro", "elite"].includes(normalizedPlan) &&
-        followersCount >= 1000;
+    const isMonetized = ["medium", "pro", "elite"].includes(normalizedPlan);
 
     const { error: cancelSubsError } = await supabase
         .from("subscriptions")
@@ -3282,6 +3262,7 @@ function canUserReceiveSupport(user) {
     if (!["medium", "pro", "elite"].includes(plan)) return false;
     if (!isPlanActiveForUser(user)) return false;
     if (isGiftedProUser(user)) return true;
+    if (["medium", "pro"].includes(plan)) return true;
     return (
         user.is_monetized === true || Number(user.followers_count || 0) >= 1000
     );
@@ -5241,11 +5222,13 @@ async function handleKPaySubscriptionCheckout(req, res) {
         if (kpayRes.gatewayUrl) {
             responseData.gatewayUrl = kpayRes.gatewayUrl;
             responseData.mode = "REDIRECT";
-            responseData.message = "Redirection vers KPay pour compléter le paiement.";
+            responseData.message =
+                "Redirection vers KPay pour compléter le paiement.";
         } else {
             // For USSD/Mobile Money payments
             responseData.mode = kpayRes.mode || "USSD";
-            responseData.message = "Demande de paiement envoyée par USSD sur votre téléphone. Veuillez valider avec votre code PIN.";
+            responseData.message =
+                "Demande de paiement envoyée par USSD sur votre téléphone. Veuillez valider avec votre code PIN.";
         }
 
         return res.json(responseData);
@@ -5486,11 +5469,13 @@ async function handleKPaySupportCheckout(req, res) {
         if (kpayRes.gatewayUrl) {
             responseData.gatewayUrl = kpayRes.gatewayUrl;
             responseData.mode = "REDIRECT";
-            responseData.message = "Redirection vers KPay pour compléter le paiement.";
+            responseData.message =
+                "Redirection vers KPay pour compléter le paiement.";
         } else {
             // For USSD/Mobile Money payments
             responseData.mode = kpayRes.mode || "USSD";
-            responseData.message = "Demande de soutien envoyée par USSD sur votre téléphone. Veuillez valider avec votre code PIN.";
+            responseData.message =
+                "Demande de soutien envoyée par USSD sur votre téléphone. Veuillez valider avec votre code PIN.";
         }
 
         return res.json(responseData);
@@ -5930,7 +5915,7 @@ app.post("/api/admin/gift-plan", async (req, res) => {
 
         const { data: profile, error: profileError } = await supabase
             .from("users")
-            .select("badge, followers_count")
+            .select("badge")
             .eq("id", targetUserId)
             .maybeSingle();
 
@@ -5951,11 +5936,7 @@ app.post("/api/admin/gift-plan", async (req, res) => {
             normalizedPlan !== "pro" && PROTECTED_BADGES.has(existingBadge)
                 ? profile.badge
                 : badgeForPlan;
-        const followersCount = Number(profile.followers_count || 0);
-        const isMonetized =
-            normalizedPlan === "pro"
-                ? true
-                : normalizedPlan === "medium" && followersCount >= 1000;
+        const isMonetized = ["medium", "pro", "elite"].includes(normalizedPlan);
 
         // Calculer les fonctionnalités premium selon le plan
         const premiumFeatures = computePremiumFeatures(normalizedPlan);
@@ -6091,10 +6072,15 @@ app.post("/api/promo/validate", async (req, res) => {
             partnerDiscount = await findActivePartnerDiscountCode(normalized);
         }
         if (!discount && !partnerDiscount) {
-            return res.status(404).json({ valid: false, error: "Code invalide ou expiré" });
+            return res
+                .status(404)
+                .json({ valid: false, error: "Code invalide ou expiré" });
         }
         if (partnerDiscount && plan && String(plan).toLowerCase() !== "pro") {
-            return res.status(400).json({ valid: false, error: "Ce code partenaire est valable uniquement pour l'abonnement Pro." });
+            return res.status(400).json({
+                valid: false,
+                error: "Ce code partenaire est valable uniquement pour l'abonnement Pro.",
+            });
         }
 
         const activeDiscount = discount || partnerDiscount;
@@ -6105,11 +6091,13 @@ app.post("/api/promo/validate", async (req, res) => {
             code: activeDiscount.code,
             discount_percent: discountPercent,
             type: discount ? "standard" : "partner",
-            plan: activeDiscount.plan || (partnerDiscount ? "pro" : null)
+            plan: activeDiscount.plan || (partnerDiscount ? "pro" : null),
         });
     } catch (err) {
         console.error("Promo validation error:", err);
-        return res.status(500).json({ valid: false, error: "Erreur de validation" });
+        return res
+            .status(500)
+            .json({ valid: false, error: "Erreur de validation" });
     }
 });
 
@@ -6532,7 +6520,6 @@ app.get("/api/creator-revenue/:userId", async (req, res) => {
             totalNet: 0,
             totalCommission: 0,
             supportRevenue: 0,
-            videoRevenue: 0,
             transactionCount: transactions ? transactions.length : 0,
         };
 
@@ -6548,8 +6535,6 @@ app.get("/api/creator-revenue/:userId", async (req, res) => {
 
                 if (tx.type === "support") {
                     summary.supportRevenue += net;
-                } else if (tx.type === "video_rpm") {
-                    summary.videoRevenue += net;
                 }
             });
         }
@@ -7347,7 +7332,10 @@ app.all(["/api/cron/daily", "/api/cron/master"], async (req, res) => {
 
     // 5. Fata Worker
     try {
-        const { processActivityLog, processPendingEvents } = require("./fata-worker");
+        const {
+            processActivityLog,
+            processPendingEvents,
+        } = require("./fata-worker");
         await processActivityLog();
         await processPendingEvents();
         results.fataWorker = "ok";
@@ -7424,7 +7412,10 @@ app.all(["/api/cron/fata-worker", "/cron/fata-worker"], async (req, res) => {
     }
 
     try {
-        const { processActivityLog, processPendingEvents } = require("./fata-worker");
+        const {
+            processActivityLog,
+            processPendingEvents,
+        } = require("./fata-worker");
         await processActivityLog();
         await processPendingEvents();
         return res.status(200).json({
@@ -7433,7 +7424,9 @@ app.all(["/api/cron/fata-worker", "/cron/fata-worker"], async (req, res) => {
         });
     } catch (error) {
         console.error("[Fata Cron Worker Error]:", error);
-        return res.status(500).json({ error: error?.message || "Fata worker error" });
+        return res
+            .status(500)
+            .json({ error: error?.message || "Fata worker error" });
     }
 });
 
@@ -7441,7 +7434,9 @@ app.all(["/api/cron/fata-worker", "/cron/fata-worker"], async (req, res) => {
 app.get("/api/fata/status", async (req, res) => {
     const auth = await authenticateRequest(req);
     if (auth.error) {
-        return res.status(auth.error.status).json({ error: auth.error.message });
+        return res
+            .status(auth.error.status)
+            .json({ error: auth.error.message });
     }
 
     try {
@@ -7472,7 +7467,9 @@ app.get("/api/fata/status", async (req, res) => {
         });
     } catch (error) {
         console.error("Fata status error:", error);
-        return res.status(500).json({ error: error?.message || "Failed to fetch Fata status" });
+        return res
+            .status(500)
+            .json({ error: error?.message || "Failed to fetch Fata status" });
     }
 });
 
@@ -7480,10 +7477,16 @@ app.get("/api/fata/status", async (req, res) => {
 app.post("/api/admin/fata/qualifications", async (req, res) => {
     const auth = await authenticateSuperAdmin(req);
     if (auth.error) {
-        return res.status(auth.error.status).json({ error: auth.error.message });
+        return res
+            .status(auth.error.status)
+            .json({ error: auth.error.message });
     }
 
-    const { challengeId, subjects, visibilityMultiplier = 5.0 } = req.body || {};
+    const {
+        challengeId,
+        subjects,
+        visibilityMultiplier = 5.0,
+    } = req.body || {};
 
     if (!challengeId || !Array.isArray(subjects) || subjects.length === 0) {
         return res.status(400).json({
@@ -7491,12 +7494,17 @@ app.post("/api/admin/fata/qualifications", async (req, res) => {
         });
     }
 
-    const { resolveChallengeConfig, isTestChallenge } = require("./fata-contract");
+    const {
+        resolveChallengeConfig,
+        isTestChallenge,
+    } = require("./fata-contract");
     let challengeConfig;
     try {
         challengeConfig = resolveChallengeConfig(challengeId);
     } catch (error) {
-        return res.status(400).json({ error: error.message || "Invalid challengeId" });
+        return res
+            .status(400)
+            .json({ error: error.message || "Invalid challengeId" });
     }
 
     const isTest = isTestChallenge(challengeId);
@@ -9876,3 +9884,4 @@ module.exports.handleKPaySupportCheckout = handleKPaySupportCheckout;
 module.exports.handleKPayCallback = handleKPayCallback;
 module.exports.handlePublicConfig = handlePublicConfig;
 module.exports.evaluateTechBadges = evaluateTechBadges;
+module.exports.canUserReceiveSupport = canUserReceiveSupport;

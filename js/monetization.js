@@ -17,7 +17,6 @@ const PLANS = {
             "Notifications automatiques aux followers",
         ],
         canReceiveTips: false,
-        canMonetizeVideos: false,
     },
     MEDIUM: {
         id: "PLAN_MEDIUM",
@@ -37,7 +36,6 @@ const PLANS = {
             "Priorité dans les recommandations",
         ],
         canReceiveTips: true,
-        canMonetizeVideos: false,
         minFollowers: 1000,
         exclusiveFeatures: {
             detailedAnalytics: true,
@@ -57,7 +55,6 @@ const PLANS = {
             "Analytics avancés",
             "Lives en HD",
             "Lives privés réservés aux followers",
-            "Monétisation vidéo ($0.40 par 1000 vues)",
             "Outils de collaboration avancés",
             "Accès anticipé aux nouvelles fonctionnalités",
             "Personnalisation complète de la page profil",
@@ -66,11 +63,8 @@ const PLANS = {
             "Visibilité maximale dans Discover",
         ],
         canReceiveTips: true,
-        canMonetizeVideos: true,
         minFollowers: 1000,
-        rpmRate: 0.4,
         exclusiveFeatures: {
-            videoMonetization: true,
             advancedCollaborationTools: true,
             earlyAccessFeatures: true,
             fullProfileCustomization: true,
@@ -95,12 +89,10 @@ const PLANS = {
             "Accès complet au Talent Explorer",
         ],
         canReceiveTips: true,
-        canMonetizeVideos: true,
         minFollowers: 0,
         exclusiveFeatures: {
             talentExplorer: true,
             monthlyAnalytics: true,
-            videoMonetization: true,
             advancedCollaborationTools: true,
             fullProfileCustomization: true,
             realtimeAnalytics: true,
@@ -117,7 +109,6 @@ const PAYMENT_RULES = {
     maxTipAmount: 1000.0,
 };
 
-const VIDEO_MONETIZATION_MIN_DURATION_SECONDS = 60;
 const MONETIZATION_TRANSIENT_NETWORK_PATTERNS = [
     "failed to fetch",
     "networkerror",
@@ -163,19 +154,6 @@ function normalizeMonetizationQueryError(error) {
         hint: "",
         code: "",
     };
-}
-
-function normalizeVideoDurationSeconds(value) {
-    const duration = Number.parseFloat(value);
-    if (!Number.isFinite(duration) || duration <= 0) return 0;
-    return duration;
-}
-
-function isEligibleVideoDuration(value) {
-    return (
-        normalizeVideoDurationSeconds(value) >
-        VIDEO_MONETIZATION_MIN_DURATION_SECONDS
-    );
 }
 
 /* ========================================
@@ -580,6 +558,7 @@ function canReceiveSupport(user) {
     if (!user) return false;
     if (!hasActiveMonetizationPlan(user)) return false;
     if (isGiftedPro(user)) return true;
+    if (["medium", "pro"].includes(getNormalizedUserPlan(user))) return true;
     return hasMonetizationFlag(user) || getFollowerCountFromUser(user) >= 1000;
 }
 
@@ -590,15 +569,6 @@ function isGiftedPro(user) {
     const status = String(user.plan_status || "").toLowerCase();
     const planEnd = user.plan_ends_at || user.planEndsAt || null;
     return plan === "pro" && status === "active" && !planEnd;
-}
-
-// Vérifier si un créateur peut monétiser ses vidéos
-function canMonetizeVideos(user) {
-    if (!user) return false;
-    if (getNormalizedUserPlan(user) !== "pro") return false;
-    if (!isPlanActiveForUser(user)) return false;
-    if (isGiftedPro(user)) return true;
-    return hasMonetizationFlag(user) || getFollowerCountFromUser(user) >= 1000;
 }
 
 // Obtenir le plan actuel de l'utilisateur
@@ -875,7 +845,6 @@ async function calculateCreatorRevenue(creatorId) {
         const summary = {
             totalRevenue: 0,
             supportRevenue: 0,
-            videoRevenue: 0,
             transactionCount: data ? data.length : 0,
         };
 
@@ -886,10 +855,6 @@ async function calculateCreatorRevenue(creatorId) {
                     summary.supportRevenue += parseFloat(
                         tx.amount_net_creator || 0,
                     );
-                } else if (tx.type === "video_rpm") {
-                    summary.videoRevenue += parseFloat(
-                        tx.amount_net_creator || 0,
-                    );
                 }
             });
         }
@@ -898,209 +863,6 @@ async function calculateCreatorRevenue(creatorId) {
     } catch (error) {
         console.error("Exception calcul revenus:", error);
         return { success: false, error: error.message };
-    }
-}
-
-/* ========================================
-   FONCTIONS SUPABASE - VIDÉOS ET VUES
-   ======================================== */
-
-// Enregistrer une vue vidéo (appelé par le système de tracking)
-async function recordVideoView(videoId, creatorId, videoDuration) {
-    try {
-        const today = new Date().toISOString().split("T")[0];
-        const normalizedDuration = normalizeVideoDurationSeconds(videoDuration);
-        const isEligible = isEligibleVideoDuration(normalizedDuration);
-
-        // Vérifier si une entrée existe déjà pour aujourd'hui
-        const { data: existing, error: checkError } = await supabase
-            .from("video_views")
-            .select("*")
-            .eq("video_id", videoId)
-            .eq("period_date", today)
-            .single();
-
-        if (checkError && checkError.code !== "PGRST116") {
-            console.error("Erreur vérification vue:", checkError);
-        }
-
-        if (existing) {
-            const existingDuration = normalizeVideoDurationSeconds(
-                existing.video_duration,
-            );
-            const nextDuration = Math.max(existingDuration, normalizedDuration);
-
-            // Incrémenter le compteur
-            const { data, error } = await supabase
-                .from("video_views")
-                .update({
-                    view_count: existing.view_count + 1,
-                    eligible: isEligibleVideoDuration(nextDuration),
-                    video_duration: nextDuration || null,
-                    period_month: today.substring(0, 7) + "-01",
-                    updated_at: new Date().toISOString(),
-                })
-                .eq("id", existing.id)
-                .select()
-                .single();
-
-            if (error) {
-                console.error("Erreur mise à jour vue:", error);
-                return { success: false, error: error.message };
-            }
-
-            return { success: true, data: data };
-        } else {
-            // Créer une nouvelle entrée
-            const { data, error } = await supabase
-                .from("video_views")
-                .insert({
-                    video_id: videoId,
-                    creator_id: creatorId,
-                    view_count: 1,
-                    eligible: isEligible,
-                    video_duration: normalizedDuration || null,
-                    period_date: today,
-                    period_month: today.substring(0, 7) + "-01",
-                })
-                .select()
-                .single();
-
-            if (error) {
-                console.error("Erreur création vue:", error);
-                return { success: false, error: error.message };
-            }
-
-            return { success: true, data: data };
-        }
-    } catch (error) {
-        console.error("Exception enregistrement vue:", error);
-        return { success: false, error: error.message };
-    }
-}
-
-// Récupérer les statistiques vidéo d'un créateur
-async function getCreatorVideoStats(creatorId, period = "month") {
-    try {
-        // On se base sur les contenus vidéo réels de l'utilisateur (table content)
-        // car les vues ne sont pas encore enregistrées dans video_views.
-        const now = new Date();
-        let startDate = null;
-        switch (period) {
-            case "day":
-                startDate = new Date(
-                    now.getFullYear(),
-                    now.getMonth(),
-                    now.getDate(),
-                );
-                break;
-            case "week":
-                startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-                break;
-            case "month":
-                startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-                break;
-            default:
-                startDate = null;
-        }
-
-        let query = supabase
-            .from("content")
-            .select("id, views, created_at, type")
-            .eq("user_id", creatorId)
-            .eq("type", "video");
-
-        if (startDate) {
-            query = query.gte("created_at", startDate.toISOString());
-        }
-
-        const { data, error } = await query;
-        if (error) {
-            if (!isTransientMonetizationNetworkError(error)) {
-                console.error("Erreur stats vidéo:", error);
-            }
-            return {
-                success: false,
-                error: normalizeMonetizationQueryError(error),
-            };
-        }
-
-        const stats = {
-            totalViews: 0,
-            totalEligibleViews: 0,
-            videoCount: 0,
-            estimatedRevenue: 0,
-        };
-
-        if (Array.isArray(data) && data.length > 0) {
-            data.forEach((row) => {
-                const views = Number(row.views || 0);
-                stats.totalViews += views;
-                stats.totalEligibleViews += views; // faute de durée, on considère toutes les vues éligibles
-            });
-            stats.videoCount = data.length;
-        }
-
-        stats.estimatedRevenue =
-            (stats.totalEligibleViews / 1000) *
-            PLANS.PRO.rpmRate *
-            (1 - PAYMENT_RULES.commissionRate);
-
-        return { success: true, data: stats };
-    } catch (error) {
-        if (!isTransientMonetizationNetworkError(error)) {
-            console.error("Exception stats vidéo:", error);
-        }
-        return {
-            success: false,
-            error: normalizeMonetizationQueryError(error),
-        };
-    }
-}
-
-/* ========================================
-   FONCTIONS SUPABASE - PAYOUTS VIDÉO
-   ======================================== */
-
-// Récupérer les payouts vidéo d'un créateur
-async function getCreatorVideoPayouts(creatorId, options = {}) {
-    try {
-        let query = supabase
-            .from("video_payouts")
-            .select("*")
-            .eq("creator_id", creatorId);
-
-        if (options.status) {
-            query = query.eq("status", options.status);
-        }
-
-        query = query.order("period_month", { ascending: false });
-
-        if (options.limit) {
-            query = query.limit(options.limit);
-        }
-
-        const { data, error } = await query;
-
-        if (error) {
-            if (!isTransientMonetizationNetworkError(error)) {
-                console.error("Erreur récupération payouts:", error);
-            }
-            return {
-                success: false,
-                error: normalizeMonetizationQueryError(error),
-            };
-        }
-
-        return { success: true, data: data || [] };
-    } catch (error) {
-        if (!isTransientMonetizationNetworkError(error)) {
-            console.error("Exception récupération payouts:", error);
-        }
-        return {
-            success: false,
-            error: normalizeMonetizationQueryError(error),
-        };
     }
 }
 
@@ -1363,7 +1125,10 @@ async function redirectToSupportCheckout({
         }
 
         if (typeof window.showToast === "function") {
-            window.showToast("Initialisation du soutien sécurisé via KPay...", "info");
+            window.showToast(
+                "Initialisation du soutien sécurisé via KPay...",
+                "info",
+            );
         }
 
         const apiBase =
@@ -1417,7 +1182,7 @@ async function redirectToSupportCheckout({
                 method: "POST",
                 headers: {
                     "Content-Type": "application/x-www-form-urlencoded",
-                    "Accept": "application/json",
+                    Accept: "application/json",
                 },
                 body: params.toString(),
             });
@@ -1431,11 +1196,19 @@ async function redirectToSupportCheckout({
                     // For card payments, open KPay gateway in a new tab
                     // This ensures PCI compliance while keeping the user experience
                     if (typeof window.open !== "undefined") {
-                        window.open(resData.gatewayUrl, "_blank", "noopener,noreferrer");
+                        window.open(
+                            resData.gatewayUrl,
+                            "_blank",
+                            "noopener,noreferrer",
+                        );
                     } else {
                         window.location.href = resData.gatewayUrl;
                     }
-                    return { success: true, data: resData, gatewayUrl: resData.gatewayUrl };
+                    return {
+                        success: true,
+                        data: resData,
+                        gatewayUrl: resData.gatewayUrl,
+                    };
                 }
                 // For USSD/Mobile Money
                 else if (resData.success || resData.status === "PENDING") {
@@ -1452,49 +1225,56 @@ async function redirectToSupportCheckout({
                             "success",
                         );
                     } else {
-                        alert(resData.message || "Demande USSD envoyée sur votre téléphone !");
+                        alert(
+                            resData.message ||
+                                "Demande USSD envoyée sur votre téléphone !",
+                        );
                     }
                     return { success: true, data: resData };
                 }
             }
-            
+
             // Handle error responses
-            const errorMsg = resData.error || resData.message || 
-                (resp.status === 500 ? "Erreur interne du serveur. Veuillez réessayer plus tard." : 
-                 `Erreur ${resp.status}: Impossible d'initialiser le paiement.`);
-            
+            const errorMsg =
+                resData.error ||
+                resData.message ||
+                (resp.status === 500
+                    ? "Erreur interne du serveur. Veuillez réessayer plus tard."
+                    : `Erreur ${resp.status}: Impossible d'initialiser le paiement.`);
+
             // Show error to user
             if (typeof window.showToast === "function") {
                 window.showToast(errorMsg, "error");
             } else if (typeof showGlobalNotification === "function") {
                 showGlobalNotification(errorMsg, "error");
             }
-            
+
             return {
                 success: false,
                 error: errorMsg,
                 status: resp.status,
             };
-            
         } catch (err) {
             supportCheckoutInProgress = false;
-            const errorMsg = err.message || "Erreur réseau lors de la connexion au service de paiement.";
-            
+            const errorMsg =
+                err.message ||
+                "Erreur réseau lors de la connexion au service de paiement.";
+
             if (typeof window.showToast === "function") {
                 window.showToast(errorMsg, "error");
             } else if (typeof showGlobalNotification === "function") {
                 showGlobalNotification(errorMsg, "error");
             }
-            
+
             return { success: false, error: errorMsg };
         }
-        
     } catch (error) {
         supportCheckoutInProgress = false;
         console.error("[Monetization] Direct support checkout error:", error);
 
         // Final fallback: show error
-        const errorMsg = error.message || "Erreur lors de l'initialisation du paiement.";
+        const errorMsg =
+            error.message || "Erreur lors de l'initialisation du paiement.";
         if (typeof window.showToast === "function") {
             window.showToast(errorMsg, "error");
         } else if (typeof showGlobalNotification === "function") {
@@ -1602,12 +1382,8 @@ if (typeof module !== "undefined" && module.exports) {
     module.exports = {
         PLANS,
         PAYMENT_RULES,
-        VIDEO_MONETIZATION_MIN_DURATION_SECONDS,
-        normalizeVideoDurationSeconds,
-        isEligibleVideoDuration,
         canReceiveSupport,
         isGiftedPro,
-        canMonetizeVideos,
         getUserPlan,
         formatCurrency,
         getUserActiveSubscription,
@@ -1618,12 +1394,8 @@ if (typeof module !== "undefined" && module.exports) {
         getCreatorTransactions,
         getSentTransactions,
         calculateCreatorRevenue,
-        recordVideoView,
-        getCreatorVideoStats,
-        getCreatorVideoPayouts,
         createSupportPaymentSession,
         buildSupportReturnPath,
-        buildSupportPaymentPageUrl,
         redirectToSupportCheckout,
         renderPlanBadge,
         renderSupportButton,
