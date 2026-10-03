@@ -38,6 +38,8 @@
         lastRenderedConversationId: null,
         lastRenderedMessagesSignature: "",
         conversationMembershipChecks: new Map(),
+        threadFilter: "all",
+        threadSearchQuery: "",
     };
 
     function getCurrentUserId() {
@@ -590,6 +592,45 @@
         }
     }
 
+    function getMessageDayKey(timestamp) {
+        const date = new Date(timestamp || 0);
+        if (!Number.isFinite(date.getTime())) return "";
+        return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+    }
+
+    function formatMessageDayLabel(timestamp) {
+        const date = new Date(timestamp || 0);
+        if (!Number.isFinite(date.getTime())) return "";
+        const today = new Date();
+        const yesterday = new Date();
+        yesterday.setDate(today.getDate() - 1);
+        const key = getMessageDayKey(date);
+        if (key === getMessageDayKey(today)) return "Aujourd'hui";
+        if (key === getMessageDayKey(yesterday)) return "Hier";
+        try {
+            return date.toLocaleDateString("fr-FR", {
+                weekday: "long",
+                day: "numeric",
+                month: "long",
+                ...(date.getFullYear() !== today.getFullYear()
+                    ? { year: "numeric" }
+                    : {}),
+            });
+        } catch (error) {
+            return "";
+        }
+    }
+
+    function renderChatEmptyState() {
+        return `
+            <div class="chat-empty-state">
+                <div class="chat-empty-icon"><i class="fa-regular fa-comments"></i></div>
+                <h4>Vos messages</h4>
+                <p>Choisissez une conversation pour commencer à discuter.</p>
+            </div>
+        `;
+    }
+
     function ensureMessagesShell() {
         const mount = getDmMount();
         if (!mount) return false;
@@ -600,60 +641,53 @@
                 <aside class="threads-panel" id="threads-panel">
                     <div class="messages-head">
                         <div class="messages-head-title-wrap">
-                            
-                            <button type="button" class="btn-ghost messages-home-btn" onclick="location.href='index.html'" aria-label="Accueil" style="width: 34px; height: 34px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.05); color: var(--text-secondary); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s ease; margin-right: 0.5rem;"><i class="fa-solid fa-house"></i></button>
+                            <a href="index.html" class="messages-icon-btn messages-home-btn" aria-label="Accueil" title="Accueil">
+                                <i class="fa-solid fa-house"></i>
+                            </a>
                             <h3>Messages</h3>
                         </div>
-                        <button type="button" id="messages-refresh-btn" class="btn-ghost messages-refresh-btn" aria-label="Actualiser">
+                        <button type="button" id="messages-refresh-btn" class="messages-icon-btn messages-refresh-btn" aria-label="Actualiser" title="Actualiser">
                             <i class="fa-solid fa-arrows-rotate"></i>
                         </button>
                     </div>
 
                     <div class="messages-search-bar">
-                        <i class="fa-solid fa-magnifying-glass"></i>
-                        <input type="search" placeholder="Rechercher des conversations" aria-label="Rechercher des conversations" />
+                        <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                        <input type="search" id="threads-search-input" placeholder="Rechercher" aria-label="Rechercher des conversations" autocomplete="off" />
                     </div>
 
-                    <div class="messages-tabs" aria-label="Filtres de messages">
-                        <button type="button" class="messages-tab-btn active">Tous</button>
-                        <button type="button" class="messages-tab-btn">Non lus</button>
-                        <button type="button" class="messages-tab-btn">Projets</button>
+                    <div class="messages-tabs" role="tablist" aria-label="Filtres de messages">
+                        <button type="button" class="messages-tab-btn active" role="tab" aria-selected="true" data-thread-filter="all">Tous</button>
+                        <button type="button" class="messages-tab-btn" role="tab" aria-selected="false" data-thread-filter="unread">Non lus</button>
                     </div>
 
                     <div class="threads-list" id="threads-list"></div>
                 </aside>
 
-                <section class="chat-panel" id="chat-panel">
+                <section class="chat-panel empty" id="chat-panel">
                     <div class="chat-header" id="chat-header">
-                        <button type="button" class="messages-back-btn" id="messages-back-btn" aria-label="Retour"><i class="fa-solid fa-arrow-left"></i></button>
+                        <button type="button" class="messages-icon-btn messages-back-btn" id="messages-back-btn" aria-label="Retour aux conversations"><i class="fa-solid fa-arrow-left"></i></button>
                         <div class="chat-header-meta">
-                            <div class="chat-user-status-row">
-                                <img src="https://placehold.co/40x40/2b2b33/fff?text=U" class="chat-header-avatar" alt="Avatar" />
-                                <span class="chat-status-dot online"></span>
+                            <img src="https://placehold.co/80x80/2b2b33/fff?text=%F0%9F%92%AC" class="chat-header-avatar" alt="" />
+                            <div class="chat-header-info">
+                                <div id="chat-header-name">Sélectionnez une conversation</div>
+                                <div id="chat-header-sub" hidden></div>
                             </div>
-                            <div id="chat-header-name">Sélectionnez une conversation</div>
-                            <div id="chat-header-sub"></div>
                         </div>
                         <div class="chat-header-actions" id="chat-header-actions">
-                            <button type="button" class="chat-header-icon-btn" id="chat-search-btn" aria-label="Rechercher dans la discussion">
-                                <i class="fa-solid fa-magnifying-glass"></i>
-                            </button>
-                            <button type="button" class="chat-header-icon-btn" id="chat-profile-btn" aria-label="Profil">
-                                <i class="fa-solid fa-user"></i>
-                            </button>
                             <div class="chat-header-menu-wrap">
-                                <button type="button" class="chat-header-icon-btn" id="chat-menu-btn" aria-label="Options de discussion">
-                                    <i class="fa-solid fa-ellipsis"></i>
+                                <button type="button" class="messages-icon-btn chat-header-icon-btn" id="chat-menu-btn" aria-label="Options de discussion" aria-haspopup="menu">
+                                    <i class="fa-solid fa-ellipsis-vertical"></i>
                                 </button>
-                                <div class="chat-header-menu" id="chat-header-menu" hidden>
-                                    <button type="button" class="chat-menu-item" id="chat-delete-btn">Supprimer la discussion</button>
-                                    <button type="button" class="chat-menu-item danger" id="chat-block-btn">Bloquer</button>
+                                <div class="chat-header-menu" id="chat-header-menu" role="menu" hidden>
+                                    <button type="button" class="chat-menu-item" id="chat-delete-btn" role="menuitem"><i class="fa-regular fa-trash-can"></i> Supprimer la discussion</button>
+                                    <button type="button" class="chat-menu-item danger" id="chat-block-btn" role="menuitem">Bloquer</button>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    <div class="chat-messages chat-thread-container" id="chat-messages">
-                        <div class="loading-state">Choisissez une conversation pour commencer.</div>
+                    <div class="chat-messages chat-thread-container" id="chat-messages" aria-live="polite">
+                        ${renderChatEmptyState()}
                     </div>
                     <form class="chat-input-row" id="chat-input-form">
                         <input
@@ -673,10 +707,11 @@
                                     class="form-input chat-input-textarea"
                                     maxlength="${DM_BODY_MAX}"
                                     autocomplete="off"
-                                    placeholder="Écrire un message..."
+                                    placeholder="Écrire un message…"
+                                    aria-label="Message"
                                     rows="1"
                                 ></textarea>
-                                <button type="submit" class="chat-send-btn" id="chat-send-btn" aria-label="Envoyer le message">
+                                <button type="submit" class="chat-send-btn" id="chat-send-btn" aria-label="Envoyer le message" title="Envoyer">
                                     <i class="fa-solid fa-paper-plane"></i>
                                 </button>
                             </div>
@@ -703,10 +738,29 @@
         const backBtn = document.getElementById("messages-back-btn");
         if (backBtn) {
             backBtn.addEventListener("click", () => {
-                const shell = document.getElementById("messages-shell");
-                if (shell) shell.classList.remove("mobile-thread-open");
+                setMobileThreadOpen(false);
             });
         }
+
+        const threadsSearch = document.getElementById("threads-search-input");
+        if (threadsSearch) {
+            threadsSearch.addEventListener("input", () => {
+                state.threadSearchQuery = threadsSearch.value;
+                renderThreadsList();
+            });
+        }
+
+        mount.querySelectorAll("[data-thread-filter]").forEach((tab) => {
+            tab.addEventListener("click", () => {
+                state.threadFilter = tab.dataset.threadFilter || "all";
+                mount.querySelectorAll("[data-thread-filter]").forEach((btn) => {
+                    const active = btn === tab;
+                    btn.classList.toggle("active", active);
+                    btn.setAttribute("aria-selected", active ? "true" : "false");
+                });
+                renderThreadsList();
+            });
+        });
 
         const list = document.getElementById("threads-list");
         if (list) {
@@ -977,7 +1031,11 @@
         const canSend = canCompose && !isBusy && (hasText || hasAttachment);
 
         if (input) input.disabled = !canCompose || isBusy;
-        if (sendBtn) sendBtn.disabled = !canSend;
+        if (sendBtn) {
+            sendBtn.disabled = !canSend;
+            sendBtn.classList.toggle("active", canSend);
+            sendBtn.classList.toggle("is-busy", isBusy);
+        }
         if (attachBtn) attachBtn.disabled = !canCompose || isBusy;
         if (hint) {
             const mobile = isMobileDevice();
@@ -1078,42 +1136,35 @@
             .join("::");
     }
 
-    function buildMessageHtml(
-        message,
-        currentUserId,
-        senderProfile,
-        hideSender = false,
-    ) {
+    function buildMessageHtml(message, currentUserId) {
         const mine = message.sender_id === currentUserId;
-        const bubbleClass = mine ? "chat-bubble mine" : "chat-bubble";
         const messageTime = formatMessageTime(message.created_at);
-        const senderHtml =
-            !mine && senderProfile?.id && !hideSender
-                ? `
-                    <div class="chat-sender-row">
-                        <a href="${escapeHtml(buildProfileHref(senderProfile.id))}" class="chat-user-link" data-message-user-link="1" data-user-id="${escapeHtml(senderProfile.id)}">
-                            ${renderNameWithBadges(senderProfile)}
-                        </a>
-                    </div>
-                `
-                : "";
+        const hasMediaOnly =
+            Boolean(message?.media_url) && !String(message?.body || "").trim();
+        // Les DM sont toujours en tête-à-tête : le nom de l'interlocuteur est
+        // déjà dans l'en-tête, inutile de le répéter sur chaque bulle.
+        const statusHtml = mine
+            ? message.pending
+                ? '<span class="message-status-icon" title="Envoi en cours"><i class="fa-regular fa-clock"></i></span>'
+                : '<span class="message-status-icon" title="Envoyé"><i class="fa-solid fa-check"></i></span>'
+            : "";
 
         return `
-            <div class="${bubbleClass}" data-message-id="${escapeHtml(message.id)}">
-                ${senderHtml}
-                ${renderMessageBody(message)}
-                <div class="chat-time">${escapeHtml(messageTime)}</div>
+            <div class="message-bubble-wrap ${mine ? "outgoing" : "incoming"}${message.pending ? " is-pending" : ""}" data-message-id="${escapeHtml(message.id)}">
+                <div class="message-bubble${hasMediaOnly ? " media-only" : ""}">
+                    ${renderMessageBody(message)}
+                    <span class="message-meta">
+                        <span class="chat-time">${escapeHtml(messageTime)}</span>
+                        ${statusHtml}
+                    </span>
+                </div>
             </div>
         `;
     }
 
-    function createMessageNode(message, currentUserId, senderProfile) {
+    function createMessageNode(message, currentUserId) {
         const template = document.createElement("template");
-        template.innerHTML = buildMessageHtml(
-            message,
-            currentUserId,
-            senderProfile,
-        ).trim();
+        template.innerHTML = buildMessageHtml(message, currentUserId).trim();
         return template.content.firstElementChild;
     }
 
@@ -1288,11 +1339,49 @@
         if (!list) return;
 
         if (!state.conversations.length) {
-            list.innerHTML = `<div class="loading-state">Aucune conversation pour le moment.</div>`;
+            list.innerHTML = `
+                <div class="threads-empty-state">
+                    <i class="fa-regular fa-paper-plane"></i>
+                    <p>Aucune conversation pour le moment.</p>
+                </div>
+            `;
             return;
         }
 
-        list.innerHTML = state.conversations
+        const query = String(state.threadSearchQuery || "")
+            .trim()
+            .toLowerCase();
+        const visibleConversations = state.conversations.filter(
+            (conversation) => {
+                if (
+                    state.threadFilter === "unread" &&
+                    !(Number(conversation.unreadCount) > 0)
+                ) {
+                    return false;
+                }
+                if (!query) return true;
+                const profile = getConversationDisplayUser(conversation);
+                const haystack = [
+                    profile.name,
+                    buildMessageSnippet(conversation.lastMessage, 200),
+                ]
+                    .join(" ")
+                    .toLowerCase();
+                return haystack.includes(query);
+            },
+        );
+
+        if (!visibleConversations.length) {
+            list.innerHTML = `
+                <div class="threads-empty-state">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    <p>${query ? "Aucun résultat." : "Aucun message non lu."}</p>
+                </div>
+            `;
+            return;
+        }
+
+        list.innerHTML = visibleConversations
             .map((conversation) => {
                 const profile = getConversationDisplayUser(conversation);
                 const activeClass =
@@ -1316,7 +1405,7 @@
                     : `<span class="thread-user-label">${profileNameHtml}</span>`;
 
                 return `
-                    <button type="button" class="thread-item${activeClass}" data-conversation-id="${conversation.id}">
+                    <button type="button" class="thread-item${activeClass}${unread > 0 ? " has-unread" : ""}" data-conversation-id="${conversation.id}">
                         <img class="thread-avatar" src="${escapeHtml(profile.avatar)}" alt="${escapeHtml(profile.name)}" loading="lazy" />
                         <div class="thread-meta">
                             <div class="thread-name-row">
@@ -1412,8 +1501,10 @@
             } else if (conversation.unreadCount) {
                 subEl.textContent = `${conversation.unreadCount} nouveau(x) message(s)`;
                 subEl.hidden = false;
-            } else {
-                subEl.textContent = "En ligne";
+            } else if (profile.isPage) {
+                // Pas de statut de présence côté serveur : on n'affiche pas
+                // de faux « En ligne ».
+                subEl.textContent = "Page entreprise";
                 subEl.hidden = false;
             }
         }
@@ -1539,7 +1630,7 @@
         if (!conversationId) {
             panel.classList.add("empty");
             if (state.lastRenderedConversationId !== null) {
-                chat.innerHTML = `<div class="loading-state">Choisissez une conversation pour commencer.</div>`;
+                chat.innerHTML = renderChatEmptyState();
             }
             state.lastRenderedConversationId = null;
             state.lastRenderedMessagesSignature = "";
@@ -1551,18 +1642,18 @@
         const messages = state.messagesByConversation.get(conversationId) || [];
         const listSignature = getMessagesListSignature(messages);
         const currentUserId = getCurrentUserId();
-        const conversation =
-            state.conversationsById.get(conversationId) || null;
-        const senderProfile = conversation
-            ? getConversationDisplayUser(conversation)
-            : null;
 
         if (!messages.length) {
             if (
                 state.lastRenderedConversationId !== conversationId ||
                 state.lastRenderedMessagesSignature !== listSignature
             ) {
-                chat.innerHTML = `<div class="loading-state">Aucun message pour l'instant. Lancez la conversation.</div>`;
+                chat.innerHTML = `
+                    <div class="chat-empty-state">
+                        <div class="chat-empty-icon"><i class="fa-regular fa-hand"></i></div>
+                        <p>Aucun message pour l'instant. Dites bonjour !</p>
+                    </div>
+                `;
             }
             state.lastRenderedConversationId = conversationId;
             state.lastRenderedMessagesSignature = listSignature;
@@ -1573,7 +1664,7 @@
         if (
             state.lastRenderedConversationId === conversationId &&
             state.lastRenderedMessagesSignature === listSignature &&
-            chat.querySelector(".chat-bubble")
+            chat.querySelector(".message-bubble-wrap")
         ) {
             syncComposerState();
             return;
@@ -1583,40 +1674,57 @@
         const wasNearBottom =
             chat.scrollHeight - chat.scrollTop - chat.clientHeight < 96;
         const existingNodes = new Map();
-        chat.querySelectorAll(".chat-bubble[data-message-id]").forEach(
+        chat.querySelectorAll(".message-bubble-wrap[data-message-id]").forEach(
             (node) => {
                 existingNodes.set(node.getAttribute("data-message-id"), node);
             },
         );
 
         const fragment = document.createDocumentFragment();
-        const previousBySender = new Map();
+        const GROUP_WINDOW_MS = 5 * 60 * 1000;
+        let previousDayKey = "";
+        let previousNode = null;
+        let previousMessage = null;
         messages.forEach((message) => {
             const messageId = String(message.id || "");
             const renderSignature = getMessageRenderSignature(message);
             const existing = existingNodes.get(messageId);
             let node = existing;
-            const previousSenderId =
-                previousBySender.get(message.sender_id) ?? null;
-            const hideSender =
-                previousSenderId &&
-                previousSenderId === message.sender_id &&
-                message.sender_id !== currentUserId;
+
+            const dayKey = getMessageDayKey(message.created_at);
+            const newDay = Boolean(dayKey) && dayKey !== previousDayKey;
+            if (newDay) {
+                const separator = document.createElement("div");
+                separator.className = "messages-date-separator";
+                separator.innerHTML = `<span>${escapeHtml(formatMessageDayLabel(message.created_at))}</span>`;
+                fragment.appendChild(separator);
+                previousDayKey = dayKey;
+            }
 
             if (!node || node.dataset.renderSignature !== renderSignature) {
-                node = createMessageNode(
-                    message,
-                    currentUserId,
-                    senderProfile,
-                    hideSender,
-                );
+                node = createMessageNode(message, currentUserId);
+            }
+            if (!node) return;
+
+            // Bulles consécutives du même auteur, à moins de 5 min d'écart :
+            // on les colle visuellement comme dans les messageries modernes.
+            const continuesGroup =
+                !newDay &&
+                previousMessage &&
+                previousMessage.sender_id === message.sender_id &&
+                new Date(message.created_at || 0) -
+                    new Date(previousMessage.created_at || 0) <
+                    GROUP_WINDOW_MS;
+            node.classList.toggle("group-continued", Boolean(continuesGroup));
+            node.classList.remove("group-has-next");
+            if (continuesGroup && previousNode) {
+                previousNode.classList.add("group-has-next");
             }
 
-            if (node) {
-                node.dataset.renderSignature = renderSignature;
-                fragment.appendChild(node);
-            }
-            previousBySender.set(message.sender_id, message.sender_id);
+            node.dataset.renderSignature = renderSignature;
+            fragment.appendChild(node);
+            previousNode = node;
+            previousMessage = message;
         });
 
         chat.replaceChildren(fragment);

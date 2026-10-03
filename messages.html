@@ -2,7 +2,7 @@
 <html lang="fr">
     <head>
         <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
         <title>XERA1 | Messages</title>
         <meta name="theme-color" content="#09090b" />
         <link rel="icon" type="image/png" href="icons/logo.png" />
@@ -17,6 +17,7 @@
         <link rel="stylesheet" href="css/search-notification.css" />
         <link rel="stylesheet" href="css/arcs.css" />
         <link rel="stylesheet" href="css/streaming-analytics.css" />
+        <link rel="stylesheet" href="css/messages-ui.css?v=20261003-1" />
         <link
             rel="stylesheet"
             href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
@@ -54,9 +55,6 @@
                 </div>
                 <span>XΞRA1</span>
             </a>
-            <a href="javascript:history.back()" style="display:flex;align-items:center;gap:0.5rem;color:#888;text-decoration:none;font-size:0.85rem;transition:color 0.2s;margin-left:15px" onmouseover="this.style.color='#f5f5f5'" onmouseout="this.style.color='#888'">
-                <i class="fas fa-arrow-left"></i> Retour
-            </a>
             <div class="lang-switcher-nav">
                 <select
                     id="header-lang-select"
@@ -68,7 +66,7 @@
                 </select>
             </div>
         </nav>
-        <section id="messages" class="page active" style="display: block">
+        <section id="messages" class="page active">
             <div class="container messages-container">
                 <div class="messages-mount"></div>
             </div>
@@ -76,7 +74,7 @@
 
         <script src="js/router.js"></script>
         <script src="js/supabase-config.js"></script>
-        <script src="js/messages.js?v=20260903-1"></script>
+        <script src="js/messages.js?v=20261003-1"></script>
         <script>
             document.addEventListener("DOMContentLoaded", () => {
                 window.initializeMessaging?.();
