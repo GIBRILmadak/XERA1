@@ -4,7 +4,7 @@
     "description": "## Avant (Monolithique)",
     "main": "index.js",
     "scripts": {
-        "test": "node tests/c2pa-utils.test.js && node tests/subscription-benefits.test.js && node tests/profile-workspace.test.js && node tests/profile-immersive.test.js && node tests/fata-integration.test.js && node tests/fata-api-routing.test.js",
+        "test": "node tests/c2pa-utils.test.js && node tests/subscription-benefits.test.js && node tests/profile-workspace.test.js && node tests/profile-immersive.test.js && node tests/fata-integration.test.js && node tests/fata-api-routing.test.js && node --test tests/fata*.test.js",
         "api": "node server/monetization-server.js",
         "start": "node server/optimized-server.js",
         "dev": "node server/optimized-server.js"

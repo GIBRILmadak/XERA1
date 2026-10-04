@@ -116,12 +116,21 @@ function isRewardEligible(challengeId, qualification = {}) {
     return resolveVisibilityMultiplier(qualification) > 1.0;
 }
 
-function buildIdempotencyKey(userId, challengeId, requirementId, occurredAt) {
+function buildIdempotencyKey(
+    userId,
+    challengeId,
+    requirementId,
+    occurredAt,
+    eventKey = "",
+) {
+    // Prefer the durable source event identity. Its timestamp can be corrected
+    // or normalized without turning a retry into a new Fata completion.
+    const identity = normalizeText(eventKey) || normalizeText(occurredAt);
     const raw = [
         normalizeText(userId),
         normalizeText(challengeId),
         normalizeText(requirementId),
-        normalizeText(occurredAt),
+        identity,
     ].join("|");
 
     return crypto.createHash("sha256").update(raw).digest("hex");

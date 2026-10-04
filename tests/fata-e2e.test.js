@@ -76,12 +76,14 @@ test("Idempotency key generation is deterministic and sha256 stable", () => {
 test("Fata API client handles 401 token invalidation and single retry", async () => {
     let callCount = 0;
     const originalFetch = globalThis.fetch;
+    let tokenRequestOptions = null;
 
     globalThis.fetch = async (url, options) => {
         callCount++;
         const urlStr = String(url || "");
 
         if (urlStr.includes("/oidc/token")) {
+            tokenRequestOptions = options;
             return {
                 ok: true,
                 status: 200,
@@ -129,6 +131,15 @@ test("Fata API client handles 401 token invalidation and single retry", async ()
         const res = await sendActionCompletion(payload, "test_idempotency_key_123");
         assert.equal(res.ok, true);
         assert.equal(res.status, 200);
+        assert.match(tokenRequestOptions.headers.Authorization, /^Basic /);
+        assert.equal(
+            new URLSearchParams(tokenRequestOptions.body).get("scope"),
+            "action-completions:write",
+        );
+        assert.equal(
+            new URLSearchParams(tokenRequestOptions.body).has("client_secret"),
+            false,
+        );
 
         const data = await res.json();
         assert.equal(data.eventId, "evt_12345");
@@ -136,4 +147,19 @@ test("Fata API client handles 401 token invalidation and single retry", async ()
     } finally {
         globalThis.fetch = originalFetch;
     }
+});
+
+test("Fata API client rejects a requirement that does not belong to the challenge", async () => {
+    await assert.rejects(
+        sendActionCompletion(
+            {
+                subject: "sub-1",
+                challengeId: "xera1-test",
+                requirementId: "arbitrary_requirement",
+                occurredAt: "2026-09-24T12:00:00Z",
+            },
+            "event-key",
+        ),
+        /Invalid Fata action completion payload/,
+    );
 });

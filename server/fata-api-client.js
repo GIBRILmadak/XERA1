@@ -3,10 +3,28 @@ const { resolveChallengeConfig } = require("./fata-contract");
 
 let cachedToken = null;
 let tokenExpiresAt = 0;
+let tokenRequest = null;
+
+const REQUEST_TIMEOUT_MS = Math.max(
+    1000,
+    Number(process.env.FATA_API_TIMEOUT_MS) || 10000,
+);
+
+function encodeOAuthClientValue(value) {
+    return new URLSearchParams({ value: String(value) })
+        .toString()
+        .slice("value=".length);
+}
+
+function buildClientAuthorization(clientId, clientSecret) {
+    const credentials = `${encodeOAuthClientValue(clientId)}:${encodeOAuthClientValue(clientSecret)}`;
+    return `Basic ${Buffer.from(credentials).toString("base64")}`;
+}
 
 function invalidateTechnicalToken() {
     cachedToken = null;
     tokenExpiresAt = 0;
+    tokenRequest = null;
 }
 
 async function getTechnicalToken() {
@@ -14,6 +32,17 @@ async function getTechnicalToken() {
         return cachedToken;
     }
 
+    if (tokenRequest) return tokenRequest;
+
+    tokenRequest = requestTechnicalToken();
+    try {
+        return await tokenRequest;
+    } finally {
+        tokenRequest = null;
+    }
+}
+
+async function requestTechnicalToken() {
     const config = getConfig("fata");
     if (!config || !config.clientId || !config.clientSecret) {
         throw new Error("Fata OAuth configuration or credentials missing");
@@ -21,20 +50,27 @@ async function getTechnicalToken() {
 
     const params = new URLSearchParams({
         grant_type: "client_credentials",
-        client_id: config.clientId,
-        client_secret: config.clientSecret,
         scope: "action-completions:write",
     });
 
     const response = await fetch(config.tokenUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        headers: {
+            Authorization: buildClientAuthorization(
+                config.clientId,
+                config.clientSecret,
+            ),
+            "Content-Type": "application/x-www-form-urlencoded",
+            Accept: "application/json",
+        },
         body: params.toString(),
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
 
     if (!response.ok) {
-        const err = await response.text();
-        console.error("[Fata API] Token request error:", response.status, err);
+        // The provider's error body is untrusted and may echo submitted
+        // credentials. Log only its status, never the response body.
+        console.error("[Fata API] Token request error:", response.status);
         throw new Error(
             `Failed to get Fata technical token: HTTP ${response.status}`,
         );
@@ -46,7 +82,9 @@ async function getTechnicalToken() {
     }
 
     cachedToken = data.access_token;
-    tokenExpiresAt = Date.now() + Math.max(10, (data.expires_in || 3600) - 60) * 1000;
+    const expiresInMs = Math.max(0, Number(data.expires_in || 3600) * 1000);
+    const refreshMarginMs = Math.min(60000, expiresInMs * 0.1);
+    tokenExpiresAt = Date.now() + Math.max(0, expiresInMs - refreshMarginMs);
     return cachedToken;
 }
 
@@ -61,8 +99,26 @@ async function sendActionCompletion(payload, idempotencyKey) {
         throw new Error("Fata OAuth config missing");
     }
 
-    // Validate that the challenge configuration exists
-    resolveChallengeConfig(payload.challengeId);
+    const challenge = resolveChallengeConfig(payload.challengeId);
+    if (
+        !payload.subject ||
+        !payload.requirementId ||
+        ![challenge.req_arc, challenge.req_preuve, challenge.req_jalon].includes(
+            payload.requirementId,
+        )
+    ) {
+        throw new Error("Invalid Fata action completion payload");
+    }
+    if (
+        !payload.occurredAt ||
+        !String(payload.occurredAt).endsWith("Z") ||
+        !Number.isFinite(Date.parse(payload.occurredAt))
+    ) {
+        throw new Error("Fata occurredAt must be an RFC3339 UTC timestamp");
+    }
+    if (!idempotencyKey || !String(idempotencyKey).trim()) {
+        throw new Error("Fata Idempotency-Key is required");
+    }
 
     const body = {
         subject: payload.subject,
@@ -86,6 +142,7 @@ async function sendActionCompletion(payload, idempotencyKey) {
                 "Idempotency-Key": idempotencyKey,
             },
             body: JSON.stringify(body),
+            signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
         });
     };
 
@@ -93,7 +150,9 @@ async function sendActionCompletion(payload, idempotencyKey) {
 
     // Contract rule: 401 -> invalidate token -> refresh -> retry ONCE immediately
     if (response.status === 401) {
-        console.warn("[Fata API] 401 Unauthorized received. Refreshing technical token and retrying once...");
+        console.warn(
+            "[Fata API] HTTP 401. Refreshing the technical token and retrying once.",
+        );
         invalidateTechnicalToken();
         token = await getTechnicalToken();
         response = await executeRequest(token);
@@ -106,4 +165,5 @@ module.exports = {
     getTechnicalToken,
     invalidateTechnicalToken,
     sendActionCompletion,
+    buildClientAuthorization,
 };

@@ -1,5 +1,5 @@
-const { createClient } = require("@supabase/supabase-js");
 const { sendActionCompletion } = require("./fata-api-client");
+const { createSupabaseServiceClient } = require("./supabase-service-client");
 const {
     resolveChallengeConfig,
     buildIdempotencyKey,
@@ -14,10 +14,7 @@ const RETRY_INTERVALS = [
     6 * 60 * 60 * 1000,
 ];
 
-const supabase = createClient(
-    process.env.SUPABASE_URL || "https://ssbuagqwjptyhavinkxg.supabase.co",
-    process.env.SUPABASE_SERVICE_ROLE_KEY || "",
-);
+const supabase = createSupabaseServiceClient();
 
 async function markAlertIfFailure(event, errorMessage) {
     const hoursSinceCreated =
@@ -129,23 +126,14 @@ async function evaluateAction1(user_id, arc_id, linkage, config) {
     if (!arc.title || !String(arc.title).trim()) return;
     if (!arc.description || !String(arc.description).trim()) return;
 
-    let milestoneCount = 0;
-
-    if (Array.isArray(arc.milestones)) {
-        milestoneCount = arc.milestones.length;
-    } else {
-        const { count: valCount } = await supabase
-            .from("arc_milestone_validations")
-            .select("id", { count: "exact", head: true })
-            .eq("arc_id", arc_id);
-
-        const { count: contentCount } = await supabase
-            .from("content")
-            .select("id", { count: "exact", head: true })
-            .eq("arc_id", arc_id);
-
-        milestoneCount = Math.max(valCount || 0, contentCount || 0);
-    }
+    // XERA1's content posts and validation records are not milestone
+    // definitions. Only an explicit ARC milestone list can satisfy Fata's
+    // requirement; guessing from related rows generated false completions.
+    const milestones = Array.isArray(arc.milestones) ? arc.milestones : [];
+    const milestoneCount = milestones.filter((milestone) => {
+        if (typeof milestone === "string") return Boolean(milestone.trim());
+        return Boolean(String(milestone?.title || "").trim());
+    }).length;
 
     // Calculate occurredAt: for existing ARCs selected for challenge, occurredAt = max(arc.created_at, linkage.created_at)
     const arcCreatedAt = new Date(arc.created_at || Date.now()).getTime();
@@ -153,7 +141,7 @@ async function evaluateAction1(user_id, arc_id, linkage, config) {
     const occurredAtDate = new Date(Math.max(arcCreatedAt, linkedAt));
 
     // Must have at least 3 milestones / elements defined
-    if (milestoneCount >= 3 || (arc.title && arc.description && arc.created_at)) {
+    if (milestoneCount >= 3) {
         await queueEvent(
             user_id,
             linkage.fata_sub,
@@ -231,6 +219,7 @@ async function queueEvent(
     requirement_id,
     occurred_at,
     idempotency_seed,
+    database = supabase,
 ) {
     const safeChallengeId = String(challenge_id || "").trim();
     const safeRequirement = String(requirement_id || "").trim();
@@ -239,33 +228,30 @@ async function queueEvent(
             ? occurred_at.toISOString()
             : new Date(occurred_at).toISOString();
 
-    try {
-        resolveChallengeConfig(safeChallengeId);
-    } catch (error) {
-        console.warn(
-            "[Fata Worker] Refusing queue for invalid challenge:",
-            error.message,
-        );
-        return;
+    const challenge = resolveChallengeConfig(safeChallengeId);
+    if (
+        ![challenge.req_arc, challenge.req_preuve, challenge.req_jalon].includes(
+            safeRequirement,
+        )
+    ) {
+        throw new Error("Refusing to queue an unmapped Fata requirement");
+    }
+    if (!String(idempotency_seed || "").trim()) {
+        throw new Error("A durable source event id is required");
     }
 
-    const idempotency_key = idempotency_seed
-        ? buildIdempotencyKey(
-              user_id,
-              safeChallengeId,
-              safeRequirement,
-              safeOccurredAt,
-          )
-        : buildIdempotencyKey(
-              user_id,
-              safeChallengeId,
-              safeRequirement,
-              safeOccurredAt,
-          );
+    const idempotency_key = buildIdempotencyKey(
+        user_id,
+        safeChallengeId,
+        safeRequirement,
+        safeOccurredAt,
+        idempotency_seed,
+    );
 
-    const { error } = await supabase
+    const { error } = await database
         .from("fata_pending_events")
-        .insert({
+        .upsert(
+            {
             user_id,
             fata_sub,
             challenge_id: safeChallengeId,
@@ -275,11 +261,15 @@ async function queueEvent(
             status: "pending",
             retry_count: 0,
             next_retry_at: null,
-        })
-        .onConflict("idempotency_key")
-        .doNothing();
+            },
+            { onConflict: "idempotency_key", ignoreDuplicates: true },
+        );
 
-    if (error) console.error("[Fata Worker] Event queue error:", error);
+    if (error) {
+        throw new Error(
+            `Could not persist Fata event (${error.code || "database_error"})`,
+        );
+    }
 }
 
 /**
@@ -338,7 +328,7 @@ async function processPendingEvents() {
             const returnedEventId = jsonResponse.eventId || null;
             const returnedRequestId = jsonResponse.requestId || res.headers.get("x-request-id") || null;
 
-            if (res.ok || res.status === 409) {
+            if (res.ok) {
                 await supabase
                     .from("fata_pending_events")
                     .update({
@@ -405,6 +395,7 @@ async function scheduleRetry(event, errorMsg, overrideDelayMs = null) {
 module.exports = {
     processActivityLog,
     processPendingEvents,
+    queueEvent,
     scheduleRetry,
     isTestChallenge,
     resolveChallengeConfig,

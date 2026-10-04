@@ -59,6 +59,33 @@ test("idempotency keys are stable for the same tuple and differ for a changed pa
     assert.notEqual(keyA, keyC);
 });
 
+test("event idempotency survives timestamp normalization and distinguishes source events", () => {
+    const keyA = buildIdempotencyKey(
+        "user-1",
+        "challenge_real_123",
+        "req_arc",
+        "2026-09-19T10:00:00Z",
+        "arc-1",
+    );
+    const sameEventAfterNormalization = buildIdempotencyKey(
+        "user-1",
+        "challenge_real_123",
+        "req_arc",
+        "2026-09-19T10:00:01Z",
+        "arc-1",
+    );
+    const differentEvent = buildIdempotencyKey(
+        "user-1",
+        "challenge_real_123",
+        "req_arc",
+        "2026-09-19T10:00:00Z",
+        "arc-2",
+    );
+
+    assert.equal(keyA, sameEventAfterNormalization);
+    assert.notEqual(keyA, differentEvent);
+});
+
 test("config exposes the contract requirement IDs", () => {
     process.env.FATA_REQ_ARC = "req_arc";
     process.env.FATA_REQ_PREUVE = "req_preuve";

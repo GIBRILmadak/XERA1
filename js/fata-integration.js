@@ -317,6 +317,7 @@
         ) {
             if (panel) {
                 panel.classList.add("is-open");
+                panel.setAttribute("aria-hidden", "false");
                 if (trigger) trigger.setAttribute("aria-expanded", "true");
             }
         }
@@ -329,17 +330,43 @@
         }
 
         if (trigger && panel) {
+            panel.setAttribute(
+                "aria-hidden",
+                String(!panel.classList.contains("is-open")),
+            );
             trigger.setAttribute(
                 "aria-expanded",
                 String(panel.classList.contains("is-open")),
             );
-            trigger.addEventListener("click", function (event) {
-                event.preventDefault();
-                const isOpen = panel.classList.toggle("is-open");
-                trigger.setAttribute("aria-expanded", String(isOpen));
-                if (isOpen) window.XeraNavHub?.closeProfileHub?.();
-                if (isOpen) void refreshStatus();
-            });
+        }
+
+        // Use delegation: the navigation hub can replace/rebuild its popover
+        // after this script initializes, discarding listeners on its button.
+        if (!window.__fataTriggerDelegateBound) {
+            window.__fataTriggerDelegateBound = true;
+            document.addEventListener(
+                "click",
+                function (event) {
+                    const clickedTrigger = event.target?.closest?.(
+                        "#nav-fata-btn, [data-fata-trigger]",
+                    );
+                    if (!clickedTrigger) return;
+
+                    const activePanel =
+                        document.getElementById("fata-challenge-panel") ||
+                        createFataPanel();
+                    event.preventDefault();
+                    const isOpen = activePanel.classList.toggle("is-open");
+                    activePanel.setAttribute("aria-hidden", String(!isOpen));
+                    clickedTrigger.setAttribute(
+                        "aria-expanded",
+                        String(isOpen),
+                    );
+                    if (isOpen) window.XeraNavHub?.closeProfileHub?.();
+                    if (isOpen) void refreshStatus();
+                },
+                true,
+            );
         }
 
         if (closeBtn && panel) {
