@@ -1,4 +1,6 @@
 (function () {
+    let profileHubScriptsPromise = null;
+
     const WEB_APP_HEAD_ENTRIES = [
         {
             selector: 'link[rel="manifest"]',
@@ -601,7 +603,7 @@
         );
     }
 
-    function ensureProfileHubScripts() {
+    function ensureProfileHubScripts(onReady) {
         const loadFataIntegration = () => {
             if (
                 window.FataIntegration ||
@@ -616,27 +618,58 @@
 
         if (window.XeraNavHub) {
             loadFataIntegration();
-            return;
+            onReady?.(true);
+            return Promise.resolve(true);
         }
 
-        const existingScript = document.querySelector(
-            'script[src*="navigation-hub.js"]',
-        );
-        if (existingScript) {
-            if (window.XeraNavHub) {
-                loadFataIntegration();
-            } else {
-                window.setTimeout(loadFataIntegration, 0);
-            }
-            return;
+        if (!profileHubScriptsPromise) {
+            profileHubScriptsPromise = new Promise((resolve) => {
+                const existingScript = document.querySelector(
+                    'script[src*="navigation-hub.js"]',
+                );
+
+                // Static deferred scripts have finished loading by the time
+                // this control can be clicked. If the global is still absent,
+                // let the caller use its normal profile navigation fallback.
+                if (
+                    existingScript &&
+                    document.readyState !== "loading" &&
+                    existingScript.dataset.xeraNavHubLoading !== "true"
+                ) {
+                    resolve(false);
+                    return;
+                }
+
+                const navigationScript =
+                    existingScript || document.createElement("script");
+                navigationScript.dataset.xeraNavHubLoading = "true";
+                navigationScript.addEventListener(
+                    "load",
+                    () => resolve(Boolean(window.XeraNavHub)),
+                    { once: true },
+                );
+                navigationScript.addEventListener(
+                    "error",
+                    () => resolve(false),
+                    { once: true },
+                );
+
+                if (!existingScript) {
+                    navigationScript.src =
+                        "/js/navigation-hub.js?v=20261004-2";
+                    document.body.appendChild(navigationScript);
+                }
+            }).finally(() => {
+                profileHubScriptsPromise = null;
+            });
         }
 
-        const navigationScript = document.createElement("script");
-        navigationScript.src = "/js/navigation-hub.js?v=20261004-1";
-        navigationScript.addEventListener("load", loadFataIntegration, {
-            once: true,
+        return profileHubScriptsPromise.then((loaded) => {
+            const ready = Boolean(loaded && window.XeraNavHub);
+            if (ready) loadFataIntegration();
+            onReady?.(ready);
+            return ready;
         });
-        document.body.appendChild(navigationScript);
     }
 
     function getCreationUserId() {
@@ -711,7 +744,15 @@
     }
 
     function ensureDesktopQuickActions() {
-        if (document.querySelector(".desktop-quick-actions")) return;
+        const existingActions = document.querySelector(
+            ".desktop-quick-actions",
+        );
+        if (existingActions) {
+            bindDesktopProfileAction(
+                existingActions.querySelector('[data-quick-action="profile"]'),
+            );
+            return;
+        }
 
         const actions = document.createElement("div");
         actions.className = "desktop-quick-actions";
@@ -751,22 +792,9 @@
                     window.location.href = "index.html";
                 }
             });
-        actions
-            .querySelector('[data-quick-action="profile"]')
-            .addEventListener("click", () => {
-                if (window.XeraNavHub?.toggleProfileHub()) return;
-
-                const profileTrigger = document.getElementById(
-                    "nav-profile-hub-trigger",
-                );
-                if (profileTrigger) {
-                    profileTrigger.click();
-                } else if (typeof window.handleProfileNavigation === "function") {
-                    window.handleProfileNavigation();
-                } else {
-                    window.location.href = "profile.html";
-                }
-            });
+        bindDesktopProfileAction(
+            actions.querySelector('[data-quick-action="profile"]'),
+        );
         actions
             .querySelector('[data-quick-action="messages"]')
             .addEventListener("click", () => {
@@ -786,6 +814,29 @@
             .addEventListener("click", () => {
                 window.openCreateChoiceModal?.();
             });
+    }
+
+    function bindDesktopProfileAction(profileAction) {
+        if (!profileAction || profileAction.dataset.profileHubBound === "true") {
+            return;
+        }
+        profileAction.dataset.profileHubBound = "true";
+        profileAction.addEventListener("click", (event) => {
+            event.preventDefault();
+            if (window.XeraNavHub?.toggleProfileHub()) return;
+
+            const navigateToProfile = () => {
+                if (typeof window.handleProfileNavigation === "function") {
+                    window.handleProfileNavigation();
+                } else {
+                    window.location.href = "profile.html";
+                }
+            };
+            void ensureProfileHubScripts((loaded) => {
+                if (loaded && window.XeraNavHub?.openProfileHub()) return;
+                navigateToProfile();
+            });
+        });
     }
 
     ensureWebAppHead();

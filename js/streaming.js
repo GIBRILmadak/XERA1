@@ -3923,17 +3923,10 @@ if (!window.__streamingLoaded) {
                 ? window.getUser(hostId)
                 : null;
         const hostUser = stream?.users || cachedUser || {};
-        const plan = String(hostUser.plan || "").toLowerCase();
-        const planStatus = String(hostUser.plan_status || "").toLowerCase();
-        const planEnd = hostUser.plan_ends_at || hostUser.planEndsAt || null;
-        const planEndMs = planEnd ? Date.parse(planEnd) : null;
-        const activeByDate =
-            !planEnd ||
-            (Number.isFinite(planEndMs) ? planEndMs > Date.now() : true);
         const isEligible =
-            planStatus === "active" &&
-            activeByDate &&
-            (plan === "medium" || plan === "pro");
+            typeof window.canReceiveSupport === "function"
+                ? window.canReceiveSupport(hostUser)
+                : false;
         const isSelf = window.currentUser && window.currentUser.id === hostId;
 
         if (!isEligible || isSelf) {

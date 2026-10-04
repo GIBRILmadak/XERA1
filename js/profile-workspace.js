@@ -10,7 +10,7 @@
         var link = document.createElement("link");
         link.id = styleId;
         link.rel = "stylesheet";
-        link.href = "css/profile-workspace.css?v=20261002-3";
+        link.href = "css/profile-workspace.css?v=20261004-1";
         document.head.appendChild(link);
     }
 

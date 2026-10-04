@@ -109,6 +109,16 @@ const PAYMENT_RULES = {
     maxTipAmount: 1000.0,
 };
 
+const INDEFINITE_GIFT_SUPPORT_STATUSES = new Set([
+    "",
+    "active",
+    "gifted",
+    "offered",
+    "granted",
+    "admin_granted",
+    "complimentary",
+]);
+
 const MONETIZATION_TRANSIENT_NETWORK_PATTERNS = [
     "failed to fetch",
     "networkerror",
@@ -162,7 +172,9 @@ function normalizeMonetizationQueryError(error) {
 
 function isPlanActiveForUser(user) {
     if (!user) return false;
-    const status = String(user.plan_status || "").toLowerCase();
+    const status = String(user.plan_status || user.planStatus || "")
+        .trim()
+        .toLowerCase();
     if (status !== "active") return false;
     const planEnd = user.plan_ends_at || user.planEndsAt || null;
     if (!planEnd) return true;
@@ -172,7 +184,7 @@ function isPlanActiveForUser(user) {
 }
 
 function getNormalizedUserPlan(user) {
-    return String(user?.plan || "").toLowerCase();
+    return String(user?.plan || "").trim().toLowerCase();
 }
 
 function getFollowerCountFromUser(user) {
@@ -182,7 +194,12 @@ function getFollowerCountFromUser(user) {
 }
 
 function hasMonetizationFlag(user) {
-    return user?.is_monetized === true || user?.isMonetized === true;
+    return (
+        user?.is_monetized === true ||
+        user?.isMonetized === true ||
+        String(user?.is_monetized || user?.isMonetized || "").toLowerCase() ===
+            "true"
+    );
 }
 
 function hasActiveMonetizationPlan(user) {
@@ -553,10 +570,27 @@ function getMonetizationFollowerGap(user) {
     return Math.max(0, 1000 - getFollowerCountFromUser(user));
 }
 
+function hasIndefiniteGiftedSupportPlan(user) {
+    if (!user) return false;
+    const plan = getNormalizedUserPlan(user).trim();
+    if (!["medium", "pro"].includes(plan)) return false;
+    if (user.plan_ends_at || user.planEndsAt) return false;
+
+    const status = String(user.plan_status || user.planStatus || "")
+        .trim()
+        .toLowerCase();
+    return INDEFINITE_GIFT_SUPPORT_STATUSES.has(status);
+}
+
 // Vérifier si un créateur peut recevoir des soutiens
 function canReceiveSupport(user) {
     if (!user) return false;
-    if (!hasActiveMonetizationPlan(user)) return false;
+    if (
+        !hasActiveMonetizationPlan(user) &&
+        !hasIndefiniteGiftedSupportPlan(user)
+    ) {
+        return false;
+    }
     if (isGiftedPro(user)) return true;
     if (["medium", "pro"].includes(getNormalizedUserPlan(user))) return true;
     return hasMonetizationFlag(user) || getFollowerCountFromUser(user) >= 1000;
@@ -1361,6 +1395,8 @@ function renderSupportAmounts() {
 
 // Expose functions to global scope for UI usage
 if (typeof window !== "undefined") {
+    window.canReceiveSupport = canReceiveSupport;
+    window.isGiftedPro = isGiftedPro;
     window.hasAdvancedProfileCustomization = hasAdvancedProfileCustomization;
     window.hasFullProfileCustomization = hasFullProfileCustomization;
     window.hasHDStreaming = hasHDStreaming;

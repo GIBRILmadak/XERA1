@@ -28,7 +28,7 @@
                     <span data-pro-page-name>Page Pro / Entreprise</span>
                 </button>
                 <button type="button" class="hub-menu-item" onclick="location.href='subscription-plans.html'">
-                    <i class="fas fa-wallet"></i><span>Abonnements & KPay</span>
+                    <i class="fas fa-wallet"></i><span>Abonnements</span>
                 </button>
                 <button type="button" class="hub-menu-item" id="nav-fata-btn">
                     <img src="icons/fata.webp" alt="Fata" style="width:18px;height:18px;object-fit:contain">
@@ -102,7 +102,9 @@
         document.addEventListener("click", (event) => {
             if (
                 !profilePopover.contains(event.target) &&
-                !profileTriggers.some((trigger) => trigger.contains(event.target))
+                !getProfileHubTriggers().some((trigger) =>
+                    trigger.contains(event.target),
+                )
             ) {
                 closeProfileHub();
             }

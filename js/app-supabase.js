@@ -16894,7 +16894,7 @@ ${publicActivityHtml}
                     <a href="index.html" style="color: var(--text-secondary); text-decoration: none; transition: color 0.3s;">Accueil</a>
                     <a href="credits.html" style="color: var(--text-secondary); text-decoration: none; transition: color 0.3s;">Crédits</a>
                 </div>
-                <p style="color: var(--text-muted); font-size: 0.9rem;">© 2026 XERA - Documentez l'effort</p>
+                <p style="color: var(--text-muted); font-size: 0.9rem;">© 2026 XERA1 - Documentez l'effort</p>
             </div>
 </footer>
     `;

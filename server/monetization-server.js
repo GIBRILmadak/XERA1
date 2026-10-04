@@ -3236,11 +3236,23 @@ function supportsPush() {
     return Boolean(VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY);
 }
 
+const INDEFINITE_GIFT_SUPPORT_STATUSES = new Set([
+    "",
+    "active",
+    "gifted",
+    "offered",
+    "granted",
+    "admin_granted",
+    "complimentary",
+]);
+
 function isPlanActiveForUser(user) {
     if (!user) return false;
-    const status = String(user.plan_status || "").toLowerCase();
+    const status = String(user.plan_status || user.planStatus || "")
+        .trim()
+        .toLowerCase();
     if (status !== "active") return false;
-    const planEnd = user.plan_ends_at || null;
+    const planEnd = user.plan_ends_at || user.planEndsAt || null;
     if (!planEnd) return true;
     const endMs = Date.parse(planEnd);
     if (!Number.isFinite(endMs)) return true;
@@ -3250,17 +3262,29 @@ function isPlanActiveForUser(user) {
 function isGiftedProUser(user) {
     if (!user) return false;
     return (
-        ["pro", "elite"].includes(String(user.plan || "").toLowerCase()) &&
-        String(user.plan_status || "").toLowerCase() === "active" &&
-        !user.plan_ends_at
+        ["pro", "elite"].includes(
+            String(user.plan || "").trim().toLowerCase(),
+        ) &&
+        String(user.plan_status || user.planStatus || "")
+            .trim()
+            .toLowerCase() === "active" &&
+        !(user.plan_ends_at || user.planEndsAt)
     );
 }
 
 function canUserReceiveSupport(user) {
     if (!user) return false;
-    const plan = String(user.plan || "").toLowerCase();
+    const plan = String(user.plan || "").trim().toLowerCase();
     if (!["medium", "pro", "elite"].includes(plan)) return false;
-    if (!isPlanActiveForUser(user)) return false;
+    const status = String(user.plan_status || user.planStatus || "")
+        .trim()
+        .toLowerCase();
+    const planEnd = user.plan_ends_at || user.planEndsAt || null;
+    const giftedSupportPlan =
+        ["medium", "pro"].includes(plan) &&
+        !planEnd &&
+        INDEFINITE_GIFT_SUPPORT_STATUSES.has(status);
+    if (!isPlanActiveForUser(user) && !giftedSupportPlan) return false;
     if (isGiftedProUser(user)) return true;
     if (["medium", "pro"].includes(plan)) return true;
     return (
