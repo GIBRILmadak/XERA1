@@ -1250,6 +1250,15 @@ html.light-mode #messages-shell .incoming .message-bubble {
     body:has(#messages-shell) #messages-floating-back-btn {
         display: none !important;
     }
+
+    /* La barre du site (notifications, monétisation) restait fixée au-dessus
+       de la messagerie plein écran et cachait le bouton retour et le nom de
+       l'interlocuteur. La messagerie a sa propre barre (maison, retour). */
+    body:has(#messages.page.active #messages-shell) > nav,
+    body.messages-screen > nav,
+    body.messages-thread-open > nav {
+        display: none !important;
+    }
 }
 
 /* La barre de navigation mobile (fixe, 64px) ne doit pas masquer la liste */
