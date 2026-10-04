@@ -11708,6 +11708,29 @@ function buildMoodDiscoverMix(
     return interleaved.map((entry) => entry.item);
 }
 
+function renderPageFollowButtonHtml(pageId, page = null, ownerUserId = null) {
+    const viewerId = window.currentUser?.id || null;
+    const resolvedOwnerId = page?.owner_id || ownerUserId || null;
+    if (
+        !pageId ||
+        !window.professionalManager?.togglePageFollow ||
+        (viewerId && resolvedOwnerId && viewerId === resolvedOwnerId)
+    ) {
+        return "";
+    }
+
+    const followState =
+        window.professionalManager.getCachedPageFollowState?.(pageId) || {
+            isFollowing: false,
+        };
+    const isFollowingPage = Boolean(followState.isFollowing);
+    const label = isFollowingPage ? "Abonné" : "S'abonner";
+    const icon = isFollowingPage ? "subscribed" : "subscribe";
+    const safePageId = escapeHtml(pageId);
+
+    return `<button type="button" data-page-follow-id="${safePageId}" class="btn-pro-primary pro-page-follow-btn feed-page-follow-btn${isFollowingPage ? " is-following" : ""}" onclick="event.stopPropagation(); window.professionalManager.togglePageFollow('${safePageId}')" title="${label} à cette Page Pro" aria-label="${label} à ${escapeHtml(page?.name || "cette Page Pro")}"><img src="icons/${icon}.svg" class="btn-icon" style="width: 18px; height: 18px;" alt=""> <span>${label}</span></button>`;
+}
+
 function renderUserCard(
     userId,
     isFollowing = false,
@@ -11792,12 +11815,13 @@ function renderUserCard(
         !isProPost && typeof window.generatePlanBadgeHTML === "function"
             ? window.generatePlanBadgeHTML(user, "feed")
             : "";
+    const supportCreator = getUser(latestContent.userId || userId) || user;
+    const supportCreatorId = supportCreator?.id || userId;
+    const supportViewerId = window.currentUser?.id || null;
     const supportButtonHtml =
-        !isProPost &&
-        currentUser &&
-        currentUser.id !== userId &&
+        (!supportViewerId || supportViewerId !== supportCreatorId) &&
         typeof window.generateSupportButtonHTML === "function"
-            ? window.generateSupportButtonHTML(user, "feed")
+            ? window.generateSupportButtonHTML(supportCreator, "feed")
             : "";
 
     const tags = Array.isArray(latestContent.tags) ? latestContent.tags : [];
@@ -11807,14 +11831,6 @@ function renderUserCard(
         className: "arc-collab-avatars--card-corner",
         fromImmersive: false,
     });
-    const supportOverlayHtml =
-        supportButtonHtml && latestContent?.type !== "text"
-            ? `<div class="support-overlay support-overlay--feed${collabCornerHtml ? " support-overlay--stacked" : ""}">${supportButtonHtml}</div>`
-            : "";
-    const supportInlineHtml =
-        !latestContent?.mediaUrl && !(latestContent?.mediaUrls || []).length
-            ? supportButtonHtml
-            : "";
     const mediaList = Array.isArray(latestContent.mediaUrls)
         ? latestContent.mediaUrls.filter(Boolean)
         : [];
@@ -11825,6 +11841,10 @@ function renderUserCard(
     const hasMultiImages =
         mediaList.length > 1 && latestContent.type !== "video";
     const primaryMediaUrl = hasMedia ? mediaList[0] : "";
+    const supportOverlayHtml =
+        supportButtonHtml && hasMedia
+            ? `<div class="support-overlay support-overlay--feed${collabCornerHtml ? " support-overlay--stacked" : ""}">${supportButtonHtml}</div>`
+            : "";
 
     let mediaHtml = "";
     if (hasMedia) {
@@ -11903,6 +11923,11 @@ function renderUserCard(
         }
     }
 
+    const supportInlineHtml =
+        supportButtonHtml && (!hasMedia || !mediaHtml)
+            ? supportButtonHtml
+            : "";
+
     const isAnnouncement = isAnnouncementContent(latestContent);
     const replyCount = isAnnouncement
         ? getReplyCount(latestContent.contentId)
@@ -11964,7 +11989,13 @@ function renderUserCard(
 
     // Subscribe Button
     let subscribeBtn = "";
-    if (!isProPost && currentUser && currentUser.id !== userId) {
+    if (isProPost) {
+        subscribeBtn = renderPageFollowButtonHtml(
+            pageId,
+            page,
+            latestContent.userId || userId,
+        );
+    } else if (window.currentUser?.id && window.currentUser.id !== userId) {
         const btnClass = isFollowing
             ? "btn-follow-card unfollow"
             : "btn-follow-card";
@@ -13208,6 +13239,9 @@ async function renderDiscoverGrid() {
                     window.professionalManager.getPageInfo(id),
                 ),
             );
+            await window.professionalManager.preloadPageFollowStates?.(
+                Array.from(pageIds),
+            );
         }
     }
 
@@ -14242,6 +14276,11 @@ async function renderImmersiveHeader(user, pageId = null) {
             slug: page?.slug || "",
             isPage: true,
         };
+        subscribeBtnHtml = renderPageFollowButtonHtml(
+            pageId,
+            page,
+            page?.owner_id || user?.id,
+        );
     }
 
     if (
@@ -14309,6 +14348,9 @@ async function renderImmersiveFeed(contents) {
                 Array.from(pageIds).map((id) =>
                     window.professionalManager.getPageInfo(id),
                 ),
+            );
+            await window.professionalManager.preloadPageFollowStates?.(
+                Array.from(pageIds),
             );
         }
     }
@@ -14418,18 +14460,30 @@ async function renderImmersiveFeed(contents) {
             const extractFirstTwoLines = (text) => {
                 if (!text) return { preview: "", full: text, hasMore: false };
                 const lines = text.split("\n").filter((line) => line.trim());
-                if (lines.length <= 2) {
+                const maxPreviewLength = 260;
+                if (lines.length <= 2 && text.length <= maxPreviewLength) {
                     return { preview: text, full: text, hasMore: false };
                 }
-                const preview = lines.slice(0, 2).join("\n");
-                return { preview, full: text, hasMore: true };
+                let preview = lines.slice(0, 2).join("\n");
+                if (preview.length > maxPreviewLength) {
+                    preview = preview.slice(0, maxPreviewLength);
+                }
+                if (preview.length < text.length && !/\s$/.test(preview)) {
+                    const lastSpace = preview.lastIndexOf(" ");
+                    if (lastSpace > maxPreviewLength * 0.7) {
+                        preview = preview.slice(0, lastSpace);
+                    }
+                }
+                const hasMore = text.trim().length > preview.trim().length;
+                return {
+                    preview: hasMore ? `${preview.trimEnd()}…` : text,
+                    full: text,
+                    hasMore,
+                };
             };
             const descriptionInfo = extractFirstTwoLines(fullDescription);
             const immersiveDescription = descriptionInfo.preview;
-            const hasMoreDescription =
-                descriptionInfo.hasMore &&
-                fullDescription &&
-                fullDescription.length > immersiveDescription.length;
+            const hasMoreDescription = descriptionInfo.hasMore;
 
             const authorIdentity = getContentAuthorIdentity(content);
             const isPageAuthor = authorIdentity.type === "PAGE_PRO";
@@ -14441,6 +14495,7 @@ async function renderImmersiveFeed(contents) {
                 : renderUserBadges(content.userId);
             const badgesHtml = contentBadgesHtml + userBadgesHtml;
             const contentUser = getUser(content.userId);
+            const supportViewerId = window.currentUser?.id || null;
 
             const page =
                 pageId &&
@@ -14494,9 +14549,7 @@ async function renderImmersiveFeed(contents) {
                 },
             );
             const immersiveSupportButtonHtml =
-                !isPageAuthor &&
-                currentUser &&
-                currentUser.id !== content.userId &&
+                (!supportViewerId || supportViewerId !== content.userId) &&
                 typeof window.generateSupportButtonHTML === "function"
                     ? window.generateSupportButtonHTML(contentUser, "feed")
                     : "";
@@ -14636,6 +14689,17 @@ async function renderImmersiveFeed(contents) {
             `
                     : "";
 
+            const immersiveFollowButtonHtml = isPageAuthor
+                ? renderPageFollowButtonHtml(pageId, page, content.userId)
+                : window.currentUser?.id &&
+                    window.currentUser.id !== content.userId
+                  ? `
+                    <button class="${followBtnClass}" data-follow-user="${escapeHtml(content.userId)}" onclick="event.stopPropagation(); toggleFollow('${escapeHtml(window.currentUser.id)}', '${escapeHtml(content.userId)}')" aria-label="${isFollowingUser ? "Ne plus suivre cet utilisateur" : "Suivre cet utilisateur"}">
+                        <img src="${followIconSrc}" class="btn-icon" style="width: 20px; height: 20px;">
+                    </button>
+                `
+                  : "";
+
             return `
             <div class="immersive-post" data-content-id="${content.contentId}" data-user-id="${content.userId}">
                 <div class="post-content-wrap">
@@ -14690,15 +14754,7 @@ async function renderImmersiveFeed(contents) {
                                 <span class="immersive-post-user-name">${contentUserNameHtml}</span>
                             </button>
                             ${collabAvatarsHtml}
-                            ${
-                                !isPageAuthor && currentUser && currentUser.id !== content.userId
-                                    ? `
-                                <button class="${followBtnClass}" data-follow-user="${content.userId}" onclick="event.stopPropagation(); toggleFollow('${currentUser.id}', '${content.userId}')">
-                                    <img src="${followIconSrc}" class="btn-icon" style="width: 20px; height: 20px;">
-                                </button>
-                            `
-                                    : ""
-                            }
+                            ${immersiveFollowButtonHtml}
                         </div>
                         <div class="badges-immersive">
                             ${badgesHtml}
@@ -15158,7 +15214,7 @@ function closeImmersive() {
     }
 }
 
-let currentImmersiveUser = null;
+let currentImmersiveAuthorKey = null;
 
 // Désactive le son et met en pause toutes les vidéos immersives sauf celle passée
 function muteOtherImmersiveVideos(activeVideo) {
@@ -15259,13 +15315,23 @@ function setupImmersiveObserver() {
                         }
 
                         // Update Header si nécessaire
-                        if (userId && userId !== currentImmersiveUser) {
-                            currentImmersiveUser = userId;
+                        const pageAuthorLink = entry.target.querySelector(
+                            "[data-profile-page-id]",
+                        );
+                        const pageId =
+                            pageAuthorLink?.dataset.profilePageId || null;
+                        const authorKey = pageId
+                            ? `page:${pageId}`
+                            : userId
+                              ? `user:${userId}`
+                              : null;
+                        if (authorKey && authorKey !== currentImmersiveAuthorKey) {
+                            currentImmersiveAuthorKey = authorKey;
                             const user = getUser(userId);
                             const headerContainer = document.getElementById(
                                 "immersive-header-container",
                             );
-                            renderImmersiveHeader(user).then((html) => {
+                            renderImmersiveHeader(user, pageId).then((html) => {
                                 if (headerContainer)
                                     headerContainer.innerHTML = html;
                             });
@@ -23220,15 +23286,36 @@ function expandImmersiveDescription(contentId) {
  * Show content details modal with full description and metadata
  */
 function showContentDetailsModal(contentId, contentTitle) {
-    // Find content by contentId across all userContents
+    // Find both personal and Page Pro content by id.
+    const targetContentId = String(contentId || "");
     let content = null;
     for (const userId in window.userContents || {}) {
         const contents = window.userContents[userId] || [];
-        const found = contents.find((c) => (c.contentId || c.id) === contentId);
+        const found = contents.find(
+            (c) =>
+                String(c.contentId || c.content_id || c.id || "") ===
+                targetContentId,
+        );
         if (found) {
             content = found;
             break;
         }
+    }
+
+    if (!content) {
+        professionalPageContents.forEach((contents) => {
+            if (content) return;
+            const found = (contents || []).find(
+                (candidate) =>
+                    String(
+                        candidate.contentId ||
+                            candidate.content_id ||
+                            candidate.id ||
+                            "",
+                    ) === targetContentId,
+            );
+            if (found) content = found;
+        });
     }
 
     if (!content) {
@@ -23256,7 +23343,7 @@ function showContentDetailsModal(contentId, contentTitle) {
             content.rawDescription || content.description || "",
         ).cleanDescription || "";
 
-    const contentUser = getUser(content.userId);
+    const contentUser = getUser(content.userId || content.user_id);
     const contentUserName = contentUser ? contentUser.name : "Utilisateur";
     const contentUserAvatar = contentUser ? contentUser.avatar : "";
     const views = formatCompactCount(content.views || 0);
@@ -23278,8 +23365,10 @@ function showContentDetailsModal(contentId, contentTitle) {
             : "";
 
     const page =
-        content.pageId &&
-        window.professionalManager?.proPagesCache?.get(content.pageId);
+        (content.pageId || content.page_id) &&
+        window.professionalManager?.proPagesCache?.get(
+            String(content.pageId || content.page_id),
+        );
     const authorName = page?.name || contentUserName;
     const authorAvatar =
         page?.avatar_url || contentUserAvatar || "icons/logo.png";

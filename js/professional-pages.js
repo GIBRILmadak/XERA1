@@ -149,6 +149,7 @@ class XERAProfessionalManager {
         this.onboarding = null;
         this.myPageSlug = null;
         this.proPagesCache = new Map();
+        this.pageFollowStateCache = new Map();
         this.initialStateHandled = false;
         this.initialStatePromise = null;
         this.proPageRenderSequence = 0;
@@ -1198,15 +1199,69 @@ class XERAProfessionalManager {
             if (countError) throw countError;
             if (followResult.error) throw followResult.error;
 
-            return {
+            const state = {
                 count: count || 0,
                 isFollowing: (followResult.data || []).length > 0,
                 available: true,
             };
+            this.pageFollowStateCache.set(
+                `${window.currentUser?.id || "anonymous"}:${String(pageId)}`,
+                state,
+            );
+            return state;
         } catch (error) {
             console.warn("Abonnements Page Pro indisponibles:", error);
             return { count: 0, isFollowing: false, available: false };
         }
+    }
+
+    getCachedPageFollowState(pageId) {
+        if (!pageId) return null;
+        return (
+            this.pageFollowStateCache.get(
+                `${window.currentUser?.id || "anonymous"}:${String(pageId)}`,
+            ) || null
+        );
+    }
+
+    async preloadPageFollowStates(pageIds = []) {
+        const ids = Array.from(
+            new Set((pageIds || []).map((id) => String(id || "")).filter(Boolean)),
+        );
+        if (ids.length === 0) return;
+
+        const viewerId = window.currentUser?.id || null;
+        const followingPageIds = new Set();
+        if (viewerId) {
+            try {
+                const { data, error } = await this.supabase
+                    .from("page_followers")
+                    .select("page_id")
+                    .eq("user_id", viewerId)
+                    .in("page_id", ids);
+                if (error) throw error;
+                (data || []).forEach((row) => {
+                    if (row?.page_id) followingPageIds.add(String(row.page_id));
+                });
+            } catch (error) {
+                console.warn(
+                    "Impossible de précharger les abonnements aux Pages Pro:",
+                    error,
+                );
+                return;
+            }
+        }
+
+        ids.forEach((pageId) => {
+            this.pageFollowStateCache.set(
+                `${viewerId || "anonymous"}:${pageId}`,
+                {
+                    count: null,
+                    isFollowing: followingPageIds.has(pageId),
+                    available: true,
+                },
+            );
+        });
     }
 
     async togglePageFollow(pageId) {
@@ -1216,8 +1271,13 @@ class XERAProfessionalManager {
             return;
         }
 
-        const button = document.getElementById(`page-follow-btn-${pageId}`);
-        if (button) button.disabled = true;
+        const pageIdString = String(pageId);
+        const getButtons = () =>
+            Array.from(document.querySelectorAll("[data-page-follow-id]")).filter(
+                (candidate) => candidate.dataset.pageFollowId === pageIdString,
+            );
+        const buttons = getButtons();
+        buttons.forEach((button) => (button.disabled = true));
 
         try {
             const state = await this.getPageFollowState(pageId);
@@ -1243,15 +1303,22 @@ class XERAProfessionalManager {
             if (error && error.code !== "23505") throw error;
 
             const nextState = await this.getPageFollowState(pageId);
-            if (button) {
+            getButtons().forEach((button) => {
                 button.classList.toggle("is-following", nextState.isFollowing);
                 button.innerHTML = `<img src="icons/${nextState.isFollowing ? "subscribed" : "subscribe"}.svg" class="btn-icon" style="width: 20px; height: 20px;"> ${nextState.isFollowing ? "Abonné" : "S'abonner"}`;
-            }
+            });
             const countElement = document.getElementById(
                 `page-follow-count-${pageId}`,
             );
             if (countElement)
                 countElement.textContent = String(nextState.count);
+            document
+                .querySelectorAll("[data-page-follow-count]")
+                .forEach((element) => {
+                    if (element.dataset.pageFollowCount === pageIdString) {
+                        element.textContent = String(nextState.count);
+                    }
+                });
         } catch (error) {
             console.error("Erreur abonnement Page Pro:", error);
             window.ToastManager?.error(
@@ -1259,7 +1326,7 @@ class XERAProfessionalManager {
                 error?.message || "Impossible de modifier l'abonnement.",
             );
         } finally {
-            if (button) button.disabled = false;
+            getButtons().forEach((button) => (button.disabled = false));
         }
     }
 
@@ -2180,7 +2247,7 @@ class XERAProfessionalManager {
             const pageFollowState = await this.getPageFollowState(page.id);
             const pageFollowHtml = isOwner
                 ? ""
-                : `<button id="page-follow-btn-${page.id}" class="btn-pro-primary pro-page-follow-btn${pageFollowState.isFollowing ? " is-following" : ""}" onclick="window.professionalManager.togglePageFollow('${page.id}')"><img src="icons/${pageFollowState.isFollowing ? "subscribed" : "subscribe"}.svg" class="btn-icon" style="width: 20px; height: 20px;"> ${pageFollowState.isFollowing ? "Abonné" : "S'abonner"}</button>`;
+                : `<button id="page-follow-btn-${page.id}" data-page-follow-id="${page.id}" class="btn-pro-primary pro-page-follow-btn${pageFollowState.isFollowing ? " is-following" : ""}" onclick="window.professionalManager.togglePageFollow('${page.id}')"><img src="icons/${pageFollowState.isFollowing ? "subscribed" : "subscribe"}.svg" class="btn-icon" style="width: 20px; height: 20px;"> ${pageFollowState.isFollowing ? "Abonné" : "S'abonner"}</button>`;
             if (typeof window.fetchVerifiedBadges === "function") {
                 await window
                     .fetchVerifiedBadges()

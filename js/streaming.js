@@ -3900,7 +3900,7 @@ if (!window.__streamingLoaded) {
         updateStreamSupportButton(stream);
     }
 
-    function updateStreamSupportButton(stream) {
+    async function updateStreamSupportButton(stream) {
         const actionButton = document.getElementById("stream-support-btn");
         const overlayContainer = document.getElementById(
             "stream-support-overlay",
@@ -3917,12 +3917,47 @@ if (!window.__streamingLoaded) {
             return;
         }
 
-        const hostName = stream?.users?.name || stream?.host_name || "Créateur";
+        const hostName =
+            stream?.users?.name || stream?.host_name || "Créateur";
         const cachedUser =
             typeof window.getUser === "function"
                 ? window.getUser(hostId)
                 : null;
-        const hostUser = stream?.users || cachedUser || {};
+        let hostUser = {
+            ...(stream?.users || {}),
+            ...(cachedUser || {}),
+        };
+        if (
+            (!Object.prototype.hasOwnProperty.call(hostUser, "plan") ||
+                !Object.prototype.hasOwnProperty.call(
+                    hostUser,
+                    "plan_status",
+                )) &&
+            window.supabase?.from
+        ) {
+            try {
+                const profileCache =
+                    (window.__xeraStreamSupportProfileCache ||= new Map());
+                let profilePromise = profileCache.get(hostId);
+                if (!profilePromise) {
+                    profilePromise = window.supabase
+                        .from("users")
+                        .select(
+                            "id, name, plan, plan_status, plan_ends_at, is_monetized, followers_count",
+                        )
+                        .eq("id", hostId)
+                        .maybeSingle()
+                        .then(({ data, error }) => (error ? null : data))
+                        .catch(() => null);
+                    profileCache.set(hostId, profilePromise);
+                }
+                const profile = await profilePromise;
+                if (profile) hostUser = { ...hostUser, ...profile };
+            } catch (error) {
+                console.warn("Impossible de charger le plan de l'hôte:", error);
+            }
+        }
+        const resolvedHostName = hostUser.name || hostName;
         const isEligible =
             typeof window.canReceiveSupport === "function"
                 ? window.canReceiveSupport(hostUser)
@@ -3938,12 +3973,12 @@ if (!window.__streamingLoaded) {
         const applySupportHandler = (btn) => {
             if (!btn) return;
             btn.dataset.creatorId = hostId;
-            btn.dataset.creatorName = hostName;
+            btn.dataset.creatorName = resolvedHostName;
             btn.onclick = (event) => {
                 event.preventDefault();
                 event.stopPropagation();
                 if (typeof window.openSupportModal === "function") {
-                    window.openSupportModal(hostId, hostName, btn);
+                    window.openSupportModal(hostId, resolvedHostName, btn);
                     return;
                 }
                 if (window.ToastManager) {
@@ -3960,7 +3995,7 @@ if (!window.__streamingLoaded) {
         };
 
         if (actionButton) {
-            actionButton.style.display = "none";
+            actionButton.style.display = "inline-flex";
             applySupportHandler(actionButton);
         }
         if (overlayContainer) {
