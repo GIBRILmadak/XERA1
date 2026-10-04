@@ -490,7 +490,7 @@ async function sendPushForDirectMessage(messageRow) {
     ] = await Promise.all([
         supabase
             .from("dm_participants")
-            .select("user_id")
+            .select("user_id, muted")
             .eq("conversation_id", messageRow.conversation_id)
             .neq("user_id", messageRow.sender_id),
         supabase
@@ -508,8 +508,14 @@ async function sendPushForDirectMessage(messageRow) {
         );
     }
 
+    // Conversation mise en sourdine : pas de notification push.
     const recipientIds = Array.from(
-        new Set((recipients || []).map((r) => r.user_id).filter(Boolean)),
+        new Set(
+            (recipients || [])
+                .filter((r) => r.muted !== true)
+                .map((r) => r.user_id)
+                .filter(Boolean),
+        ),
     );
     if (recipientIds.length === 0) return;
 
