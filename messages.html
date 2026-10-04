@@ -17,7 +17,7 @@
         <link rel="stylesheet" href="css/search-notification.css" />
         <link rel="stylesheet" href="css/arcs.css" />
         <link rel="stylesheet" href="css/streaming-analytics.css" />
-        <link rel="stylesheet" href="css/messages-ui.css?v=20261003-1" />
+        <link rel="stylesheet" href="css/messages-ui.css?v=20261005-1" />
         <link
             rel="stylesheet"
             href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
@@ -74,10 +74,26 @@
 
         <script src="js/router.js?v=20261004-3"></script>
         <script src="js/supabase-config.js"></script>
-        <script src="js/messages.js?v=20261004-1"></script>
+        <script src="js/ux-enhancements.js"></script>
+        <script src="js/messages.js?v=20261005-1"></script>
         <script>
-            document.addEventListener("DOMContentLoaded", () => {
-                window.initializeMessaging?.();
+            // Page autonome : app-supabase.js n'est pas chargé ici, donc
+            // personne d'autre ne résout la session avant la messagerie.
+            document.addEventListener("DOMContentLoaded", async () => {
+                let user = null;
+                try {
+                    user = await window.checkAuth?.();
+                } catch (error) {
+                    console.error("Messages auth error:", error);
+                }
+                if (!user?.id) {
+                    const back = `${window.location.pathname}${window.location.search}`;
+                    window.location.replace(
+                        `login.html?redirect=${encodeURIComponent(back)}`,
+                    );
+                    return;
+                }
+                await window.initializeMessaging?.();
             });
         </script>
         <script src="js/i18n.js"></script>

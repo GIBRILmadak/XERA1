@@ -6,6 +6,7 @@
         { "source": "/", "destination": "/api/home" },
         { "source": "/share/:path*", "destination": "/index.html" },
         { "source": "/login", "destination": "/login.html" },
+        { "source": "/messages", "destination": "/messages.html" },
         { "source": "/profile", "destination": "/api/profile" },
         { "source": "/profile/:path*", "destination": "/api/profile" },
         { "source": "/pagepro", "destination": "/api/profile" },
