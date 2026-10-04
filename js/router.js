@@ -544,7 +544,7 @@
                 <button type="button" class="xera-bottom-fab" title="Créer" aria-label="Créer">
                     <i class="fas fa-plus"></i>
                 </button>
-                <a class="xera-bottom-item" href="messages.html" title="Messages">
+                <a class="xera-bottom-item xera-bottom-item--messages" href="messages.html" title="Messages">
                     <div class="xera-bottom-icon"><i class="fas fa-envelope"></i></div>
                     <span>Messages</span>
                 </a>
@@ -568,6 +568,16 @@
             });
         }
 
+        const profileTrigger = bottomNav.querySelector(
+            '[data-profile-hub-trigger], .xera-bottom-item[title="Profil"]',
+        );
+        if (profileTrigger) {
+            profileTrigger.dataset.profileHubTrigger = "";
+            profileTrigger.setAttribute("href", "#");
+            profileTrigger.setAttribute("aria-label", "Ouvrir le menu Profil");
+            ensureProfileHubScripts();
+        }
+
         if (bottomNav.dataset.scrollBound) return;
         bottomNav.dataset.scrollBound = "true";
         let lastScrollY = window.scrollY;
@@ -589,6 +599,44 @@
             },
             { passive: true },
         );
+    }
+
+    function ensureProfileHubScripts() {
+        const loadFataIntegration = () => {
+            if (
+                window.FataIntegration ||
+                document.querySelector('script[src*="fata-integration.js"]')
+            ) {
+                return;
+            }
+            const fataScript = document.createElement("script");
+            fataScript.src = "/js/fata-integration.js?v=20261004-3";
+            document.body.appendChild(fataScript);
+        };
+
+        if (window.XeraNavHub) {
+            loadFataIntegration();
+            return;
+        }
+
+        const existingScript = document.querySelector(
+            'script[src*="navigation-hub.js"]',
+        );
+        if (existingScript) {
+            if (window.XeraNavHub) {
+                loadFataIntegration();
+            } else {
+                window.setTimeout(loadFataIntegration, 0);
+            }
+            return;
+        }
+
+        const navigationScript = document.createElement("script");
+        navigationScript.src = "/js/navigation-hub.js?v=20261004-1";
+        navigationScript.addEventListener("load", loadFataIntegration, {
+            once: true,
+        });
+        document.body.appendChild(navigationScript);
     }
 
     function getCreationUserId() {

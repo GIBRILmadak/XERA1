@@ -419,14 +419,18 @@ async function getAllUsers() {
 
 async function createContent(contentData) {
     try {
+        const userId = contentData.user_id ?? contentData.userId ?? null;
+        const pageId = contentData.page_id ?? contentData.pageId ?? null;
         const payload = {
             ...contentData,
-            user_id: contentData.user_id ?? contentData.userId ?? null,
+            user_id: userId,
+            author_type: pageId ? "PAGE_PRO" : "USER",
+            author_id: pageId || userId,
             day_number: contentData.day_number ?? contentData.dayNumber ?? null,
             media_url: contentData.media_url ?? contentData.mediaUrl ?? null,
             media_urls: contentData.media_urls ?? contentData.mediaUrls ?? null,
             arc_id: contentData.arc_id ?? contentData.arcId ?? null,
-            page_id: contentData.page_id ?? contentData.pageId ?? null,
+            page_id: pageId,
         };
         delete payload.userId;
         delete payload.dayNumber;
@@ -453,16 +457,32 @@ async function updateContent(contentId, contentData) {
     }
 
     try {
+        const includesPageId =
+            Object.prototype.hasOwnProperty.call(contentData, "page_id") ||
+            Object.prototype.hasOwnProperty.call(contentData, "pageId");
+        const pageId = contentData.page_id ?? contentData.pageId ?? null;
+        const userId = contentData.user_id ?? contentData.userId ?? null;
         const payload = {
             ...contentData,
             updated_at: new Date().toISOString(),
-            user_id: contentData.user_id ?? contentData.userId ?? null,
+            user_id: userId,
             day_number: contentData.day_number ?? contentData.dayNumber ?? null,
             media_url: contentData.media_url ?? contentData.mediaUrl ?? null,
             media_urls: contentData.media_urls ?? contentData.mediaUrls ?? null,
             arc_id: contentData.arc_id ?? contentData.arcId ?? null,
-            page_id: contentData.page_id ?? contentData.pageId ?? null,
         };
+        if (includesPageId) {
+            payload.page_id = pageId;
+            payload.author_type = pageId ? "PAGE_PRO" : "USER";
+            payload.author_id = pageId || userId;
+        } else {
+            delete payload.page_id;
+            delete payload.pageId;
+            delete payload.author_type;
+            delete payload.authorType;
+            delete payload.author_id;
+            delete payload.authorId;
+        }
         delete payload.userId;
         delete payload.dayNumber;
         delete payload.mediaUrl;
@@ -518,7 +538,9 @@ async function getUserEngagementTotals(userId) {
         const { data, error } = await supabase
             .from("content")
             .select("views")
-            .eq("user_id", userId);
+            .eq("author_type", "USER")
+            .eq("author_id", userId)
+            .is("page_id", null);
         if (error) throw error;
         const totalViews = (data || []).reduce(
             (sum, item) => sum + (Number(item.views) || 0),
@@ -565,7 +587,9 @@ async function getUserContent(userId) {
         const { data, error } = await supabase
             .from("content")
             .select(columns)
-            .eq("user_id", userId)
+            .eq("author_type", "USER")
+            .eq("author_id", userId)
+            .is("page_id", null)
             .order("day_number", { ascending: false });
 
         if (error) throw error;

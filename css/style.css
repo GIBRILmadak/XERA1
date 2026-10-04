@@ -836,6 +836,7 @@ nav {
 }
 
 .desktop-quick-action {
+    position: relative;
     display: inline-flex;
     align-items: center;
     gap: 0.45rem;
@@ -848,6 +849,20 @@ nav {
     font-size: 0.76rem;
     font-weight: 700;
     cursor: pointer;
+}
+
+.desktop-quick-action[data-quick-action="messages"].has-unread::after {
+    content: "";
+    position: absolute;
+    top: 3px;
+    left: 22px;
+    width: 10px;
+    height: 10px;
+    border: 2px solid #101014;
+    border-radius: 50%;
+    background: #ef4444;
+    box-sizing: border-box;
+    pointer-events: none;
 }
 
 .desktop-quick-action:hover {
@@ -18907,6 +18922,24 @@ nav {
     .xera-bottom-item.active,
     .xera-bottom-item:hover {
         color: #ffffff;
+    }
+
+    .xera-bottom-item--messages {
+        position: relative;
+    }
+
+    .xera-bottom-item--messages.has-unread::after {
+        content: "";
+        position: absolute;
+        top: 5px;
+        left: calc(50% + 7px);
+        width: 10px;
+        height: 10px;
+        border: 2px solid #101014;
+        border-radius: 50%;
+        background: #ef4444;
+        box-sizing: border-box;
+        pointer-events: none;
     }
 
     .xera-bottom-item i,

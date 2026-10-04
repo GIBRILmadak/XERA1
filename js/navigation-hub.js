@@ -4,6 +4,51 @@
  */
 
 (() => {
+    function ensureProfileHubPopover() {
+        let popover = document.getElementById("profile-hub-popover");
+        if (popover) return popover;
+
+        popover = document.createElement("div");
+        popover.id = "profile-hub-popover";
+        popover.className = "profile-hub-popover";
+        popover.innerHTML = `
+            <a href="profile-personal.html" class="hub-user-header hub-user-header--link" title="Voir et modifier mon profil">
+                <div class="hub-avatar-wrap"><img id="hub-user-avatar" class="hub-user-avatar" src="icons/logo.png" alt="Avatar"></div>
+                <div class="hub-user-info">
+                    <span id="hub-user-name" class="hub-user-name">Mon profil</span>
+                    <span id="hub-user-handle" class="hub-user-handle" hidden></span>
+                    <span id="hub-pro-badge" class="hub-badge-pro" style="display:none"><i class="fas fa-certificate"></i> PRO</span>
+                    <span class="hub-edit-label"><i class="fas fa-pencil-alt"></i> Modifier le profil</span>
+                </div>
+            </a>
+            <div class="hub-menu-group">
+                <button type="button" class="hub-menu-item" id="hub-nav-pro-page" data-profile-hub-pro-page style="display:none">
+                    <i class="fas fa-building" data-pro-page-icon aria-hidden="true"></i>
+                    <img class="hub-pro-page-avatar" data-pro-page-avatar alt="" hidden>
+                    <span data-pro-page-name>Page Pro / Entreprise</span>
+                </button>
+                <button type="button" class="hub-menu-item" onclick="location.href='subscription-plans.html'">
+                    <i class="fas fa-wallet"></i><span>Abonnements & KPay</span>
+                </button>
+                <button type="button" class="hub-menu-item" id="nav-fata-btn">
+                    <img src="icons/fata.webp" alt="Fata" style="width:18px;height:18px;object-fit:contain">
+                    <span>Challenge Fata</span>
+                </button>
+            </div>
+            <div class="hub-divider"></div>
+            <div class="hub-footer-row">
+                <div class="lang-switcher-nav">
+                    <select id="header-lang-select" class="nav-lang-select" aria-label="Language selection">
+                        <option value="fr">FR</option><option value="en">EN</option>
+                    </select>
+                </div>
+                <a href="login.html" id="nav-auth" class="hub-menu-item" data-i18n="navAuth">Connexion</a>
+            </div>
+        `;
+        document.body.appendChild(popover);
+        return popover;
+    }
+
     function getProfileHubTriggers() {
         return Array.from(
             document.querySelectorAll(
@@ -14,7 +59,7 @@
 
     function initNavigationHub() {
         const profileTriggers = getProfileHubTriggers();
-        const profilePopover = document.getElementById("profile-hub-popover");
+        const profilePopover = ensureProfileHubPopover();
 
         if (!profileTriggers.length || !profilePopover) return;
 
@@ -33,7 +78,13 @@
             // Binding a second click handler would toggle the panel twice.
             if (profileTrigger === quickProfileAction) return;
 
+            // The mobile dock and the legacy avatar still have inline profile
+            // navigation handlers. This control opens the same account menu as
+            // the desktop quick action instead of navigating away.
+            profileTrigger.removeAttribute("onclick");
+
             profileTrigger.addEventListener("click", (event) => {
+                event.preventDefault();
                 event.stopPropagation();
                 toggleProfileHub();
             });
@@ -295,7 +346,7 @@
         if (fataPanel) fataPanel.classList.remove("is-open");
     }
 
-    if (document.readyState === "loading" || document.readyState === "interactive") {
+    if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", initNavigationHub, {
             once: true,
         });

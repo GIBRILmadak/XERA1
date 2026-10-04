@@ -64,6 +64,19 @@
         var isAdmin = typeof window.isSuperAdmin === "function" && window.isSuperAdmin();
         var unique = new Map();
         sources.flat().forEach(function (content, index) {
+            var pageId = content && (content.pageId || content.page_id);
+            var authorType = String(
+                (content && (content.authorType || content.author_type)) ||
+                    (pageId ? "PAGE_PRO" : "USER")
+            ).toUpperCase();
+            var authorId =
+                (content && (content.authorId || content.author_id)) ||
+                (pageId ? pageId : content && (content.userId || content.user_id));
+            if (
+                authorType !== "USER" ||
+                String(authorId || "") !== String(userId || "") ||
+                pageId
+            ) return;
             if (!content || (!isAdmin && content.isDeleted)) return;
             var id = content.contentId || content.content_id || content.id;
             var key = id

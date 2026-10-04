@@ -1703,6 +1703,8 @@ class XERAProfessionalManager {
             const { data: updates, error } = await this.supabase
                 .from("content")
                 .select("*")
+                .eq("author_type", "PAGE_PRO")
+                .eq("author_id", pageId)
                 .eq("page_id", pageId)
                 .order("created_at", { ascending: false });
 
@@ -1715,6 +1717,10 @@ class XERAProfessionalManager {
 
             const normalizedUpdates = updates.map((update) => ({
                 ...update,
+                userId: update.user_id,
+                pageId: update.page_id || pageId,
+                authorType: update.author_type || "PAGE_PRO",
+                authorId: update.author_id || update.page_id || pageId,
                 type: update.metadata?.sub_type === "event" ? "event" : "news",
                 createdAt: update.created_at,
             }));
@@ -1729,7 +1735,7 @@ class XERAProfessionalManager {
                                 "function"
                             ) {
                                 return window.renderProfileUpdateCard(update, {
-                                    profileUserId: update.user_id,
+                                    profileUserId: pageId,
                                     currentUserId: window.currentUserId,
                                 });
                             }
@@ -1982,6 +1988,8 @@ class XERAProfessionalManager {
                 let payload = {
                     page_id: pageId,
                     user_id: window.currentUserId,
+                    author_type: "PAGE_PRO",
+                    author_id: pageId,
                     type: "text", // Par défaut, sera écrasé si média présent
                     state: "success", // Ajout du state pour éviter la contrainte NOT NULL
                     day_number: 0, // Correction : ajout du day_number pour éviter l'erreur NOT NULL
@@ -2060,10 +2068,12 @@ class XERAProfessionalManager {
     /**
      * Rendu complet d'une Page Professionnelle
      */
-    async renderProPage(slug) {
-        console.log("[Pro] renderProPage starting for slug:", slug);
+    async renderProPage(slugOrId) {
+        console.log("[Pro] renderProPage starting for page:", slugOrId);
 
-        const routeKey = `${window.location.pathname || ""}|${window.location.search || ""}|${slug || ""}`;
+        if (!slugOrId) return;
+
+        const routeKey = `${window.location.pathname || ""}|${window.location.search || ""}|${slugOrId || ""}`;
         const now = Date.now();
         if (
             window.__proPageRenderGuardKey === routeKey &&
@@ -2085,20 +2095,20 @@ class XERAProfessionalManager {
             currentPath.includes("/pagepro");
 
         const hasProParam =
-            new URLSearchParams(window.location.search).get("pro") === slug;
+            new URLSearchParams(window.location.search).get("pro") === String(slugOrId);
 
         // 1. Navigation / Redirection (Si on n'est pas sur la bonne page ou URL)
         if (!isProfilePage || !hasProParam) {
-            console.log("[Pro] Redirecting to profile page with slug:", slug);
-            const targetUrl = `profile.html?pro=${slug}`;
+            console.log("[Pro] Redirecting to the professional page:", slugOrId);
+            const targetUrl = `profile.html?pro=${encodeURIComponent(slugOrId)}`;
 
             if (
                 window.XeraRouter &&
                 typeof window.XeraRouter.navigate === "function"
             ) {
-                window.XeraRouter.navigate("pagepro", { query: { pro: slug } });
+                window.XeraRouter.navigate("pagepro", { query: { pro: slugOrId } });
             } else if (typeof window.navigateTo === "function") {
-                window.navigateTo("pagepro", { query: { pro: slug } });
+                window.navigateTo("pagepro", { query: { pro: slugOrId } });
             } else {
                 window.location.href = targetUrl;
             }
@@ -2129,7 +2139,7 @@ class XERAProfessionalManager {
         if (!isCurrentRender()) return;
 
         // Persister dans l'URL si on reste en mode SPA
-        this.syncUrl({ pro: slug, explorer: null });
+        this.syncUrl({ pro: slugOrId, explorer: null });
 
         if (typeof document !== "undefined" && document.body) {
             document.body.classList.add("is-pro");
@@ -2139,11 +2149,23 @@ class XERAProfessionalManager {
         proContainer.innerHTML = CompanyPageSkeleton();
 
         try {
-            const { data: page, error } = await this.supabase
+            const isPageId = /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(String(slugOrId));
+            let { data: page, error } = await this.supabase
                 .from("professional_pages")
                 .select("*")
-                .eq("slug", slug)
-                .single();
+                .eq(isPageId ? "id" : "slug", slugOrId)
+                .maybeSingle();
+
+            // Support both the canonical slug and an ID-only Page Pro link.
+            if ((!page || error) && isPageId) {
+                const bySlug = await this.supabase
+                    .from("professional_pages")
+                    .select("*")
+                    .eq("slug", slugOrId)
+                    .maybeSingle();
+                page = bySlug.data;
+                error = bySlug.error;
+            }
 
             if (error || !page) throw new Error("Page introuvable");
             if (!isCurrentRender()) return;
@@ -5196,6 +5218,27 @@ if (typeof window !== "undefined") {
             await new Promise((resolve) => setTimeout(resolve, 100));
         }
         return window.professionalManager;
+    };
+
+    // Les publications d'une Page Pro ouvrent toujours la Page Pro elle-même,
+    // indépendamment du compte qui en assure la gestion.
+    window.openProfessionalPageById = async function (pageId) {
+        if (!pageId) return;
+        const proId = String(pageId);
+        const currentProId = new URLSearchParams(
+            window.location.search,
+        ).get("pro");
+        if (currentProId === proId) return;
+
+        if (window.XeraRouter?.navigate) {
+            window.XeraRouter.navigate("pagepro", {
+                query: { pro: proId },
+            });
+        } else {
+            window.location.assign(
+                `profile.html?pro=${encodeURIComponent(proId)}`,
+            );
+        }
     };
 
     window.navigateToProfessionalPage = async function (event) {

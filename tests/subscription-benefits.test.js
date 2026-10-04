@@ -102,6 +102,20 @@ assert.match(
 
 const staticHtml = fs.readFileSync("subscription-plans.html", "utf8");
 const appSource = fs.readFileSync("js/app-supabase.js", "utf8");
+const legacyMonetizationSource = fs.readFileSync("monetization.js", "utf8");
+const dashboardAccessFunction = appSource.match(
+    /function hasMonetizationDashboardAccess\(user\) \{[\s\S]*?\n\}/,
+);
+assert.ok(dashboardAccessFunction, "monetization dashboard access function exists");
+assert.match(dashboardAccessFunction[0], /\["medium", "pro"\]\.includes\(plan\)/);
+assert.match(
+    appSource,
+    /const canAccessMonetizationDashboard =\s*isOwnProfile && hasMonetizationDashboardAccess\(user\)/,
+);
+assert.match(
+    legacyMonetizationSource,
+    /export function canUserReceiveSupport\(user\) \{[\s\S]*?if \(!isPlanActiveForUser\(user\)\) return false;\s*return true;/,
+);
 const boostFunction = appSource.match(
     /function getPlanBoostMultiplier\(userId\) \{[\s\S]*?\n\}/,
 );

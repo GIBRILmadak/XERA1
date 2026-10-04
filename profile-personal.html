@@ -44,7 +44,7 @@
         <meta name="twitter:image" content="https://xera1.xyz/icons/logo.png" />
 
         <!-- Styles globaux -->
-        <link rel="stylesheet" href="css/style.css?v=20261003-2" />
+        <link rel="stylesheet" href="css/style.css?v=20261004-1" />
         <link rel="stylesheet" href="css/search-notification.css" />
         <link rel="stylesheet" href="css/arcs.css" />
         <link rel="stylesheet" href="css/streaming-analytics.css" />
@@ -95,6 +95,40 @@
             </div>
             <div id="notification-list" class="notification-list">
                 <!-- Notifications injectées dynamiquement -->
+            </div>
+        </div>
+
+        <div
+            id="fata-challenge-panel"
+            class="fata-challenge-panel"
+            aria-labelledby="personal-fata-title"
+        >
+            <div class="fata-panel-header">
+                <div class="fata-panel-title-group">
+                    <img src="icons/fata.webp" alt="Fata" class="fata-panel-logo" />
+                    <div>
+                        <h3 id="personal-fata-title" class="fata-panel-title">Challenge Fata × XERA1</h3>
+                        <p class="fata-panel-subtitle">Proof of Building & Progression</p>
+                    </div>
+                </div>
+                <button type="button" class="fata-close-btn" aria-label="Fermer">&times;</button>
+            </div>
+            <div class="fata-panel-body">
+                <div class="fata-auth-card">
+                    <div class="fata-auth-header">
+                        <div class="fata-auth-icon is-pending">
+                            <i class="fas fa-link"></i>
+                        </div>
+                        <div class="fata-auth-details">
+                            <span class="fata-auth-status">Compte Fata non connecté</span>
+                            <span class="fata-auth-id">Liez votre compte Fata pour synchroniser vos preuves.</span>
+                        </div>
+                    </div>
+                    <button type="button" class="fata-connect-btn">
+                        <i class="fab fa-openid"></i> Connecter mon compte Fata
+                    </button>
+                    <p class="fata-connection-note" hidden></p>
+                </div>
             </div>
         </div>
 
@@ -428,7 +462,7 @@
         </section>
 
         <!-- Configuration Supabase -->
-        <script src="js/router.js"></script>
+        <script src="js/router.js?v=20261004-1"></script>
         <script src="js/supabase-config.js"></script>
         <script src="js/monetization-utils.js"></script>
         <script src="js/monetization.js?v=20260319-1"></script>
@@ -443,8 +477,8 @@
         <script src="js/app-enhancements.js"></script>
         <!-- Modules de fonctionnalités -->
         <script src="js/search.js"></script>
-        <script src="js/notifications.js?v=20260502-1"></script>
-        <script src="js/messages.js?v=20261003-1"></script>
+        <script src="js/notifications.js?v=20261004-1"></script>
+        <script src="js/messages.js?v=20261004-1"></script>
         <script src="js/file-upload.js"></script>
         <script src="js/nudges.js"></script>
         <script src="js/tutorial.js"></script>
@@ -462,7 +496,7 @@
         <script src="js/pro-settings-component.js?v=20260723-1" defer></script>
         <!-- Script principal avec intégration Supabase -->
         <script src="js/c2pa-utils.js"></script>
-        <script src="js/app-supabase.js?v=20260903-1"></script>
+        <script src="js/app-supabase.js?v=20261004-2"></script>
         <script>
             window.navigateToProfessionalPage = function () {
                 window.location.href = "profile.html?pro=xera1";
@@ -497,5 +531,7 @@
         <script src="js/personal-profile-page.js"></script>
         <script src="js/i18n.js"></script>
         <script src="js/seo-schema.js"></script>
+        <script src="js/navigation-hub.js?v=20261004-1" defer></script>
+        <script src="js/fata-integration.js?v=20261004-3" defer></script>
     </body>
 </html>

@@ -1,11 +1,8 @@
 const crypto = require("crypto");
-const { createClient } = require("@supabase/supabase-js");
 const { OAUTH_CONFIGS } = require("./oauth-configs");
+const { createSupabaseServiceClient } = require("./supabase-service-client");
 
-const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY,
-);
+const supabase = createSupabaseServiceClient();
 
 const ENCRYPTION_KEY_RAW =
     process.env.OAUTH_TOKEN_ENCRYPTION_KEY ||

@@ -62,9 +62,50 @@ const allowedOrigins = [APP_BASE_URL, APP_FRONTEND_URL]
     .flatMap((value) => String(value || "").split(","))
     .map((v) => v.trim())
     .filter(Boolean);
+
+function isLocalDevelopmentOrigin(origin) {
+    const localHosts = new Set([
+        "localhost",
+        "127.0.0.1",
+        "0.0.0.0",
+        "[::1]",
+        "::1",
+    ]);
+    const hasProductionOrigin = allowedOrigins.some((configuredOrigin) => {
+        try {
+            const configuredUrl = new URL(configuredOrigin);
+            return (
+                configuredUrl.protocol === "https:" ||
+                !localHosts.has(configuredUrl.hostname)
+            );
+        } catch (_) {
+            return false;
+        }
+    });
+    if (process.env.NODE_ENV === "production" || hasProductionOrigin) {
+        return false;
+    }
+    try {
+        const url = new URL(origin);
+        return (
+            url.protocol === "http:" &&
+            localHosts.has(url.hostname)
+        );
+    } catch (_) {
+        return false;
+    }
+}
+
 app.use(
     cors({
-        origin: allowedOrigins,
+        origin(origin, callback) {
+            callback(
+                null,
+                !origin ||
+                    allowedOrigins.includes(origin) ||
+                    isLocalDevelopmentOrigin(origin),
+            );
+        },
         methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     }),
 );

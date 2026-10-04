@@ -78,9 +78,23 @@
     }
 
     function setNavBadgeCount(count) {
+        const value = Number(count) || 0;
+
+        document
+            .querySelectorAll(
+                '#messages-nav-btn, [data-quick-action="messages"], .xera-bottom-item--messages',
+            )
+            .forEach((button) => {
+                button.classList.toggle("has-unread", value > 0);
+                const label = value > 0
+                    ? `${value} message${value > 1 ? "s" : ""} non lu${value > 1 ? "s" : ""}`
+                    : "Messages";
+                button.setAttribute("aria-label", label);
+                button.title = label;
+            });
+
         const badge = getOrCreateNavBadge();
         if (!badge) return;
-        const value = Number(count) || 0;
         if (value > 0) {
             badge.textContent = value > 99 ? "99+" : String(value);
             badge.style.display = "flex";
@@ -88,6 +102,7 @@
             badge.style.display = "none";
             badge.textContent = "";
         }
+        badge.setAttribute("aria-hidden", "true");
     }
 
     function escapeHtml(value) {

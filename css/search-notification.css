@@ -301,17 +301,21 @@
     position: absolute;
     top: -4px;
     right: -4px;
-    min-width: 18px;
-    height: 18px;
-    padding: 0 4px;
+    width: 10px;
+    min-width: 10px;
+    height: 10px;
+    padding: 0;
     background: #ef4444;
-    color: #fff;
-    font-size: 0.7rem;
-    font-weight: 700;
-    border-radius: 9px;
+    color: transparent;
+    font-size: 0;
+    line-height: 0;
+    border: 2px solid #101014;
+    border-radius: 50%;
     display: none;
     align-items: center;
     justify-content: center;
+    box-sizing: border-box;
+    pointer-events: none;
 }
 
 /* --- PANNEAU DE NOTIFICATIONS --- */

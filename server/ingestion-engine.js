@@ -1,9 +1,6 @@
-const { createClient } = require("@supabase/supabase-js");
 const { getValidAccessToken } = require("./oauth-token-manager");
-const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY,
-);
+const { createSupabaseServiceClient } = require("./supabase-service-client");
+const supabase = createSupabaseServiceClient();
 
 // Adapteurs (implémentations spécifiques)
 const adapters = {

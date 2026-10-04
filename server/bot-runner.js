@@ -596,7 +596,8 @@ async function postAsBot(bot, options = {}) {
         const { count: todayCount } = await supabase
             .from("content")
             .select("*", { count: "exact", head: true })
-            .eq("user_id", bot.user_id)
+            .eq("author_type", "USER")
+            .eq("author_id", bot.user_id)
             .gte("created_at", todayStartIso)
             .lt("created_at", nextDayIso);
 
@@ -605,7 +606,8 @@ async function postAsBot(bot, options = {}) {
         const { data: recentPosts } = await supabase
             .from("content")
             .select("title, description, media_url")
-            .eq("user_id", bot.user_id)
+            .eq("author_type", "USER")
+            .eq("author_id", bot.user_id)
             .order("created_at", { ascending: false })
             .limit(20);
 
@@ -627,7 +629,8 @@ async function postAsBot(bot, options = {}) {
             const { data: lastRow, error: lastErr } = await supabase
                 .from("content")
                 .select("day_number")
-                .eq("user_id", bot.user_id)
+                .eq("author_type", "USER")
+                .eq("author_id", bot.user_id)
                 .order("day_number", { ascending: false })
                 .limit(1)
                 .maybeSingle();

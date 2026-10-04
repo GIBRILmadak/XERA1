@@ -1,6 +1,5 @@
 const express = require("express");
 const router = express.Router();
-const { createClient } = require("@supabase/supabase-js");
 const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
 const jwksClient = require("jwks-rsa");
@@ -8,6 +7,7 @@ const { getConfig } = require("./oauth-configs");
 const { resolveChallengeConfig } = require("./fata-contract");
 const { encryptToken } = require("./oauth-token-manager");
 const { enqueueIngestion } = require("./ingestion-queue");
+const { createSupabaseServiceClient } = require("./supabase-service-client");
 
 const jwksClients = {};
 
@@ -52,10 +52,7 @@ function verifyIdToken(token, config) {
 
 // Réutiliser le client supabase du server principal si possible,
 // sinon créer une instance. Pour l'instant, on suppose qu'il est passé ou recréé.
-const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY,
-);
+const supabase = createSupabaseServiceClient();
 
 function getBearerToken(req) {
     const authHeader = req.headers.authorization || "";

@@ -31,6 +31,26 @@ let notificationsPollingTimer = null;
 let notificationsRealtimeWarned = false;
 let notificationOutsideClickBound = false;
 
+function setNotificationNavBadgeCount(count) {
+    const unreadCount = Math.max(0, Number(count) || 0);
+    const badge = document.getElementById("notification-badge");
+    const button = document.getElementById("notification-btn");
+    const label = unreadCount > 0
+        ? `${unreadCount} notification${unreadCount > 1 ? "s" : ""} non lue${unreadCount > 1 ? "s" : ""}`
+        : "Notifications";
+
+    if (badge) {
+        badge.textContent = unreadCount > 99 ? "99+" : String(unreadCount || "");
+        badge.style.display = unreadCount > 0 ? "flex" : "none";
+        badge.setAttribute("aria-hidden", "true");
+    }
+    if (button) {
+        button.classList.toggle("has-unread", unreadCount > 0);
+        button.setAttribute("aria-label", label);
+        button.title = label;
+    }
+}
+
 // Initialiser les notifications
 async function initializeNotifications() {
     if (!currentUser) return;
@@ -156,20 +176,8 @@ async function setupPushNotifications() {
                                     }
                                 }
 
-                                // Update DOM badge as fallback
-                                const badgeEl =
-                                    document.getElementById(
-                                        "notification-badge",
-                                    );
-                                if (badgeEl) {
-                                    if (Number.isFinite(n) && n > 0) {
-                                        badgeEl.textContent =
-                                            n > 99 ? "99+" : String(n);
-                                        badgeEl.style.display = "flex";
-                                    } else {
-                                        badgeEl.style.display = "none";
-                                    }
-                                }
+                                // Update the navigation indicator as a fallback.
+                                setNotificationNavBadgeCount(n);
                             } catch (e) {
                                 // ignore
                             }
@@ -702,17 +710,8 @@ async function showReturnReminderNotification(reminderDate = new Date()) {
 
 // Mettre à jour le badge de notifications
 function updateNotificationBadge() {
-    const badge = document.getElementById("notification-badge");
-    if (!badge) return;
-
     const unreadCount = notifications.filter((n) => !n.read).length;
-
-    if (unreadCount > 0) {
-        badge.textContent = unreadCount > 99 ? "99+" : unreadCount;
-        badge.style.display = "flex";
-    } else {
-        badge.style.display = "none";
-    }
+    setNotificationNavBadgeCount(unreadCount);
 
     // Try to update the native app badge (Badging API) when supported
     try {

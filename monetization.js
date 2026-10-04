@@ -401,10 +401,7 @@ export function canUserReceiveSupport(user) {
     const plan = String(user.plan || "").toLowerCase();
     if (!["medium", "pro"].includes(plan)) return false;
     if (!isPlanActiveForUser(user)) return false;
-    if (isGiftedProUser(user)) return true;
-    return (
-        user.is_monetized === true || Number(user.followers_count || 0) >= 1000
-    );
+    return true;
 }
 
 // --- Transaction & Subscription Management ---

@@ -435,8 +435,9 @@ async function fetchUserEngagementStats(supabase, userIds = []) {
         const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
         const { data: recentPosts, error: postsError } = await supabase
             .from("content")
-            .select("user_id")
-            .in("user_id", userIds)
+            .select("author_id")
+            .eq("author_type", "USER")
+            .in("author_id", userIds)
             .gte("created_at", sevenDaysAgo);
 
         if (postsError) {
@@ -504,7 +505,8 @@ async function fetchUserEngagementStats(supabase, userIds = []) {
             const userSocialEvents = socialEvents.filter(
                 (event) => event.target_user_id === userId,
             );
-            const userRecentPosts = recentPosts?.filter(p => p.user_id === userId) || [];
+            const userRecentPosts =
+                recentPosts?.filter((post) => post.author_id === userId) || [];
 
             const countEvent = (type) =>
                 userSocialEvents.filter((event) => event.event_type === type)

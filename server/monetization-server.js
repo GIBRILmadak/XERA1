@@ -4466,8 +4466,9 @@ async function buildEmailReminderContexts(users = [], now = new Date()) {
             .eq("status", "in_progress"),
         supabase
             .from("content")
-            .select("id, user_id, title, created_at, arc_id")
-            .in("user_id", userIds)
+            .select("id, author_id, title, created_at, arc_id")
+            .eq("author_type", "USER")
+            .in("author_id", userIds)
             .gte("created_at", recentOwnActivityIso)
             .order("created_at", { ascending: false }),
         supabase
@@ -4490,8 +4491,8 @@ async function buildEmailReminderContexts(users = [], now = new Date()) {
 
     const latestOwnContentByUser = new Map();
     (ownContentResult.data || []).forEach((row) => {
-        if (!latestOwnContentByUser.has(row.user_id)) {
-            latestOwnContentByUser.set(row.user_id, row);
+        if (!latestOwnContentByUser.has(row.author_id)) {
+            latestOwnContentByUser.set(row.author_id, row);
         }
     });
 
@@ -4517,8 +4518,9 @@ async function buildEmailReminderContexts(users = [], now = new Date()) {
         const [socialContentResult, followedUsersResult] = await Promise.all([
             supabase
                 .from("content")
-                .select("id, user_id, title, created_at, arc_id")
-                .in("user_id", followedUserIds)
+                .select("id, author_id, title, created_at, arc_id")
+                .eq("author_type", "USER")
+                .in("author_id", followedUserIds)
                 .gte("created_at", recentSocialActivityIso)
                 .order("created_at", { ascending: false }),
             supabase.from("users").select("id, name").in("id", followedUserIds),
@@ -4535,10 +4537,10 @@ async function buildEmailReminderContexts(users = [], now = new Date()) {
     );
     const recentSocialByAuthor = new Map();
     recentSocialRows.forEach((row) => {
-        if (!recentSocialByAuthor.has(row.user_id)) {
-            recentSocialByAuthor.set(row.user_id, []);
+        if (!recentSocialByAuthor.has(row.author_id)) {
+            recentSocialByAuthor.set(row.author_id, []);
         }
-        recentSocialByAuthor.get(row.user_id).push(row);
+        recentSocialByAuthor.get(row.author_id).push(row);
     });
 
     const contexts = new Map();
@@ -8075,7 +8077,8 @@ async function evaluateTechBadges(options = {}) {
     // Fetch recent content for the lookback window
     const { data: rows, error: rowsError } = await supabase
         .from("content")
-        .select("user_id, created_at")
+        .select("author_id, created_at")
+        .eq("author_type", "USER")
         .gte("created_at", startIso);
 
     if (rowsError) {
@@ -8085,7 +8088,7 @@ async function evaluateTechBadges(options = {}) {
     // Build per-user date sets and last post timestamp
     const map = new Map();
     (rows || []).forEach((r) => {
-        const uid = String(r.user_id || "").trim();
+        const uid = String(r.author_id || "").trim();
         if (!uid) return;
         const createdAt = r.created_at;
         if (!createdAt) return;
@@ -8178,7 +8181,8 @@ async function evaluateTechBadges(options = {}) {
                 const { data: lastRow, error: lastErr } = await supabase
                     .from("content")
                     .select("created_at")
-                    .eq("user_id", uid)
+                    .eq("author_type", "USER")
+                    .eq("author_id", uid)
                     .order("created_at", { ascending: false })
                     .limit(1)
                     .maybeSingle();
@@ -8763,7 +8767,8 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
             const { count: todayCount } = await supabase
                 .from("content")
                 .select("*", { count: "exact", head: true })
-                .eq("user_id", bot.user_id)
+                .eq("author_type", "USER")
+                .eq("author_id", bot.user_id)
                 .gte("created_at", todayStartIso)
                 .lt("created_at", nextDayIso);
 
@@ -8772,7 +8777,8 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
             const { data: recentPosts } = await supabase
                 .from("content")
                 .select("title, description, media_url")
-                .eq("user_id", bot.user_id)
+                .eq("author_type", "USER")
+                .eq("author_id", bot.user_id)
                 .order("created_at", { ascending: false })
                 .limit(20);
 
@@ -8794,7 +8800,8 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
                 const { data: lastRow, error: lastErr } = await supabase
                     .from("content")
                     .select("day_number")
-                    .eq("user_id", bot.user_id)
+                    .eq("author_type", "USER")
+                    .eq("author_id", bot.user_id)
                     .order("day_number", { ascending: false })
                     .limit(1)
                     .maybeSingle();

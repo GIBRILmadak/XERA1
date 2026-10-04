@@ -9,6 +9,9 @@ window.currentViewerId = null;
 window.allUsers = [];
 window.userContents = {};
 window.userProjects = {};
+const professionalPageContents = new Map();
+const professionalPagesById = new Map();
+let professionalPageDataLoaded = false;
 window.adminAnnouncements = [];
 window.adminSubscriptionPayments = [];
 window.adminWithdrawalRequests = [];
@@ -496,12 +499,15 @@ async function getUserEngagementTotals(userId) {
     try {
         const { data, error } = await supabase
             .from("content")
-            .select("views, page_id")
-            .eq("user_id", userId);
+            .select("views")
+            .eq("author_type", "USER")
+            .eq("author_id", userId)
+            .is("page_id", null);
         if (error) throw error;
-        const totalViews = (data || [])
-            .filter((item) => !item.page_id)
-            .reduce((sum, item) => sum + (Number(item.views) || 0), 0);
+        const totalViews = (data || []).reduce(
+            (sum, item) => sum + (Number(item.views) || 0),
+            0,
+        );
         return { totalViews };
     } catch (error) {
         console.error("getUserEngagementTotals error:", error);
@@ -3288,6 +3294,9 @@ function adjustNavForAccountType(user) {
 function resetLoadedCollections() {
     Object.keys(userContents || {}).forEach((key) => delete userContents[key]);
     Object.keys(userProjects || {}).forEach((key) => delete userProjects[key]);
+    professionalPageContents.clear();
+    professionalPagesById.clear();
+    professionalPageDataLoaded = false;
 }
 
 function snapshotUserContents() {
@@ -3650,7 +3659,9 @@ async function preloadUserContents(
             const { data, error } = await supabase
                 .from("content")
                 .select(cleanColumns)
-                .in("user_id", userIds)
+                .eq("author_type", "USER")
+                .in("author_id", userIds)
+                .is("page_id", null)
                 .order("day_number", { ascending: false });
 
             if (error) throw error;
@@ -3658,7 +3669,7 @@ async function preloadUserContents(
             // Indexer par user_id
             const grouped = new Map();
             (data || []).forEach((row) => {
-                const uid = row.user_id;
+                const uid = row.author_id;
                 if (!grouped.has(uid)) grouped.set(uid, []);
                 grouped.get(uid).push(convertSupabaseContent(row));
             });
@@ -3671,7 +3682,9 @@ async function preloadUserContents(
             chunk.forEach((user) => {
                 const fallback = fallbackContentsByUser?.get?.(user.id);
                 userContents[user.id] = Array.isArray(fallback)
-                    ? [...fallback]
+                    ? fallback.filter((content) =>
+                          isUserAuthoredContent(content, user.id),
+                      )
                     : [];
             });
         }
@@ -3679,6 +3692,78 @@ async function preloadUserContents(
 
     // Keep a lightweight cache for instant discover/profile boot
     persistDiscoverCache();
+}
+
+async function preloadProfessionalPageData() {
+    professionalPageDataLoaded = true;
+    professionalPageContents.clear();
+    professionalPagesById.clear();
+
+    try {
+        const { data: pages, error: pagesError } = await supabase
+            .from("professional_pages")
+            .select("*");
+        if (pagesError) throw pagesError;
+
+        (pages || []).forEach((page) => {
+            if (!page?.id) return;
+            professionalPagesById.set(String(page.id), page);
+            window.professionalManager?.proPagesCache?.set(
+                String(page.id),
+                page,
+            );
+            professionalPageContents.set(String(page.id), []);
+        });
+
+        const pageIds = Array.from(professionalPagesById.keys());
+        if (pageIds.length === 0) return [];
+
+        const pagePostColumns = `
+            *,
+            arcs ( id, title, status, user_id ),
+            projects ( id, name )
+        `;
+        for (
+            let i = 0;
+            i < pageIds.length;
+            i += CONTENT_FETCH_BATCH_SIZE
+        ) {
+            const pageIdChunk = pageIds.slice(
+                i,
+                i + CONTENT_FETCH_BATCH_SIZE,
+            );
+            const { data: posts, error: postsError } = await supabase
+                .from("content")
+                .select(pagePostColumns)
+                .eq("author_type", "PAGE_PRO")
+                .in("author_id", pageIdChunk)
+                .not("page_id", "is", null)
+                .order("created_at", { ascending: false })
+                .limit(1000);
+            if (postsError) throw postsError;
+
+            (posts || []).forEach((row) => {
+                const pageId = String(row.author_id || row.page_id || "");
+                if (!pageId || !professionalPageContents.has(pageId)) return;
+                professionalPageContents.get(pageId).push(
+                    convertSupabaseContent(row),
+                );
+            });
+        }
+
+        return Array.from(professionalPagesById.values());
+    } catch (error) {
+        professionalPageDataLoaded = false;
+        console.warn("Impossible de charger les publications des Pages Pro:", error);
+        return [];
+    }
+}
+
+async function ensureProfessionalPageDataLoaded() {
+    if (!professionalPageDataLoaded) {
+        return preloadProfessionalPageData();
+    }
+    return Array.from(professionalPagesById.values());
 }
 
 async function ensureUserProjectsLoaded(userId) {
@@ -3791,6 +3876,7 @@ async function loadAllData() {
                 publicOnly: false,
                 fallbackContentsByUser,
             }),
+            preloadProfessionalPageData(),
             fetchAdminAnnouncements(),
         ]);
 
@@ -3832,6 +3918,7 @@ async function loadPublicData() {
                 publicOnly: true,
                 fallbackContentsByUser,
             }),
+            preloadProfessionalPageData(),
             fetchAdminAnnouncements(),
         ]);
 
@@ -4351,17 +4438,64 @@ function openReplyPrompt(contentId) {
     submitAnnouncementReply(contentId);
 }
 
-// Récupérer le contenu d'un utilisateur
+// Récupérer le contenu personnel d'un utilisateur, sans les posts Page Pro.
+function getContentAuthorIdentity(content) {
+    const pageId = content?.pageId || content?.page_id || null;
+    const userId = content?.userId || content?.user_id || null;
+    const explicitType = content?.authorType || content?.author_type || "";
+    const type = String(explicitType || (pageId ? "PAGE_PRO" : "USER"))
+        .trim()
+        .toUpperCase();
+    const explicitId = content?.authorId || content?.author_id || null;
+    const id = explicitId || (type === "PAGE_PRO" ? pageId : userId);
+    return { type, id: id ? String(id) : null };
+}
+
+function isUserAuthoredContent(content, userId) {
+    const author = getContentAuthorIdentity(content);
+    return (
+        author.type === "USER" &&
+        author.id !== null &&
+        author.id === String(userId || "")
+    );
+}
+
+function isPageProAuthoredContent(content, pageId) {
+    const author = getContentAuthorIdentity(content);
+    return (
+        author.type === "PAGE_PRO" &&
+        author.id !== null &&
+        author.id === String(pageId || "")
+    );
+}
+
 function getUserContentLocal(userId) {
     const contents = userContents[userId] || [];
     const visibleContents = contents.filter(
-        (c) => isSuperAdmin() || !c.isDeleted,
+        (content) =>
+            isUserAuthoredContent(content, userId) &&
+            (isSuperAdmin() || !content.isDeleted),
     );
     // Sort by createdAt descending (newest first) instead of day_number
     // This ensures cards show the actual latest upload
     return visibleContents.sort(
         (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
     );
+}
+
+function getPageContentLocal(pageId) {
+    const contents = professionalPageContents.get(String(pageId || "")) || [];
+    return contents
+        .filter(
+            (content) =>
+                isPageProAuthoredContent(content, pageId) &&
+                (isSuperAdmin() || !content.isDeleted),
+        )
+        .sort(
+            (a, b) =>
+                new Date(b.createdAt || 0).getTime() -
+                new Date(a.createdAt || 0).getTime(),
+        );
 }
 
 // Récupérer le dernier contenu
@@ -5334,6 +5468,13 @@ function convertSupabaseContent(supabaseContent) {
     return {
         contentId: supabaseContent.id,
         userId: supabaseContent.user_id,
+        authorType:
+            supabaseContent.author_type ||
+            (supabaseContent.page_id ? "PAGE_PRO" : "USER"),
+        authorId:
+            supabaseContent.author_id ||
+            supabaseContent.page_id ||
+            supabaseContent.user_id,
         projectId: supabaseContent.project_id,
         arcId: supabaseContent.arc_id,
         pageId: supabaseContent.page_id,
@@ -8632,25 +8773,21 @@ async function applyGiftPlanToUser(userId, planValue) {
     ]);
 
     let badgeToApply = badgeValue;
-    let followersCount = 0;
     try {
         const { data: profile } = await supabase
             .from("users")
-            .select("badge, followers_count")
+            .select("badge")
             .eq("id", userId)
             .maybeSingle();
         const existingBadge = String(profile?.badge || "").toLowerCase();
         if (plan !== "pro" && protectedBadges.has(existingBadge)) {
             badgeToApply = profile?.badge || badgeValue;
         }
-        followersCount = Number(profile?.followers_count || 0);
     } catch (e) {
         // Si la lecture échoue, garder le badge plan par défaut
-        followersCount = 0;
     }
 
-    const isMonetized =
-        plan === "pro" || (plan === "medium" && followersCount >= 1000);
+    const isMonetized = ["medium", "pro"].includes(plan);
     if (isSuperAdmin()) {
         try {
             const serverUser = await requestAdminGiftPlan(userId, plan);
@@ -10340,18 +10477,34 @@ function renderProfileUpdateCard(
         ? `<div class="timeline-context profile-update-context">${contextItems.join("")}</div>`
         : "";
 
+    const authorIdentity = getContentAuthorIdentity(content);
+    const pageId =
+        authorIdentity.type === "PAGE_PRO" ? authorIdentity.id : null;
+    const pageAuthor =
+        pageId &&
+        (professionalPagesById.get(String(pageId)) ||
+            window.professionalManager?.proPagesCache?.get(String(pageId)));
     const contentAuthor =
-        content.userId && content.userId !== profileUserId
+        authorIdentity.type === "USER" &&
+        content.userId &&
+        content.userId !== profileUserId
             ? getUser(content.userId)
             : null;
-    const authorHtml = contentAuthor
+    const authorHtml = pageId
         ? `
+            <div class="profile-update-author">
+                <span class="profile-update-author-label">par</span>
+                <button type="button" class="profile-update-author-name" style="border:0;background:transparent;padding:0;color:inherit;font:inherit;cursor:pointer" data-profile-author-type="PAGE_PRO" data-profile-page-id="${escapeHtml(pageId)}" onclick="event.stopPropagation(); window.openProfessionalPageById('${escapeHtml(pageId)}')" aria-label="Voir la Page Pro ${escapeHtml(pageAuthor?.name || "professionnelle")}">${renderUsernameWithBadge(pageAuthor?.name || "Page professionnelle", pageId, true)}</button>
+            </div>
+`
+        : contentAuthor
+          ? `
             <div class="profile-update-author">
                 <span class="profile-update-author-label">par</span>
                 <span class="profile-update-author-name">${renderUsernameWithBadge(contentAuthor.name, contentAuthor.id)}</span>
             </div>
 `
-        : "";
+          : "";
 
     const isAnnouncement = isAnnouncementContent(content);
     const canReply = canReplyToContent(content);
@@ -11128,19 +11281,21 @@ function getDiscoverContentTime(content) {
     return Number.isFinite(t) ? t : 0;
 }
 
-function buildDiscoverArcCardEntries(users) {
+function buildDiscoverArcCardEntries(users, pages = []) {
     const entries = [];
 
-    (users || []).forEach((user) => {
-        if (!user || !user.id) return;
-        const contents = getUserContentLocal(user.id);
-        if (!contents || contents.length === 0) return;
+    const appendAuthorEntries = (user, contents, authorType, authorId) => {
+        if (!user?.id || !Array.isArray(contents) || contents.length === 0) {
+            return;
+        }
 
         const latestByArc = new Map();
         contents.forEach((content) => {
             if (!content || !content.contentId) return;
             const arcId = content.arcId || content.arc?.id || null;
-            const arcKey = arcId ? `arc-${arcId}` : "no-arc";
+            const identityKey = authorType + ":" + authorId;
+            const arcKey =
+                identityKey + ":" + (arcId ? "arc-" + arcId : "no-arc");
             const existing = latestByArc.get(arcKey);
             if (
                 !existing ||
@@ -11156,12 +11311,41 @@ function buildDiscoverArcCardEntries(users) {
                 type: "arc",
                 user,
                 content,
+                authorType,
+                authorId,
                 arcId: content.arcId || content.arc?.id || null,
                 arcKey,
-                verified: isVerifiedDiscoverUser(user),
+                verified:
+                    authorType === "PAGE_PRO"
+                        ? isVerifiedProfessionalPagePost({ content })
+                        : isVerifiedDiscoverUser(user),
                 tags: Array.isArray(content.tags) ? content.tags : [],
             });
         });
+    };
+
+    (users || []).forEach((user) => {
+        if (!user || !user.id) return;
+        const contents = getUserContentLocal(user.id);
+        if (!contents || contents.length === 0) return;
+
+        appendAuthorEntries(user, contents, "USER", user.id);
+    });
+
+    (pages || []).forEach((page) => {
+        if (!page?.id) return;
+        const owner = getUser(page.owner_id) || {
+            id: page.owner_id || page.id,
+            name: page.name || "Page professionnelle",
+            avatar: page.avatar_url || "icons/enterprise.svg",
+            title: page.industry || "",
+        };
+        appendAuthorEntries(
+            owner,
+            getPageContentLocal(page.id),
+            "PAGE_PRO",
+            String(page.id),
+        );
     });
 
     return entries.sort(
@@ -11531,31 +11715,37 @@ function renderUserCard(
     latestContentOverride = null,
     layoutOptions = {},
 ) {
-    const user = getUser(userId);
-    if (!user) return "";
-
     const latestContent = latestContentOverride || getLatestContent(userId);
     if (!latestContent) return "";
 
-    // Gérer les pages pro
-    let displayUser = { ...user };
-    let isProPost = false;
-    if (latestContent.pageId && window.professionalManager) {
-        const page = window.professionalManager.proPagesCache.get(
-            latestContent.pageId,
-        );
-        if (page) {
-            isProPost = true;
-            displayUser = {
-                id: userId,
-                name: page.name,
-                avatar: page.avatar_url || "icons/enterprise.svg",
-                title: page.industry,
-                slug: page.slug,
-                isPage: true,
-            };
-        }
-    }
+    const author = getContentAuthorIdentity(latestContent);
+    const isProPost = author.type === "PAGE_PRO";
+    const pageId = isProPost ? author.id : null;
+    const page =
+        pageId &&
+        (professionalPagesById.get(pageId) ||
+            window.professionalManager?.proPagesCache?.get(pageId));
+    const user =
+        getUser(userId) ||
+        (isProPost
+            ? {
+                  id: latestContent.userId || userId,
+                  name: page?.name || "Page professionnelle",
+                  avatar: page?.avatar_url || "icons/enterprise.svg",
+              }
+            : null);
+    if (!user) return "";
+
+    const displayUser = isProPost
+        ? {
+              id: pageId,
+              name: page?.name || "Page professionnelle",
+              avatar: page?.avatar_url || "icons/enterprise.svg",
+              title: page?.industry || "",
+              slug: page?.slug || "",
+              isPage: true,
+          }
+        : { ...user, isPage: false };
 
     const proBadgeHtml = isProPost
         ? `<span class="pro-official-badge" style="background: #000; color: #fff; font-size: 0.65rem; padding: 2px 8px; border-radius: 4px; font-weight: 900; margin-left: 8px; border: 1px solid rgba(255,255,255,0.2); vertical-align: middle; display: inline-block;">PRO</span>`
@@ -11595,12 +11785,15 @@ function renderUserCard(
               ? "is-failure"
               : "is-paused";
 
-    const badgesHtml = renderUserBadges(userId);
+    const badgesHtml = isProPost
+        ? renderVerifiedPageBadge(pageId)
+        : renderUserBadges(userId);
     const monetizationBadgeHtml =
-        typeof window.generatePlanBadgeHTML === "function"
+        !isProPost && typeof window.generatePlanBadgeHTML === "function"
             ? window.generatePlanBadgeHTML(user, "feed")
             : "";
     const supportButtonHtml =
+        !isProPost &&
         currentUser &&
         currentUser.id !== userId &&
         typeof window.generateSupportButtonHTML === "function"
@@ -11715,8 +11908,9 @@ function renderUserCard(
         ? getReplyCount(latestContent.contentId)
         : 0;
 
-    const isVerifiedUser =
-        isVerifiedCreatorUserId(userId) || isVerifiedStaffUserId(userId);
+    const isVerifiedUser = isProPost
+        ? Boolean(window.isVerifiedPageId?.(pageId))
+        : isVerifiedCreatorUserId(userId) || isVerifiedStaffUserId(userId);
 
     const isTextContent =
         latestContent && (!hasMedia || latestContent.type === "text");
@@ -11770,7 +11964,7 @@ function renderUserCard(
 
     // Subscribe Button
     let subscribeBtn = "";
-    if (currentUser && currentUser.id !== userId) {
+    if (!isProPost && currentUser && currentUser.id !== userId) {
         const btnClass = isFollowing
             ? "btn-follow-card unfollow"
             : "btn-follow-card";
@@ -11813,15 +12007,18 @@ function renderUserCard(
 
     // User Info (Name, Avatar, Subscribe) - Moved to bottom
     const profileOnClick = displayUser.isPage
-        ? `window.professionalManager.renderProPage('${displayUser.slug}')`
+        ? `window.openProfessionalPageById('${escapeHtml(pageId)}')`
         : `handleProfileClick('${userId}', this)`;
+    const profileIdentityAttribute = displayUser.isPage
+        ? `data-profile-page-id="${escapeHtml(pageId)}"`
+        : `data-profile-user-id="${escapeHtml(userId)}"`;
 
     const userInfoHtml = `
 <div class="card-user-bottom">
-            <button class="profile-link card-profile-link" data-profile-user-id="${userId}" onclick="event.preventDefault(); event.stopPropagation(); ${profileOnClick}" type="button" aria-label="Voir le profil de ${escapeHtml(displayUser.name || "cet utilisateur")}">
+            <button class="profile-link card-profile-link" data-profile-author-type="${displayUser.isPage ? "PAGE_PRO" : "USER"}" ${profileIdentityAttribute} onclick="event.preventDefault(); event.stopPropagation(); ${profileOnClick}" type="button" aria-label="Voir ${displayUser.isPage ? "la Page Pro" : "le profil"} de ${escapeHtml(displayUser.name || "cet utilisateur")}">
                 <img src="${displayUser.avatar || "https://placehold.co/40"}" class="card-avatar" loading="lazy" decoding="async">
                 <div class="profile-link-text">
-                    <h3 class="discover-user-name">${renderUsernameWithBadge(displayUser.name, displayUser.isPage ? latestContent.pageId : userId, displayUser.isPage)}${proBadgeHtml}${monetizationBadgeHtml}</h3>
+                    <h3 class="discover-user-name">${renderUsernameWithBadge(displayUser.name, displayUser.isPage ? pageId : userId, displayUser.isPage)}${proBadgeHtml}${monetizationBadgeHtml}</h3>
                     ${momentumBadgeHtml}
                     <div class="card-user-title">${displayUser.title || ""}</div>
                 </div>
@@ -12942,18 +13139,13 @@ async function renderDiscoverGrid() {
     }
     if (renderSequence !== discoverRenderSequence) return;
 
-    const professionalPageOwnerIds = await getPublicProfessionalPageOwnerIds();
-
     // Tri de base par récence puis mélange pondéré vérifiés/non-vérifiés
     usersToDisplay = sortUsersByLatestRecency(usersToDisplay).filter((user) =>
-        professionalPageOwnerIds.has(user.id) &&
-        getUserContentLocal(user.id).some((content) => content?.pageId)
-            ? true
-            : shouldShowProfileToViewerSync(
-                  user,
-                  currentUser?.id || null,
-                  followedSet,
-              ),
+        shouldShowProfileToViewerSync(
+            user,
+            currentUser?.id || null,
+            followedSet,
+        ),
     );
     liveStreams = liveStreams.filter((stream) => {
         const host = getUser(stream.user_id);
@@ -12964,7 +13156,11 @@ async function renderDiscoverGrid() {
         );
     });
 
-    const discoverArcCards = buildDiscoverArcCardEntries(usersToDisplay);
+    const professionalPages = await ensureProfessionalPageDataLoaded();
+    const discoverArcCards = buildDiscoverArcCardEntries(
+        usersToDisplay,
+        professionalPages,
+    );
     const arcIdsForDiscover = discoverArcCards
         .map((entry) => entry.arcId)
         .filter(Boolean);
@@ -13149,15 +13345,33 @@ async function renderDiscoverGrid() {
 function getAllFeedContent() {
     let allContent = [];
     if (typeof userContents !== "undefined") {
-        Object.values(userContents).forEach((userContentList) => {
+        Object.entries(userContents).forEach(([userId, userContentList]) => {
             if (Array.isArray(userContentList)) {
-                allContent = allContent.concat(userContentList);
+                allContent = allContent.concat(
+                    userContentList.filter((content) =>
+                        isUserAuthoredContent(content, userId),
+                    ),
+                );
             }
         });
     }
+
+    professionalPageContents.forEach((_contents, pageId) => {
+        allContent = allContent.concat(getPageContentLocal(pageId));
+    });
+
+    const uniqueContent = new Map();
+    allContent.forEach((content, index) => {
+        const id = content?.contentId || content?.id || `feed-item-${index}`;
+        if (!uniqueContent.has(String(id))) {
+            uniqueContent.set(String(id), content);
+        }
+    });
+
     // Sort by createdAt descending (newest first)
-    return allContent.sort(
-        (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
+    return Array.from(uniqueContent.values()).sort(
+        (a, b) =>
+            getDiscoverContentTime(b) - getDiscoverContentTime(a),
     );
 }
 
@@ -14017,17 +14231,17 @@ async function renderImmersiveHeader(user, pageId = null) {
         isPage: false,
     };
 
-    if (pageId && window.professionalManager) {
-        const page = window.professionalManager.proPagesCache.get(pageId);
-        if (page) {
-            displayUser = {
-                id: user.id,
-                name: page.name,
-                avatar: page.avatar_url || "icons/enterprise.svg",
-                slug: page.slug,
-                isPage: true,
-            };
-        }
+    if (pageId) {
+        const page =
+            professionalPagesById.get(String(pageId)) ||
+            window.professionalManager?.proPagesCache?.get(String(pageId));
+        displayUser = {
+            id: String(pageId),
+            name: page?.name || "Page professionnelle",
+            avatar: page?.avatar_url || "icons/enterprise.svg",
+            slug: page?.slug || "",
+            isPage: true,
+        };
     }
 
     if (
@@ -14053,12 +14267,12 @@ async function renderImmersiveHeader(user, pageId = null) {
         } catch (e) {
             console.error(e);
         }
-    } else if (!user) {
+    } else if (!user && !displayUser.isPage) {
         return "";
     }
 
     const profileOnClick = displayUser.isPage
-        ? `window.professionalManager.renderProPage('${displayUser.slug}')`
+        ? `window.openProfessionalPageById('${escapeHtml(pageId)}')`
         : `handleProfileClick('${user.id}', this, true)`;
 
     return `
@@ -14217,42 +14431,41 @@ async function renderImmersiveFeed(contents) {
                 fullDescription &&
                 fullDescription.length > immersiveDescription.length;
 
+            const authorIdentity = getContentAuthorIdentity(content);
+            const isPageAuthor = authorIdentity.type === "PAGE_PRO";
+            const pageId = isPageAuthor ? authorIdentity.id : null;
             const contentBadges = getContentBadges(content);
-            // Include user badges as well (consistent with Discover cards)
             const contentBadgesHtml = renderBadges(contentBadges);
-            const userBadgesHtml = renderUserBadges(content.userId);
+            const userBadgesHtml = isPageAuthor
+                ? ""
+                : renderUserBadges(content.userId);
             const badgesHtml = contentBadgesHtml + userBadgesHtml;
             const contentUser = getUser(content.userId);
 
-            // Gérer les pages pro
-            let displayUser = {
-                id: content.userId,
-                name: contentUser ? contentUser.name : "Utilisateur",
-                avatar:
-                    contentUser && contentUser.avatar
-                        ? contentUser.avatar
-                        : "https://placehold.co/40",
-                isPage: false,
-            };
-
-            if (content.pageId && window.professionalManager) {
-                const page = window.professionalManager.proPagesCache.get(
-                    content.pageId,
-                );
-                if (page) {
-                    displayUser = {
-                        id: content.userId,
-                        name: page.name,
-                        avatar: page.avatar_url || "icons/enterprise.svg",
-                        slug: page.slug,
-                        isPage: true,
-                    };
-                }
-            }
+            const page =
+                pageId &&
+                (professionalPagesById.get(String(pageId)) ||
+                    window.professionalManager?.proPagesCache?.get(
+                        String(pageId),
+                    ));
+            const displayUser = isPageAuthor
+                ? {
+                      id: String(pageId),
+                      name: page?.name || "Page professionnelle",
+                      avatar: page?.avatar_url || "icons/enterprise.svg",
+                      slug: page?.slug || "",
+                      isPage: true,
+                  }
+                : {
+                      id: content.userId,
+                      name: contentUser ? contentUser.name : "Utilisateur",
+                      avatar: contentUser?.avatar || "https://placehold.co/40",
+                      isPage: false,
+                  };
 
             const contentUserNameHtml = renderUsernameWithBadge(
                 displayUser.name,
-                displayUser.isPage ? content.pageId : displayUser.id,
+                displayUser.isPage ? pageId : displayUser.id,
                 displayUser.isPage,
             );
             const contentUserAvatar = displayUser.avatar;
@@ -14281,6 +14494,7 @@ async function renderImmersiveFeed(contents) {
                 },
             );
             const immersiveSupportButtonHtml =
+                !isPageAuthor &&
                 currentUser &&
                 currentUser.id !== content.userId &&
                 typeof window.generateSupportButtonHTML === "function"
@@ -14471,13 +14685,13 @@ async function renderImmersiveFeed(contents) {
                         ${moodActionsHtml}
                         ${immersiveReplyHtml}
                         <div class="immersive-post-user">
-                            <button class="profile-link immersive-profile-link" onclick="event.stopPropagation(); ${displayUser.isPage ? `window.professionalManager.renderProPage('${displayUser.slug}')` : `handleProfileClick('${content.userId}', this, true)`}">
+                            <button class="profile-link immersive-profile-link" data-profile-author-type="${displayUser.isPage ? "PAGE_PRO" : "USER"}" data-profile-${displayUser.isPage ? "page" : "user"}-id="${escapeHtml(displayUser.isPage ? pageId : content.userId)}" onclick="event.stopPropagation(); ${displayUser.isPage ? `window.openProfessionalPageById('${escapeHtml(pageId)}')` : `handleProfileClick('${content.userId}', this, true)`}">
                                 <img src="${contentUserAvatar}" alt="Avatar de ${displayUser.name}" class="immersive-post-user-avatar">
                                 <span class="immersive-post-user-name">${contentUserNameHtml}</span>
                             </button>
                             ${collabAvatarsHtml}
                             ${
-                                currentUser && currentUser.id !== content.userId
+                                !isPageAuthor && currentUser && currentUser.id !== content.userId
                                     ? `
                                 <button class="${followBtnClass}" data-follow-user="${content.userId}" onclick="event.stopPropagation(); toggleFollow('${currentUser.id}', '${content.userId}')">
                                     <img src="${followIconSrc}" class="btn-icon" style="width: 20px; height: 20px;">
@@ -15849,6 +16063,8 @@ async function renderProfileTimeline(userId) {
                 `,
                     )
                     .eq("arc_id", window.selectedArcId)
+                    .eq("author_type", "USER")
+                    .eq("author_id", userId)
                     .is("page_id", null)
                     .order("created_at", { ascending: false });
             if (arcContentsError) throw arcContentsError;
@@ -16058,9 +16274,7 @@ async function renderProfileTimeline(userId) {
 
     // ... Boutons existants ...
     const canAccessMonetizationDashboard =
-        isOwnProfile &&
-        ["medium", "pro"].includes(String(user.plan || "").toLowerCase()) &&
-        isPlanActiveByDate(user);
+        isOwnProfile && hasMonetizationDashboardAccess(user);
     const settingsButtonHtml = isOwnProfile
         ? `
 <button class="badge settings-badge" onclick="window.launchLive('${userId}')" title="Lancer un live">
@@ -17366,6 +17580,34 @@ window.syncFloatingCreateVisibility = syncFloatingCreateVisibility;
 document.addEventListener(
     "click",
     (event) => {
+        const pageTrigger = event.target.closest(
+            '[data-profile-author-type="PAGE_PRO"][data-profile-page-id], [data-profile-page-id]',
+        );
+        if (pageTrigger) {
+            const pageId = pageTrigger.dataset.profilePageId;
+            if (!pageId) return;
+
+            event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation();
+
+            if (typeof window.openProfessionalPageById === "function") {
+                Promise.resolve(window.openProfessionalPageById(pageId)).catch(
+                    (error) =>
+                        console.error("Ouverture de Page Pro impossible:", error),
+                );
+            } else if (window.XeraRouter?.navigate) {
+                window.XeraRouter.navigate("pagepro", {
+                    query: { pro: pageId },
+                });
+            } else {
+                window.location.assign(
+                    `profile.html?pro=${encodeURIComponent(pageId)}`,
+                );
+            }
+            return;
+        }
+
         const profileTrigger = event.target.closest(
             ".user-card .card-profile-link[data-profile-user-id]",
         );
@@ -22232,6 +22474,8 @@ async function deleteContent(contentId) {
 // Rendre les fonctions disponibles globalement
 window.renderRichDescription = renderRichDescription;
 window.renderProfileUpdateCard = renderProfileUpdateCard;
+window.getUserContentLocal = getUserContentLocal;
+window.getPageContentLocal = getPageContentLocal;
 window.toggleProPostDescription = function (contentId) {
     const description = Array.from(
         document.querySelectorAll(".pro-post-description"),
@@ -22451,20 +22695,42 @@ function subscribeToRealtime() {
                 const { eventType, new: newRecord, old: oldRecord } = payload;
 
                 if (eventType === "INSERT" || eventType === "UPDATE") {
-                    const userId = newRecord?.user_id;
-                    if (!userId) return;
+                    const converted = convertSupabaseContent(newRecord);
+                    const author = getContentAuthorIdentity(converted);
+                    const contentId = converted.contentId;
+                    if (!author.id || !contentId) return;
+
+                    // Un changement d'identité retire aussi l'ancienne copie locale.
+                    Object.keys(userContents).forEach((id) => {
+                        userContents[id] = (userContents[id] || []).filter(
+                            (item) => item?.contentId !== contentId,
+                        );
+                    });
+                    professionalPageContents.forEach((items, id) => {
+                        professionalPageContents.set(
+                            id,
+                            (items || []).filter(
+                                (item) => item?.contentId !== contentId,
+                            ),
+                        );
+                    });
 
                     // Mise a jour locale immediate pour un feed temps reel plus reactif
                     try {
-                        const converted = convertSupabaseContent(newRecord);
-                        const currentList = Array.isArray(userContents[userId])
-                            ? userContents[userId]
-                            : [];
+                        const cache =
+                            author.type === "PAGE_PRO"
+                                ? professionalPageContents
+                                : userContents;
+                        const cacheKey = String(author.id);
+                        const currentList = Array.isArray(cache.get?.(cacheKey))
+                            ? cache.get(cacheKey)
+                            : Array.isArray(cache[cacheKey])
+                              ? cache[cacheKey]
+                              : [];
                         const merged = [
                             converted,
                             ...currentList.filter(
-                                (item) =>
-                                    item?.contentId !== converted.contentId,
+                                (item) => item?.contentId !== contentId,
                             ),
                         ].sort(
                             (left, right) =>
@@ -22475,65 +22741,74 @@ function subscribeToRealtime() {
                                     left?.createdAt || left?.created_at || 0,
                                 ),
                         );
-                        userContents[userId] = merged;
+                        if (author.type === "PAGE_PRO") {
+                            professionalPageContents.set(cacheKey, merged);
+                        } else {
+                            userContents[cacheKey] = merged;
+                        }
                     } catch (_error) {
                         // fallback ci-dessous via refetch complet
                     }
 
-                    // Schedule a debounced background re-fetch to avoid
-                    // repeated heavy SELECTs on every realtime event.
-                    try {
-                        if (!window.__userContentRefetchTimers) {
-                            window.__userContentRefetchTimers = new Map();
-                        }
-                        // If a refetch is already scheduled for this user, skip.
-                        if (!window.__userContentRefetchTimers.has(userId)) {
-                            const timerId = setTimeout(async () => {
-                                try {
-                                    const contentResult =
-                                        await getUserContent(userId);
-                                    if (
-                                        contentResult &&
-                                        contentResult.success
-                                    ) {
-                                        userContents[userId] =
-                                            contentResult.data.map(
-                                                convertSupabaseContent,
+                    // Recharger seulement l'historique USER; les posts Page Pro
+                    // restent indexés dans professionalPageContents.
+                    if (author.type === "USER") {
+                        const userId = author.id;
+                        try {
+                            if (!window.__userContentRefetchTimers) {
+                                window.__userContentRefetchTimers = new Map();
+                            }
+                            if (!window.__userContentRefetchTimers.has(userId)) {
+                                const timerId = setTimeout(async () => {
+                                    try {
+                                        const contentResult =
+                                            await getUserContent(userId);
+                                        if (
+                                            contentResult &&
+                                            contentResult.success
+                                        ) {
+                                            userContents[userId] =
+                                                contentResult.data.map(
+                                                    convertSupabaseContent,
+                                                );
+                                        }
+                                    } catch (e) {
+                                        console.warn(
+                                            "Background getUserContent failed:",
+                                            e?.message || e,
+                                        );
+                                    } finally {
+                                        const t =
+                                            window.__userContentRefetchTimers.get(
+                                                userId,
                                             );
-                                    }
-                                } catch (e) {
-                                    console.warn(
-                                        "Background getUserContent failed:",
-                                        e?.message || e,
-                                    );
-                                } finally {
-                                    const t =
-                                        window.__userContentRefetchTimers.get(
+                                        if (t) clearTimeout(t);
+                                        window.__userContentRefetchTimers.delete(
                                             userId,
                                         );
-                                    if (t) clearTimeout(t);
-                                    window.__userContentRefetchTimers.delete(
-                                        userId,
-                                    );
-                                }
-                            }, 3000); // 3s debounce window
-                            window.__userContentRefetchTimers.set(
-                                userId,
-                                timerId,
+                                    }
+                                }, 3000);
+                                window.__userContentRefetchTimers.set(
+                                    userId,
+                                    timerId,
+                                );
+                            }
+                        } catch (e) {
+                            console.warn(
+                                "Scheduling background refetch failed:",
+                                e,
                             );
                         }
-                    } catch (e) {
-                        console.warn(
-                            "Scheduling background refetch failed:",
-                            e,
-                        );
                     }
 
                     // Si on affiche le profil de cet utilisateur, rafraîchir
-                    if (window.currentProfileViewed === userId) {
+                    if (
+                        author.type === "USER" &&
+                        window.currentProfileViewed === author.id
+                    ) {
                         console.log("Mise à jour automatique du profil...");
                         if (!window.__immersiveOpen) {
-                            await renderProfileIntoContainer(userId);
+                            await renderProfileIntoContainer(author.id);
                         } else {
                             console.log(
                                 "Immersive open: skip profile auto-refresh",
@@ -22546,16 +22821,30 @@ function subscribeToRealtime() {
                         scheduleDiscoverRefresh();
                     }
                 } else if (eventType === "DELETE") {
-                    const userId = oldRecord?.user_id;
                     const contentId = oldRecord?.id;
+                    const author = getContentAuthorIdentity(oldRecord);
+                    if (contentId) {
+                        Object.keys(userContents).forEach((id) => {
+                            userContents[id] = (userContents[id] || []).filter(
+                                (item) => item?.contentId !== contentId,
+                            );
+                        });
+                        professionalPageContents.forEach((items, id) => {
+                            professionalPageContents.set(
+                                id,
+                                (items || []).filter(
+                                    (item) => item?.contentId !== contentId,
+                                ),
+                            );
+                        });
+                    }
                     if (
-                        userId &&
-                        contentId &&
-                        Array.isArray(userContents[userId])
+                        author.type === "USER" &&
+                        author.id &&
+                        window.currentProfileViewed === author.id &&
+                        !window.__immersiveOpen
                     ) {
-                        userContents[userId] = userContents[userId].filter(
-                            (item) => item?.contentId !== contentId,
-                        );
+                        await renderProfileIntoContainer(author.id);
                     }
                     if (document.querySelector(".discover-grid")) {
                         scheduleDiscoverRefresh();
