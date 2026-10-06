@@ -7,7 +7,8 @@
         "test": "node tests/c2pa-utils.test.js && node tests/subscription-benefits.test.js && node tests/profile-workspace.test.js && node tests/profile-immersive.test.js && node tests/fata-integration.test.js && node tests/fata-api-routing.test.js && node --test tests/fata*.test.js",
         "api": "node server/monetization-server.js",
         "start": "node server/optimized-server.js",
-        "dev": "node server/optimized-server.js"
+        "dev": "node server/optimized-server.js",
+        "build:css": "npx --yes tailwindcss@3.4.17 -c tailwind.config.js -i css/tailwind.input.css -o css/tailwind.css --minify"
     },
     "keywords": [],
     "author": "",
