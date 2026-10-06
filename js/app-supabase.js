@@ -11853,8 +11853,8 @@ function renderUserCard(
     if (hasMedia) {
         if (latestContent.type === "video") {
             mediaHtml = `
-                <div class="card-media-wrap card-media-wrap--editorial">
-                    <video id="video-${userId}" class="card-media" src="${primaryMediaUrl}" muted playsinline webkit-playsinline autoplay preload="metadata" tabindex="-1" data-user-id="${userId}" data-content-id="${latestContent.contentId}" disablePictureInPicture></video>
+                <div class="card-media-wrap card-media-wrap--editorial${latestContent.posterUrl ? " has-poster" : ""}">
+                    <video id="video-${userId}" class="card-media" data-src="${primaryMediaUrl}"${latestContent.posterUrl ? ` poster="${latestContent.posterUrl}"` : ""} muted playsinline webkit-playsinline preload="none" tabindex="-1" data-user-id="${userId}" data-content-id="${latestContent.contentId}" disablePictureInPicture></video>
                     <div class="video-fallback">
                         <img src="icons/play.svg" alt="Play" width="40" height="40">
                         <span>Vidéo</span>
@@ -17867,10 +17867,21 @@ function toggleTimelineExpand(button) {
 
 function toggleVideoPlay(video) {
     if (video.paused) {
+        ensureDiscoverVideoSource(video);
         video.play().catch(() => {});
     } else {
         video.pause();
     }
+}
+
+// Les vidéos des cartes ne sont téléchargées qu'une fois visibles à l'écran
+// (avant, chaque carte lançait l'original en autoplay dès l'affichage).
+function ensureDiscoverVideoSource(video) {
+    if (!video || video.getAttribute("src")) return;
+    const src = video.dataset.src;
+    if (!src) return;
+    video.preload = "metadata";
+    video.src = src;
 }
 
 function setupDiscoverVideoInteractions() {
@@ -17890,6 +17901,7 @@ function setupDiscoverVideoInteractions() {
                 if (entry.isIntersecting) {
                     // Play if visible - keep muted for cards
                     video.muted = true;
+                    ensureDiscoverVideoSource(video);
                     video.play().catch(() => {
                         console.log("Autoplay blocked for card video");
                     });
@@ -17942,6 +17954,7 @@ function setupDiscoverVideoInteractions() {
         // Autoplay on hover for discover cards
         video.addEventListener("mouseenter", function () {
             this.muted = true;
+            ensureDiscoverVideoSource(this);
             this.play().catch(() => {});
         });
         video.addEventListener("mouseleave", function () {

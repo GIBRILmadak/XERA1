@@ -1720,7 +1720,9 @@ nav {
 }
 
 .card-media-wrap.is-ready .video-fallback,
-.immersive-video-wrap.is-ready .video-fallback {
+.immersive-video-wrap.is-ready .video-fallback,
+.card-media-wrap.has-poster .video-fallback,
+.immersive-video-wrap.has-poster .video-fallback {
     opacity: 0;
 }
 
