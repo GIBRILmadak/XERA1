@@ -14573,14 +14573,14 @@ async function renderImmersiveFeed(contents) {
             if (mediaList.length > 0) {
                 if (content.type === "video") {
                     mediaHtml = `
-                    <div class="immersive-video-wrap" style="position: relative; width: 100%; height: 100%;">
+                    <div class="immersive-video-wrap${content.posterUrl ? " has-poster" : ""}" style="position: relative; width: 100%; height: 100%;">
                         <video
                             id="immersive-video-${content.contentId}"
                             class="immersive-video"
-                            data-src="${mediaList[0]}"
+                            data-src="${mediaList[0]}"${content.posterUrl ? `
+                            poster="${content.posterUrl}"` : ""}
                             playsinline
                             webkit-playsinline
-                            autoplay
                             muted
                             loop
                             preload="metadata"
