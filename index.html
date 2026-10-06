@@ -503,12 +503,13 @@
                             <video
                                 id="hero-demo-video"
                                 class="hero-video-player"
-                                src="medias/Create%20arc.MOV"
+                                data-src="medias/create-arc-demo.mp4"
+                                poster="medias/create-arc-demo.webp"
                                 autoplay
                                 muted
                                 loop
                                 playsinline
-                                preload="metadata"
+                                preload="none"
                             >
                                 Your browser does not support the video tag.
                             </video>
@@ -1135,11 +1136,35 @@
                     });
                 }
 
+                // La démo (1,3 Mo) ne se charge qu'une fois la page affichée, et
+                // pas d'elle-même en mode économie de données / 2G.
+                const loadHeroVideo = () => {
+                    if (!heroVideo || heroVideo.getAttribute("src")) return;
+                    heroVideo.src = heroVideo.dataset.src;
+                };
+                if (heroVideo) {
+                    const connection = navigator.connection;
+                    const constrainedNetwork =
+                        connection &&
+                        (connection.saveData ||
+                            /(^|-)2g$/.test(connection.effectiveType || ""));
+                    if (constrainedNetwork) {
+                        heroVideo.removeAttribute("autoplay");
+                    } else if (document.readyState === "complete") {
+                        loadHeroVideo();
+                    } else {
+                        window.addEventListener("load", loadHeroVideo, {
+                            once: true,
+                        });
+                    }
+                }
+
                 const openDemoFullscreen = async () => {
                     if (!heroVideo) {
                         scrollToDiscover();
                         return;
                     }
+                    loadHeroVideo();
                     try {
                         heroVideo.controls = true;
                         heroVideo.muted = false;
@@ -1169,6 +1194,7 @@
                 // Hero demo video: allow unmute toggle
                 if (heroVideo && heroUnmute) {
                     heroUnmute.addEventListener("click", async () => {
+                        loadHeroVideo();
                         const willUnmute = heroVideo.muted;
                         heroVideo.muted = !willUnmute;
                         heroUnmute.textContent = heroVideo.muted
@@ -1187,6 +1213,7 @@
 
                     // Fullscreen on click/tap
                     heroVideo.addEventListener("click", async () => {
+                        loadHeroVideo();
                         try {
                             if (document.fullscreenElement) {
                                 await document.exitFullscreen();
