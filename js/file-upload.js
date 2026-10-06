@@ -16,6 +16,11 @@ const MAX_FILE_SIZE = Number.POSITIVE_INFINITY; // no client-side limit
 const RESUMABLE_THRESHOLD_BYTES = 45 * 1024 * 1024; // 45 Mo ~ limite CDN courante
 const RESUMABLE_CHUNK_SIZE_BYTES = 8 * 1024 * 1024; // 8 Mo par chunk
 
+// Chaque octet stocké est re-téléchargé à chaque vue (quota "egress" Supabase) :
+// on réduit les médias avant l'upload plutôt que de servir les originaux.
+// Les noms de fichiers sont uniques, le cache navigateur/CDN peut donc durer 1 an.
+const MEDIA_CACHE_CONTROL = "31536000";
+
 // Uploader un fichier vers Supabase Storage
 
 function getFileExtension(file) {
@@ -181,7 +186,7 @@ async function uploadFile(file, folder = "content", onProgress) {
             (file.size >= RESUMABLE_THRESHOLD_BYTES || isVideo);
 
         const baseFileOptions = {
-            cacheControl: isGif ? "0" : "3600",
+            cacheControl: MEDIA_CACHE_CONTROL,
             contentType: file.type || undefined,
             upsert: false,
         };
