@@ -11,6 +11,8 @@ const PRECACHE_URLS = [
 // Les noms de fichiers sont uniques, une image ne change jamais d'URL.
 const MEDIA_CACHE_NAME = "xera1-media-v1";
 const MEDIA_CACHE_MAX_ENTRIES = 400;
+// Sur une connexion lente, on bascule sur la copie en cache après ce délai.
+const NETWORK_TIMEOUT_MS = 4000;
 
 self.addEventListener("install", (event) => {
     // Precache critical assets so the install prompt shows icon immediately
@@ -116,14 +118,26 @@ async function mediaCacheFirst(request) {
     return response;
 }
 
+function rejectAfter(ms) {
+    return new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("network timeout")), ms),
+    );
+}
+
 async function networkFirst(request) {
     const cache = await caches.open(CACHE_NAME);
-    try {
-        const response = await fetch(request);
+    const networkPromise = fetch(request).then((response) => {
         if (response && response.ok) {
-            cache.put(request, response.clone());
+            cache.put(request, response.clone()).catch(() => {});
         }
         return response;
+    });
+    networkPromise.catch(() => {});
+    try {
+        const hasCopy = await cache.match(request);
+        return hasCopy
+            ? await Promise.race([networkPromise, rejectAfter(NETWORK_TIMEOUT_MS)])
+            : await networkPromise;
     } catch (e) {
         const cached = await cache.match(request);
         if (cached) return cached;
