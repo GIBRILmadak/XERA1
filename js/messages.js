@@ -4027,8 +4027,25 @@
                 syncComposerState();
 
                 let fileToSend = pending.file;
+                let progressBase = 0;
                 if (pending.kind === "image") {
                     fileToSend = await prepareImageForUpload(pending.file);
+                } else if (
+                    pending.kind === "video" &&
+                    typeof transcodeVideoForUpload === "function"
+                ) {
+                    // Réencodeur de file-upload.js (720p H.264) quand la page le charge.
+                    const optimized = await transcodeVideoForUpload(
+                        pending.file,
+                        (progress) => {
+                            const currentPending = getPendingAttachment();
+                            if (!currentPending) return;
+                            currentPending.progress = progress * 40;
+                            renderAttachmentPreview();
+                        },
+                    );
+                    progressBase = 40;
+                    if (optimized) fileToSend = optimized;
                 }
 
                 const upload = await uploadDmMedia(
@@ -4037,7 +4054,9 @@
                     (percent) => {
                         const currentPending = getPendingAttachment();
                         if (!currentPending) return;
-                        currentPending.progress = Number(percent) || 0;
+                        currentPending.progress =
+                            progressBase +
+                            ((Number(percent) || 0) * (100 - progressBase)) / 100;
                         currentPending.uploading = true;
                         renderAttachmentPreview();
                     },
