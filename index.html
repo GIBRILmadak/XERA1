@@ -161,10 +161,19 @@
             rel="stylesheet"
             href="css/monetization.css?v=20261004-2"
         />
+        <!-- Icônes : chargées sans bloquer le premier affichage -->
         <link
             rel="stylesheet"
             href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+            media="print"
+            onload="this.media='all'"
         />
+        <noscript>
+            <link
+                rel="stylesheet"
+                href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+            />
+        </noscript>
         <script
             src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.111.0/dist/umd/supabase.js"
             defer
