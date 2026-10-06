@@ -1835,7 +1835,7 @@ class XERAProfessionalManager {
                             update.media_url
                                 ? `
                             <div style="border-radius: 12px; overflow: hidden; margin-bottom: 15px; border: 1px solid var(--border-color);">
-                                ${update.type === "video" ? `<video src="${update.media_url}" controls style="width: 100%;"></video>` : `<img src="${update.media_url}" style="width: 100%; object-fit: cover;">`}
+                                ${update.type === "video" ? `<video src="${update.media_url}"${update.metadata?.poster_url ? ` poster="${update.metadata.poster_url}" preload="none"` : ` preload="metadata"`} controls playsinline style="width: 100%;"></video>` : `<img src="${update.media_url}" style="width: 100%; object-fit: cover;">`}
                             </div>
                         `
                                 : ""

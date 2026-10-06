@@ -556,7 +556,7 @@ function renderArcCreationForm(arcToEdit = null) {
                         if (result.type === "image") {
                             previewContainer.innerHTML = `<img src="${result.url}" style="max-width: 100%; max-height: 200px; border-radius: 8px;">`;
                         } else {
-                            previewContainer.innerHTML = `<video src="${result.url}" controls style="max-width: 100%; max-height: 200px; border-radius: 8px;"></video>`;
+                            previewContainer.innerHTML = `<video src="${result.previewUrl || result.url}" controls style="max-width: 100%; max-height: 200px; border-radius: 8px;"></video>`;
                         }
                     } else {
                         placeholder.style.display = "block";
@@ -2086,7 +2086,7 @@ function renderArcDetails(arc, followersCount, isFollowing, content) {
 
     const coverHtml = arc.media_url
         ? arc.media_type === "video"
-            ? `<div class="arc-cover" style="width:100%; max-height:300px; overflow:hidden; border-radius:12px; margin-bottom:1.5rem;"><video src="${arc.media_url}" controls style="width:100%; height:100%; object-fit:cover;"></video></div>`
+            ? `<div class="arc-cover" style="width:100%; max-height:300px; overflow:hidden; border-radius:12px; margin-bottom:1.5rem;"><video src="${arc.media_url}" controls playsinline preload="metadata" style="width:100%; height:100%; object-fit:cover;"></video></div>`
             : `<div class="arc-cover" style="width:100%; height:250px; background-image:url('${arc.media_url}'); background-size:cover; background-position:center; border-radius:12px; margin-bottom:1.5rem;"></div>`
         : "";
 
