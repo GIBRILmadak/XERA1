@@ -5458,10 +5458,12 @@ function convertSupabaseContent(supabaseContent) {
     const { tags, cleanDescription } =
         extractTagsFromDescription(rawDescription);
 
-    let mediaUrls = [];
-    // Resilience: use media_url if media_urls is missing in DB
     const mediaUrl = supabaseContent.media_url;
-    if (mediaUrl) {
+    let mediaUrls = Array.isArray(supabaseContent.media_urls)
+        ? supabaseContent.media_urls.filter(Boolean)
+        : [];
+    // Resilience: use media_url if media_urls is missing in DB
+    if (mediaUrls.length === 0 && mediaUrl) {
         mediaUrls = [mediaUrl];
     }
 
