@@ -21795,6 +21795,7 @@ async function openCreateMenu(
             currentMode === "announcement" ? "text" : typeSelect.value;
         latestSelectedFileName = "";
         window.__xeraLatestMediaC2PA = null;
+        window.__xeraLatestMediaPoster = null;
         if (fileInput) fileInput.value = "";
         if (videoDurationHint) videoDurationHint.textContent = "";
         previewContainer.innerHTML = "";
@@ -22029,6 +22030,14 @@ async function openCreateMenu(
                         successful[0]?.c2pa ||
                         window.__xeraLatestMediaC2PA ||
                         null;
+                    window.__xeraLatestMediaPoster =
+                        successful[0]?.type === "video" &&
+                        successful[0]?.posterUrl
+                            ? {
+                                  mediaUrl: successUrls[0],
+                                  posterUrl: successful[0].posterUrl,
+                              }
+                            : null;
                 }
                 loader.style.display = "none";
                 setUploadProgressIndeterminate();
