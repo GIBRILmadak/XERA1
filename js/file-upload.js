@@ -36,6 +36,7 @@ const VIDEO_AUDIO_BITRATE = 96_000;
 const VIDEO_SKIP_BELOW_BYTES = 6 * 1024 * 1024;
 // Abandonne le réencodage (et envoie l'original) s'il serait trop long.
 const VIDEO_MAX_TRANSCODE_SECONDS = 240;
+const VIDEO_POSTER_MAX_SIDE = 720;
 
 // Uploader un fichier vers Supabase Storage
 
@@ -336,6 +337,79 @@ async function encodeCanvasCompact(canvas, quality, keepAlpha) {
     return await canvasToBlob(canvas, "image/jpeg", quality);
 }
 
+// Miniature affichée à la place de la vidéo tant qu'elle n'est pas lue :
+// quelques dizaines de Ko au lieu de plusieurs Mo.
+async function createVideoPoster(file) {
+    if (!file || typeof document === "undefined") return null;
+    const objectUrl = URL.createObjectURL(file);
+    const video = document.createElement("video");
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = "auto";
+
+    try {
+        const frameReady = new Promise((resolve, reject) => {
+            const timer = setTimeout(
+                () => reject(new Error("poster timeout")),
+                10000,
+            );
+            video.addEventListener(
+                "loadeddata",
+                () => {
+                    const duration = Number(video.duration) || 0;
+                    video.currentTime =
+                        duration > 0 ? Math.min(0.5, duration / 4) : 0;
+                },
+                { once: true },
+            );
+            video.addEventListener(
+                "seeked",
+                () => {
+                    clearTimeout(timer);
+                    resolve();
+                },
+                { once: true },
+            );
+            video.addEventListener(
+                "error",
+                () => {
+                    clearTimeout(timer);
+                    reject(new Error("poster decode error"));
+                },
+                { once: true },
+            );
+        });
+        video.src = objectUrl;
+        await frameReady;
+
+        const sourceWidth = video.videoWidth;
+        const sourceHeight = video.videoHeight;
+        if (!sourceWidth || !sourceHeight) return null;
+        const scale = Math.min(
+            1,
+            VIDEO_POSTER_MAX_SIDE / Math.max(sourceWidth, sourceHeight),
+        );
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(sourceWidth * scale);
+        canvas.height = Math.round(sourceHeight * scale);
+        canvas
+            .getContext("2d")
+            .drawImage(video, 0, 0, canvas.width, canvas.height);
+        return await encodeCanvasCompact(canvas, 0.72, false);
+    } catch (error) {
+        console.warn("Miniature vidéo non générée:", error);
+        return null;
+    } finally {
+        try {
+            video.removeAttribute("src");
+            video.load();
+        } catch (e) {
+            // ignore
+        }
+        URL.revokeObjectURL(objectUrl);
+    }
+}
+
 function getImageMaxSideForFolder(folder) {
     return /avatar/i.test(String(folder || "")) ? AVATAR_MAX_SIDE : IMAGE_MAX_SIDE;
 }
@@ -472,6 +546,7 @@ async function uploadFile(file, folder = "content", onProgress) {
             );
         }
 
+        let posterBlob = null;
         if (isVideo) {
             const durationSeconds = await readVideoDurationSeconds(file);
             if (durationSeconds > MAX_VIDEO_DURATION_SECONDS) {
@@ -493,6 +568,8 @@ async function uploadFile(file, folder = "content", onProgress) {
                 progressScale = 0.6;
                 if (optimized) file = optimized;
             }
+
+            posterBlob = await createVideoPoster(file);
         }
 
         // Validation de la taille
@@ -639,6 +716,28 @@ async function uploadFile(file, folder = "content", onProgress) {
             data: { publicUrl },
         } = supabase.storage.from("media").getPublicUrl(fileName);
 
+        let posterUrl = null;
+        if (posterBlob) {
+            const posterExt = posterBlob.type === "image/webp" ? "webp" : "jpg";
+            const posterPath = `${fileName.replace(/\.[^/.]+$/, "")}.poster.${posterExt}`;
+            try {
+                const { error: posterError } = await supabase.storage
+                    .from("media")
+                    .upload(posterPath, posterBlob, {
+                        cacheControl: MEDIA_CACHE_CONTROL,
+                        contentType: posterBlob.type,
+                        upsert: false,
+                    });
+                if (!posterError) {
+                    posterUrl = supabase.storage
+                        .from("media")
+                        .getPublicUrl(posterPath).data.publicUrl;
+                }
+            } catch (e) {
+                console.warn("Miniature vidéo non envoyée:", e);
+            }
+        }
+
         if (typeof onProgress === "function") {
             try {
                 onProgress(100);
@@ -652,6 +751,9 @@ async function uploadFile(file, folder = "content", onProgress) {
             url: publicUrl,
             path: fileName,
             type: isImage ? "image" : "video",
+            posterUrl,
+            // Aperçu local : évite de re-télécharger le fichier qu'on vient d'envoyer.
+            previewUrl: isVideo ? URL.createObjectURL(file) : null,
         };
     } catch (error) {
         console.error("Erreur upload:", error);
