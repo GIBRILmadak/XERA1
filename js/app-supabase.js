@@ -19429,17 +19429,21 @@ curl -X POST https://xera.tech/api/hook/v1/publish \\
                     );
                 }
 
+                const uploadFolder = label === "avatar" ? "avatars" : "profile";
                 let fileToUpload = file;
                 if (!isGif && typeof compressImage === "function") {
                     try {
-                        fileToUpload = await compressImage(file);
+                        fileToUpload = await compressImage(
+                            file,
+                            getImageMaxSideForFolder(uploadFolder),
+                        );
                     } catch (err) {
                         console.warn(`Compression ${label} échouée:`, err);
                     }
                 }
 
                 btnSave.textContent = `Upload ${label}...`;
-                const uploadResult = await uploadFile(fileToUpload, "profile");
+                const uploadResult = await uploadFile(fileToUpload, uploadFolder);
                 if (!uploadResult?.success || !uploadResult?.url) {
                     throw new Error(
                         uploadResult?.error ||
@@ -19813,6 +19817,7 @@ curl -X POST https://xera.tech/api/hook/v1/publish \\
         initializeFileInput("setting-avatar-file", {
             preview: "preview-avatar",
             compress: true,
+            folder: "avatars",
             onBeforeUpload: () => {
                 pendingProfileMediaUploads += 1;
                 updateSaveButtonUploadState();
