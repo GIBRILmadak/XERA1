@@ -96,6 +96,32 @@ async function readVideoDurationSeconds(file) {
     });
 }
 
+const MIME_BY_EXTENSION = {
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    png: "image/png",
+    gif: "image/gif",
+    webp: "image/webp",
+    heic: "image/heic",
+    heif: "image/heif",
+    avif: "image/avif",
+    mp4: "video/mp4",
+    m4v: "video/x-m4v",
+    mov: "video/quicktime",
+    webm: "video/webm",
+    mkv: "video/x-matroska",
+    "3gp": "video/3gpp",
+    "3g2": "video/3gpp2",
+    ogv: "video/ogg",
+};
+
+// Certains navigateurs mobiles laissent file.type vide : le bucket n'accepte
+// que des images et des vidéos, on déduit donc le type de l'extension.
+function resolveUploadContentType(file) {
+    if (file?.type) return file.type;
+    return MIME_BY_EXTENSION[getFileExtension(file)] || undefined;
+}
+
 function isGifFile(file) {
     if (!file) return false;
     if (file.type === "image/gif") return true;
@@ -187,7 +213,7 @@ async function uploadFile(file, folder = "content", onProgress) {
 
         const baseFileOptions = {
             cacheControl: MEDIA_CACHE_CONTROL,
-            contentType: file.type || undefined,
+            contentType: resolveUploadContentType(file),
             upsert: false,
         };
 
