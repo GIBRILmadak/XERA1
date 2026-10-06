@@ -24,6 +24,7 @@ const IMAGE_MAX_SIDE = 1920;
 const AVATAR_MAX_SIDE = 512;
 const IMAGE_QUALITY = 0.82;
 const IMAGE_SKIP_BELOW_BYTES = 200 * 1024;
+const MAX_GIF_SIZE_BYTES = 5 * 1024 * 1024;
 
 // Uploader un fichier vers Supabase Storage
 
@@ -258,6 +259,12 @@ async function uploadFile(file, folder = "content", onProgress) {
         if (fileSizeMB > MAX_UPLOAD_SIZE_MB) {
             throw new Error(
                 `Fichier trop volumineux (${fileSizeMB.toFixed(1)}MB). La taille maximale est de ${MAX_UPLOAD_SIZE_MB}MB.`,
+            );
+        }
+
+        if (isGif && file.size > MAX_GIF_SIZE_BYTES) {
+            throw new Error(
+                `GIF trop lourd (${fileSizeMB.toFixed(1)} Mo). Maximum ${MAX_GIF_SIZE_BYTES / (1024 * 1024)} Mo : réduis-le ou publie-le en vidéo, c'est bien plus léger.`,
             );
         }
 
