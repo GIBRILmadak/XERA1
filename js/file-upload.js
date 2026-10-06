@@ -20,6 +20,10 @@ const RESUMABLE_CHUNK_SIZE_BYTES = 8 * 1024 * 1024; // 8 Mo par chunk
 // on réduit les médias avant l'upload plutôt que de servir les originaux.
 // Les noms de fichiers sont uniques, le cache navigateur/CDN peut donc durer 1 an.
 const MEDIA_CACHE_CONTROL = "31536000";
+const IMAGE_MAX_SIDE = 1920;
+const AVATAR_MAX_SIDE = 512;
+const IMAGE_QUALITY = 0.82;
+const IMAGE_SKIP_BELOW_BYTES = 200 * 1024;
 
 // Uploader un fichier vers Supabase Storage
 
@@ -122,6 +126,93 @@ function resolveUploadContentType(file) {
     return MIME_BY_EXTENSION[getFileExtension(file)] || undefined;
 }
 
+function replaceFileExtension(name, extension) {
+    const base = String(name || "media").replace(/\.[^/.]+$/, "");
+    return `${base}.${extension}`;
+}
+
+function canvasToBlob(canvas, type, quality) {
+    return new Promise((resolve) => {
+        try {
+            canvas.toBlob((blob) => resolve(blob || null), type, quality);
+        } catch (e) {
+            resolve(null);
+        }
+    });
+}
+
+// WebP quand le navigateur sait l'encoder (Safari renvoie du PNG à la place).
+async function encodeCanvasCompact(canvas, quality, keepAlpha) {
+    const webp = await canvasToBlob(canvas, "image/webp", quality);
+    if (webp && webp.type === "image/webp") return webp;
+    if (keepAlpha) return await canvasToBlob(canvas, "image/png");
+    return await canvasToBlob(canvas, "image/jpeg", quality);
+}
+
+function getImageMaxSideForFolder(folder) {
+    return /avatar/i.test(String(folder || "")) ? AVATAR_MAX_SIDE : IMAGE_MAX_SIDE;
+}
+
+// Redimensionne et réencode une image. Renvoie le fichier d'origine si rien
+// n'est à gagner (déjà petite, format illisible comme HEIC hors Safari, etc.).
+async function optimizeImageForUpload(file, maxSide = IMAGE_MAX_SIDE) {
+    if (!file || isGifFile(file) || file.__xeraOptimized) return file;
+
+    const objectUrl = URL.createObjectURL(file);
+    try {
+        const img = new Image();
+        img.decoding = "async";
+        img.src = objectUrl;
+        await img.decode();
+
+        const sourceWidth = img.naturalWidth;
+        const sourceHeight = img.naturalHeight;
+        if (!sourceWidth || !sourceHeight) return file;
+        const scale = Math.min(1, maxSide / Math.max(sourceWidth, sourceHeight));
+        if (scale === 1 && file.size <= IMAGE_SKIP_BELOW_BYTES) {
+            file.__xeraOptimized = true;
+            return file;
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(sourceWidth * scale));
+        canvas.height = Math.max(1, Math.round(sourceHeight * scale));
+        const keepAlpha = file.type === "image/png" || file.type === "image/webp";
+        const ctx = canvas.getContext("2d");
+        if (!keepAlpha) {
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        const blob = await encodeCanvasCompact(canvas, IMAGE_QUALITY, keepAlpha);
+        if (!blob || (scale === 1 && blob.size >= file.size)) {
+            file.__xeraOptimized = true;
+            return file;
+        }
+
+        const extension =
+            blob.type === "image/webp"
+                ? "webp"
+                : blob.type === "image/png"
+                  ? "png"
+                  : "jpg";
+        const optimized = new File(
+            [blob],
+            replaceFileExtension(file.name, extension),
+            { type: blob.type, lastModified: Date.now() },
+        );
+        optimized.__xeraOptimized = true;
+        if (file.__xeraC2PA) optimized.__xeraC2PA = file.__xeraC2PA;
+        return optimized;
+    } catch (error) {
+        console.warn("Optimisation image ignorée:", error);
+        return file;
+    } finally {
+        URL.revokeObjectURL(objectUrl);
+    }
+}
+
 function isGifFile(file) {
     if (!file) return false;
     if (file.type === "image/gif") return true;
@@ -167,6 +258,13 @@ async function uploadFile(file, folder = "content", onProgress) {
         if (fileSizeMB > MAX_UPLOAD_SIZE_MB) {
             throw new Error(
                 `Fichier trop volumineux (${fileSizeMB.toFixed(1)}MB). La taille maximale est de ${MAX_UPLOAD_SIZE_MB}MB.`,
+            );
+        }
+
+        if (isImage && !isGif) {
+            file = await optimizeImageForUpload(
+                file,
+                getImageMaxSideForFolder(folder),
             );
         }
 
@@ -397,59 +495,8 @@ function createImagePreview(file, callback) {
 }
 
 // Compresser une image avant upload
-async function compressImage(file, maxWidth = 1920, quality = 0.8) {
-    if (isGifFile(file)) {
-        return file;
-    }
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-
-        reader.onload = (e) => {
-            const img = new Image();
-
-            img.onload = () => {
-                const canvas = document.createElement("canvas");
-                let width = img.width;
-                let height = img.height;
-
-                // Redimensionner si nécessaire
-                if (width > maxWidth) {
-                    height = (height * maxWidth) / width;
-                    width = maxWidth;
-                }
-
-                canvas.width = width;
-                canvas.height = height;
-
-                const ctx = canvas.getContext("2d");
-                ctx.drawImage(img, 0, 0, width, height);
-
-                canvas.toBlob(
-                    (blob) => {
-                        if (!blob) {
-                            reject(
-                                new Error("Impossible de compresser l'image."),
-                            );
-                            return;
-                        }
-                        const compressedFile = new File([blob], file.name, {
-                            type: "image/jpeg",
-                            lastModified: Date.now(),
-                        });
-                        resolve(compressedFile);
-                    },
-                    "image/jpeg",
-                    quality,
-                );
-            };
-
-            img.onerror = reject;
-            img.src = e.target.result;
-        };
-
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-    });
+async function compressImage(file, maxWidth = IMAGE_MAX_SIDE) {
+    return await optimizeImageForUpload(file, maxWidth);
 }
 
 // Initialiser un input de fichier avec drag & drop
@@ -651,7 +698,10 @@ async function handleFileSelection(
             compress && isAllowedImageFile(file) && !isGifFile(file);
         if (shouldCompress) {
             try {
-                fileToUpload = await compressImage(file);
+                fileToUpload = await compressImage(
+                    file,
+                    getImageMaxSideForFolder(folder),
+                );
                 if (c2paInspection) {
                     fileToUpload.__xeraC2PA = c2paInspection;
                 }
