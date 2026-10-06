@@ -5492,6 +5492,7 @@ function convertSupabaseContent(supabaseContent) {
         tags,
         mediaUrl: mediaUrl,
         mediaUrls: mediaUrls,
+        posterUrl: supabaseContent.metadata?.poster_url || null,
         views: supabaseContent.views || 0,
         encouragementsCount: supabaseContent.encouragements_count || 0,
         createdAt: new Date(supabaseContent.created_at),
