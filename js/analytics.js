@@ -1,3 +1,28 @@
+// Chart.js (~70 Ko) n'est chargé qu'au premier graphique affiché.
+const CHART_JS_URL =
+    "https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js";
+let chartJsPromise = null;
+
+function ensureChartJs() {
+    if (typeof window.Chart !== "undefined") return Promise.resolve(window.Chart);
+    if (!chartJsPromise) {
+        chartJsPromise = new Promise((resolve, reject) => {
+            const script = document.createElement("script");
+            script.src = CHART_JS_URL;
+            script.async = true;
+            script.onload = () => resolve(window.Chart);
+            script.onerror = () => {
+                chartJsPromise = null;
+                script.remove();
+                reject(new Error("Chart.js indisponible"));
+            };
+            document.head.appendChild(script);
+        });
+    }
+    return chartJsPromise;
+}
+window.ensureChartJs = ensureChartJs;
+
 /* ========================================
    MOMENTUM ENGINE & INSIGHTS (Algorithmic Power)
    ======================================== */
@@ -856,6 +881,20 @@ function renderMonthlyChart({
     series,
     containerId,
 }) {
+    if (typeof window.Chart === "undefined") {
+        ensureChartJs()
+            .then(() =>
+                renderMonthlyChart({
+                    year,
+                    monthIndex,
+                    daysInMonth,
+                    series,
+                    containerId,
+                }),
+            )
+            .catch((error) => console.warn(error.message));
+        return;
+    }
     const domIds = getAnalyticsDomIds(containerId);
     const safeId = domIds.safeId;
     const canvasId = domIds.canvasId;

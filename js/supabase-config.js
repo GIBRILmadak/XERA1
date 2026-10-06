@@ -20,6 +20,31 @@ if (SUPABASE_SDK) {
     window.supabaseSDK = SUPABASE_SDK;
 }
 
+// Quand le projet Supabase est suspendu (quota dépassé), toutes les requêtes
+// répondent 402 : on prévient le visiteur au lieu d'afficher un site vide.
+function showServiceUnavailableBanner() {
+    if (document.getElementById("xera-service-banner")) return;
+    const render = () => {
+        if (document.getElementById("xera-service-banner")) return;
+        const banner = document.createElement("div");
+        banner.id = "xera-service-banner";
+        banner.setAttribute("role", "status");
+        banner.style.cssText =
+            "position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:2147483000;max-width:min(560px,calc(100vw - 32px));padding:12px 16px;border-radius:14px;background:#111827;color:#f9fafb;font:500 14px/1.45 Inter,system-ui,sans-serif;box-shadow:0 10px 30px rgba(0,0,0,.35);text-align:center;";
+        banner.textContent =
+            "XERA1 est temporairement en maintenance. Vos données sont en sécurité, merci de revenir un peu plus tard.";
+        document.body.appendChild(banner);
+    };
+    if (document.body) render();
+    else document.addEventListener("DOMContentLoaded", render, { once: true });
+}
+
+async function xeraSupabaseFetch(input, init) {
+    const response = await fetch(input, init);
+    if (response.status === 402) showServiceUnavailableBanner();
+    return response;
+}
+
 // Initialisation unique du client
 if (!window.supabaseClient) {
     try {
@@ -39,6 +64,7 @@ if (!window.supabaseClient) {
                         persistSession: true,
                         autoRefreshToken: true,
                     },
+                    global: { fetch: xeraSupabaseFetch },
                 },
             );
         } else if (
@@ -336,6 +362,7 @@ function updateSessionStorage(rememberMe) {
             persistSession: true,
             autoRefreshToken: true,
         },
+        global: { fetch: xeraSupabaseFetch },
     });
     supabase = window.supabaseClient;
     window.supabase = supabase;

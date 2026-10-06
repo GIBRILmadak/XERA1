@@ -5458,10 +5458,12 @@ function convertSupabaseContent(supabaseContent) {
     const { tags, cleanDescription } =
         extractTagsFromDescription(rawDescription);
 
-    let mediaUrls = [];
-    // Resilience: use media_url if media_urls is missing in DB
     const mediaUrl = supabaseContent.media_url;
-    if (mediaUrl) {
+    let mediaUrls = Array.isArray(supabaseContent.media_urls)
+        ? supabaseContent.media_urls.filter(Boolean)
+        : [];
+    // Resilience: use media_url if media_urls is missing in DB
+    if (mediaUrls.length === 0 && mediaUrl) {
         mediaUrls = [mediaUrl];
     }
 
@@ -5490,6 +5492,7 @@ function convertSupabaseContent(supabaseContent) {
         tags,
         mediaUrl: mediaUrl,
         mediaUrls: mediaUrls,
+        posterUrl: supabaseContent.metadata?.poster_url || null,
         views: supabaseContent.views || 0,
         encouragementsCount: supabaseContent.encouragements_count || 0,
         createdAt: new Date(supabaseContent.created_at),
@@ -10274,7 +10277,7 @@ function renderProfileContentMedia(content, options = {}) {
     if (content?.type === "video") {
         return `
             <div class="timeline-media profile-update-media ${compact ? "is-compact" : ""}" ${mediaContextAttrs} style="position: relative;">
-                <video src="${primaryMediaUrl}" controls playsinline preload="metadata"></video>
+                <video src="${primaryMediaUrl}"${content?.posterUrl ? ` poster="${escapeHtml(content.posterUrl)}" preload="none"` : ` preload="metadata"`} controls playsinline></video>
                 ${c2paBadge}
                 ${extraCount}
             </div>
@@ -11850,8 +11853,8 @@ function renderUserCard(
     if (hasMedia) {
         if (latestContent.type === "video") {
             mediaHtml = `
-                <div class="card-media-wrap card-media-wrap--editorial">
-                    <video id="video-${userId}" class="card-media" src="${primaryMediaUrl}" muted playsinline webkit-playsinline autoplay preload="metadata" tabindex="-1" data-user-id="${userId}" data-content-id="${latestContent.contentId}" disablePictureInPicture></video>
+                <div class="card-media-wrap card-media-wrap--editorial${latestContent.posterUrl ? " has-poster" : ""}">
+                    <video id="video-${userId}" class="card-media" data-src="${primaryMediaUrl}"${latestContent.posterUrl ? ` poster="${latestContent.posterUrl}"` : ""} muted playsinline webkit-playsinline preload="none" tabindex="-1" data-user-id="${userId}" data-content-id="${latestContent.contentId}" disablePictureInPicture></video>
                     <div class="video-fallback">
                         <img src="icons/play.svg" alt="Play" width="40" height="40">
                         <span>Vidéo</span>
@@ -14570,14 +14573,14 @@ async function renderImmersiveFeed(contents) {
             if (mediaList.length > 0) {
                 if (content.type === "video") {
                     mediaHtml = `
-                    <div class="immersive-video-wrap" style="position: relative; width: 100%; height: 100%;">
+                    <div class="immersive-video-wrap${content.posterUrl ? " has-poster" : ""}" style="position: relative; width: 100%; height: 100%;">
                         <video
                             id="immersive-video-${content.contentId}"
                             class="immersive-video"
-                            data-src="${mediaList[0]}"
+                            data-src="${mediaList[0]}"${content.posterUrl ? `
+                            poster="${content.posterUrl}"` : ""}
                             playsinline
                             webkit-playsinline
-                            autoplay
                             muted
                             loop
                             preload="metadata"
@@ -17426,7 +17429,11 @@ window.renderWeeklyProgressChart = async function (userId) {
         const canvas = document.getElementById(
             `weekly-progress-chart-${userId}`,
         );
-        if (!canvas || typeof Chart === "undefined") return;
+        if (!canvas) return;
+        if (typeof Chart === "undefined") {
+            if (typeof window.ensureChartJs !== "function") return;
+            await window.ensureChartJs();
+        }
 
         // Destroy existing chart instance if any
         if (!window._weeklyCharts) window._weeklyCharts = new Map();
@@ -17864,10 +17871,21 @@ function toggleTimelineExpand(button) {
 
 function toggleVideoPlay(video) {
     if (video.paused) {
+        ensureDiscoverVideoSource(video);
         video.play().catch(() => {});
     } else {
         video.pause();
     }
+}
+
+// Les vidéos des cartes ne sont téléchargées qu'une fois visibles à l'écran
+// (avant, chaque carte lançait l'original en autoplay dès l'affichage).
+function ensureDiscoverVideoSource(video) {
+    if (!video || video.getAttribute("src")) return;
+    const src = video.dataset.src;
+    if (!src) return;
+    video.preload = "metadata";
+    video.src = src;
 }
 
 function setupDiscoverVideoInteractions() {
@@ -17887,6 +17905,7 @@ function setupDiscoverVideoInteractions() {
                 if (entry.isIntersecting) {
                     // Play if visible - keep muted for cards
                     video.muted = true;
+                    ensureDiscoverVideoSource(video);
                     video.play().catch(() => {
                         console.log("Autoplay blocked for card video");
                     });
@@ -17939,6 +17958,7 @@ function setupDiscoverVideoInteractions() {
         // Autoplay on hover for discover cards
         video.addEventListener("mouseenter", function () {
             this.muted = true;
+            ensureDiscoverVideoSource(this);
             this.play().catch(() => {});
         });
         video.addEventListener("mouseleave", function () {
@@ -19427,17 +19447,21 @@ curl -X POST https://xera.tech/api/hook/v1/publish \\
                     );
                 }
 
+                const uploadFolder = label === "avatar" ? "avatars" : "profile";
                 let fileToUpload = file;
                 if (!isGif && typeof compressImage === "function") {
                     try {
-                        fileToUpload = await compressImage(file);
+                        fileToUpload = await compressImage(
+                            file,
+                            getImageMaxSideForFolder(uploadFolder),
+                        );
                     } catch (err) {
                         console.warn(`Compression ${label} échouée:`, err);
                     }
                 }
 
                 btnSave.textContent = `Upload ${label}...`;
-                const uploadResult = await uploadFile(fileToUpload, "profile");
+                const uploadResult = await uploadFile(fileToUpload, uploadFolder);
                 if (!uploadResult?.success || !uploadResult?.url) {
                     throw new Error(
                         uploadResult?.error ||
@@ -19811,6 +19835,7 @@ curl -X POST https://xera.tech/api/hook/v1/publish \\
         initializeFileInput("setting-avatar-file", {
             preview: "preview-avatar",
             compress: true,
+            folder: "avatars",
             onBeforeUpload: () => {
                 pendingProfileMediaUploads += 1;
                 updateSaveButtonUploadState();
@@ -21774,6 +21799,7 @@ async function openCreateMenu(
             currentMode === "announcement" ? "text" : typeSelect.value;
         latestSelectedFileName = "";
         window.__xeraLatestMediaC2PA = null;
+        window.__xeraLatestMediaPoster = null;
         if (fileInput) fileInput.value = "";
         if (videoDurationHint) videoDurationHint.textContent = "";
         previewContainer.innerHTML = "";
@@ -22008,6 +22034,14 @@ async function openCreateMenu(
                         successful[0]?.c2pa ||
                         window.__xeraLatestMediaC2PA ||
                         null;
+                    window.__xeraLatestMediaPoster =
+                        successful[0]?.type === "video" &&
+                        successful[0]?.posterUrl
+                            ? {
+                                  mediaUrl: successUrls[0],
+                                  posterUrl: successful[0].posterUrl,
+                              }
+                            : null;
                 }
                 loader.style.display = "none";
                 setUploadProgressIndeterminate();
@@ -22039,7 +22073,7 @@ async function openCreateMenu(
 
                 if (successful[0]?.type === "video") {
                     previewContainer.innerHTML = buildMediaPreviewShell(
-                        `<video src="${successUrls[0]}" controls style="max-width: 100%; max-height: 300px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);"></video>`,
+                        `<video src="${successful[0]?.previewUrl || successUrls[0]}" controls style="max-width: 100%; max-height: 300px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);"></video>`,
                     );
                     refreshSmartSuggestions({
                         fileName: latestSelectedFileName,
@@ -22228,13 +22262,38 @@ async function openCreateMenu(
                           source: window.__xeraLatestMediaC2PA.source || null,
                       }
                     : null;
+            // En édition, on conserve les métadonnées existantes (sub_type des
+            // pages pro, miniature vidéo...) au lieu de les écraser.
+            const preservedMetadata =
+                isEdit &&
+                existingContent?.metadata &&
+                typeof existingContent.metadata === "object"
+                    ? { ...existingContent.metadata }
+                    : {};
+            const previousMediaUrl = isEdit
+                ? existingContent.media_url || existingContent.mediaUrl || null
+                : null;
+            if ((mediaUrl || null) !== previousMediaUrl) {
+                delete preservedMetadata.poster_url;
+                delete preservedMetadata.c2pa;
+                delete preservedMetadata.is_ai;
+            }
+            const latestPoster = window.__xeraLatestMediaPoster;
+            const posterUrl =
+                selectedType === "video" &&
+                latestPoster?.mediaUrl &&
+                latestPoster.mediaUrl === mediaUrl
+                    ? latestPoster.posterUrl
+                    : null;
             const contentMetadata = {
+                ...preservedMetadata,
                 ...(selectedMediaC2PA
                     ? {
                           c2pa: selectedMediaC2PA,
                           is_ai: selectedMediaC2PA.isAI,
                       }
                     : {}),
+                ...(posterUrl ? { poster_url: posterUrl } : {}),
             };
 
             const contentData = {

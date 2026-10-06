@@ -6,7 +6,10 @@
 let monetizationUiInitialized = false;
 
 // État global pour éviter les doublons de requêtes
-let supportCheckoutInProgress = false;
+// Noms propres à ce fichier : monetization.js et supabase-config.js déclarent
+// déjà supportCheckoutInProgress / formatCurrency / checkAuth au niveau global,
+// et un doublon de `let` empêchait tout ce script de se charger.
+let supportUiCheckoutInProgress = false;
 
 function handleSupportButtonClick(e) {
     const supportBtn = e.target.closest(".support-btn-active");
@@ -500,7 +503,7 @@ function closeGlobalSupportModal() {
     if (messageInput) {
         messageInput.value = "";
     }
-    supportCheckoutInProgress = false;
+    supportUiCheckoutInProgress = false;
     // Réactiver le bouton
     const submitBtn = document.getElementById("global-support-submit");
     if (submitBtn) {
@@ -550,7 +553,7 @@ function updateGlobalSupportSummary() {
     const amount = globalSupportState.amount || 0;
 
     const amountEl = document.getElementById("global-summary-amount");
-    if (amountEl) amountEl.textContent = formatCurrency(amount);
+    if (amountEl) amountEl.textContent = formatSupportAmount(amount);
 
     // Activer/désactiver le bouton
     const submitBtn = document.getElementById("global-support-submit");
@@ -561,7 +564,7 @@ function updateGlobalSupportSummary() {
     }
 }
 
-function formatCurrency(amount) {
+function formatSupportAmount(amount) {
     if (!Number.isFinite(amount)) return "$0.00";
     const rounded = Math.round(amount * 100) / 100;
     return `$${rounded.toFixed(2)}`;
@@ -570,7 +573,7 @@ function formatCurrency(amount) {
 // Traiter le soutien
 async function processGlobalSupport() {
     // Empêcher les clics multiples
-    if (supportCheckoutInProgress) {
+    if (supportUiCheckoutInProgress) {
         showGlobalNotification("Paiement déjà en cours...", "info");
         return;
     }
@@ -590,7 +593,7 @@ async function processGlobalSupport() {
 
     try {
         // Vérifier si l'utilisateur est connecté
-        const currentUser = await checkAuth();
+        const currentUser = await getMonetizationAuthUser();
         if (!currentUser) {
             showGlobalNotification(
                 "Veuillez vous connecter pour envoyer un soutien",
@@ -609,7 +612,7 @@ async function processGlobalSupport() {
                 '<i class="fas fa-spinner fa-spin"></i> Traitement...';
         }
 
-        supportCheckoutInProgress = true;
+        supportUiCheckoutInProgress = true;
 
         const selectedMethod =
             document.getElementById("global-support-payment-method")?.value ||
@@ -622,7 +625,7 @@ async function processGlobalSupport() {
 
         // Valider les champs requis pour Mobile Money
         if (selectedMethod === "mobile_money" && !walletId) {
-            supportCheckoutInProgress = false;
+            supportUiCheckoutInProgress = false;
             showGlobalNotification("Veuillez entrer votre numéro de téléphone", "error");
             if (submitBtn) {
                 submitBtn.disabled = false;
@@ -663,7 +666,7 @@ async function processGlobalSupport() {
             "error",
         );
     } finally {
-        supportCheckoutInProgress = false;
+        supportUiCheckoutInProgress = false;
         const submitBtn = document.getElementById("global-support-submit");
         if (submitBtn) {
             submitBtn.disabled = !(
@@ -809,14 +812,9 @@ function integrateMonetizationInContentCard(cardElement, user) {
 }
 
 // Fonction utilitaire pour formater la devise
-function formatCurrency(amount) {
-    if (!Number.isFinite(amount)) return "$0.00";
-    const rounded = Math.round(amount * 100) / 100;
-    return `$${rounded.toFixed(2)}`;
-}
 
 // Fonction utilitaire pour vérifier l'authentification
-async function checkAuth() {
+async function getMonetizationAuthUser() {
     if (typeof window.supabase !== "undefined") {
         const { data: { session }, error } = await window.supabase.auth.getSession();
         if (error) {
