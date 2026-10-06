@@ -1,12 +1,16 @@
 /*
  * XERA1 Service Worker for Web Push notifications
  */
-const CACHE_NAME = "xera1-shell-v7";
+const CACHE_NAME = "xera1-shell-v8";
 const PRECACHE_URLS = [
     "/manifest.json",
     "/icons/logo-192x192.png",
     "/icons/logo-512x512.png",
 ];
+// Images Supabase déjà vues : servies depuis l'appareil (0 octet d'egress).
+// Les noms de fichiers sont uniques, une image ne change jamais d'URL.
+const MEDIA_CACHE_NAME = "xera1-media-v1";
+const MEDIA_CACHE_MAX_ENTRIES = 400;
 
 self.addEventListener("install", (event) => {
     // Precache critical assets so the install prompt shows icon immediately
@@ -66,6 +70,52 @@ function isCacheableAsset(request) {
     return false;
 }
 
+function isSupabasePublicImage(request) {
+    if (request.method !== "GET" || request.headers.has("range")) return false;
+    let url;
+    try {
+        url = new URL(request.url);
+    } catch (e) {
+        return false;
+    }
+    if (!url.hostname.endsWith(".supabase.co")) return false;
+    if (!url.pathname.startsWith("/storage/v1/object/public/")) return false;
+    if (request.destination === "image") return true;
+    return /\.(jpe?g|png|webp|gif|avif)$/i.test(url.pathname);
+}
+
+async function trimMediaCache(cache) {
+    const keys = await cache.keys();
+    const excess = keys.length - MEDIA_CACHE_MAX_ENTRIES;
+    for (let i = 0; i < excess; i += 1) {
+        await cache.delete(keys[i]);
+    }
+}
+
+async function mediaCacheFirst(request) {
+    const cache = await caches.open(MEDIA_CACHE_NAME);
+    const cached = await cache.match(request.url);
+    if (cached) return cached;
+
+    let response;
+    try {
+        // Réponse CORS (et non opaque) : mise en cache sans surcoût de quota.
+        response = await fetch(request.url, {
+            mode: "cors",
+            credentials: "omit",
+        });
+    } catch (e) {
+        return fetch(request);
+    }
+    if (response.ok) {
+        cache
+            .put(request.url, response.clone())
+            .then(() => trimMediaCache(cache))
+            .catch(() => {});
+    }
+    return response;
+}
+
 async function networkFirst(request) {
     const cache = await caches.open(CACHE_NAME);
     try {
@@ -90,7 +140,12 @@ async function networkFirst(request) {
 self.addEventListener("fetch", (event) => {
     const request = event.request;
 
-    // Avoid interfering with non-GET / cross-origin (Supabase, CDNs, etc.)
+    if (isSupabasePublicImage(request)) {
+        event.respondWith(mediaCacheFirst(request));
+        return;
+    }
+
+    // Avoid interfering with non-GET / cross-origin (Supabase API, CDNs, etc.)
     if (request.method !== "GET") return;
     if (!isSameOrigin(request)) return;
     if (!isCacheableAsset(request)) return;
