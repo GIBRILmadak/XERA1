@@ -25,6 +25,17 @@ const AVATAR_MAX_SIDE = 512;
 const IMAGE_QUALITY = 0.82;
 const IMAGE_SKIP_BELOW_BYTES = 200 * 1024;
 const MAX_GIF_SIZE_BYTES = 5 * 1024 * 1024;
+// Réencodage vidéo dans le navigateur (WebCodecs, accéléré matériellement).
+// Mediabunny n'est chargé qu'au moment d'un upload vidéo.
+const MEDIABUNNY_MODULE_URL =
+    "https://cdn.jsdelivr.net/npm/mediabunny@1.61.3/dist/bundles/mediabunny.min.mjs";
+const VIDEO_MAX_SHORT_SIDE = 720;
+const VIDEO_MAX_FRAME_RATE = 30;
+const VIDEO_BITRATE_720P = 1_600_000;
+const VIDEO_AUDIO_BITRATE = 96_000;
+const VIDEO_SKIP_BELOW_BYTES = 6 * 1024 * 1024;
+// Abandonne le réencodage (et envoie l'original) s'il serait trop long.
+const VIDEO_MAX_TRANSCODE_SECONDS = 240;
 
 // Uploader un fichier vers Supabase Storage
 
@@ -101,6 +112,32 @@ async function readVideoDurationSeconds(file) {
     });
 }
 
+let mediabunnyModulePromise = null;
+
+function loadMediabunny() {
+    if (!mediabunnyModulePromise) {
+        mediabunnyModulePromise = import(MEDIABUNNY_MODULE_URL).catch(
+            (error) => {
+                mediabunnyModulePromise = null;
+                throw error;
+            },
+        );
+    }
+    return mediabunnyModulePromise;
+}
+
+function canTranscodeVideoInBrowser() {
+    return (
+        typeof window !== "undefined" &&
+        typeof window.VideoEncoder === "function" &&
+        typeof window.VideoDecoder === "function"
+    );
+}
+
+function toEven(value) {
+    return Math.max(2, Math.round(value / 2) * 2);
+}
+
 const MIME_BY_EXTENSION = {
     jpg: "image/jpeg",
     jpeg: "image/jpeg",
@@ -130,6 +167,155 @@ function resolveUploadContentType(file) {
 function replaceFileExtension(name, extension) {
     const base = String(name || "media").replace(/\.[^/.]+$/, "");
     return `${base}.${extension}`;
+}
+
+// Réencode une vidéo en MP4 H.264 (720p max, 30 i/s max). Renvoie null si le
+// navigateur ne sait pas le faire ou si le résultat n'est pas plus léger :
+// l'appelant envoie alors le fichier d'origine.
+async function transcodeVideoForUpload(file, onProgress) {
+    if (!file || file.size < VIDEO_SKIP_BELOW_BYTES) return null;
+    if (!canTranscodeVideoInBrowser()) return null;
+
+    let mb;
+    try {
+        mb = await loadMediabunny();
+    } catch (error) {
+        console.warn("Mediabunny indisponible, envoi de l'original:", error);
+        return null;
+    }
+
+    const input = new mb.Input({
+        source: new mb.BlobSource(file),
+        formats: mb.ALL_FORMATS,
+    });
+
+    try {
+        const videoTrack = await input.getPrimaryVideoTrack();
+        if (!videoTrack || !(await videoTrack.canDecode())) return null;
+
+        const sourceWidth = videoTrack.displayWidth;
+        const sourceHeight = videoTrack.displayHeight;
+        if (!sourceWidth || !sourceHeight) return null;
+
+        const scale = Math.min(
+            1,
+            VIDEO_MAX_SHORT_SIDE / Math.min(sourceWidth, sourceHeight),
+        );
+        const width = toEven(sourceWidth * scale);
+        const height = toEven(sourceHeight * scale);
+        const bitrate = Math.max(
+            450_000,
+            Math.round((VIDEO_BITRATE_720P * width * height) / (720 * 1280)),
+        );
+        const videoQuality = new mb.Quality({ bitrate });
+        if (
+            !(await mb.canEncodeVideo("avc", {
+                width,
+                height,
+                quality: videoQuality,
+            }))
+        ) {
+            return null;
+        }
+
+        let frameRate;
+        try {
+            const stats = await videoTrack.computePacketStats(120);
+            if (stats.averagePacketRate > VIDEO_MAX_FRAME_RATE + 1) {
+                frameRate = VIDEO_MAX_FRAME_RATE;
+            }
+        } catch (e) {
+            // Débit d'images inconnu : on garde celui de la source.
+        }
+
+        const audioTrack = await input.getPrimaryAudioTrack();
+        const canEncodeAac = await mb.canEncodeAudio("aac", {
+            quality: new mb.Quality({ bitrate: VIDEO_AUDIO_BITRATE }),
+        });
+
+        const output = new mb.Output({
+            format: new mb.Mp4OutputFormat({ fastStart: "in-memory" }),
+            target: new mb.BufferTarget(),
+        });
+
+        const conversion = await mb.Conversion.init({
+            input,
+            output,
+            tracks: "primary",
+            video: {
+                width,
+                height,
+                fit: "contain",
+                codec: "avc",
+                quality: videoQuality,
+                frameRate,
+                forceTranscode: true,
+            },
+            // Sans encodeur AAC (ex : Firefox), on recopie la piste audio telle quelle.
+            audio: canEncodeAac
+                ? {
+                      codec: "aac",
+                      quality: new mb.Quality({ bitrate: VIDEO_AUDIO_BITRATE }),
+                  }
+                : {},
+            showWarnings: false,
+        });
+
+        const lostAudio =
+            audioTrack &&
+            conversion.discardedTracks.some(
+                (entry) => entry.track.type === "audio",
+            );
+        if (!conversion.isValid || lostAudio) return null;
+
+        const startedAt = Date.now();
+        let abortedForSlowness = false;
+        conversion.onProgress = (progress) => {
+            if (typeof onProgress === "function") onProgress(progress);
+            const elapsed = (Date.now() - startedAt) / 1000;
+            if (elapsed > 15 && progress > 0) {
+                const estimatedTotal = elapsed / progress;
+                if (estimatedTotal > VIDEO_MAX_TRANSCODE_SECONDS) {
+                    abortedForSlowness = true;
+                    conversion.cancel();
+                }
+            }
+        };
+
+        try {
+            await conversion.execute();
+        } catch (error) {
+            if (abortedForSlowness) {
+                console.info(
+                    "Réencodage vidéo trop lent sur cet appareil, envoi de l'original.",
+                );
+                return null;
+            }
+            throw error;
+        }
+
+        const buffer = output.target.buffer;
+        if (!buffer || buffer.byteLength >= file.size * 0.9) return null;
+
+        const optimized = new File(
+            [buffer],
+            replaceFileExtension(file.name, "mp4"),
+            { type: "video/mp4", lastModified: Date.now() },
+        );
+        console.info(
+            `Vidéo optimisée : ${(file.size / 1048576).toFixed(1)} Mo -> ${(optimized.size / 1048576).toFixed(1)} Mo (${width}x${height})`,
+        );
+        return optimized;
+    } catch (error) {
+        console.warn("Réencodage vidéo impossible, envoi de l'original:", error);
+        return null;
+    } finally {
+        try {
+            input.dispose();
+        } catch (e) {
+            // ignore
+        }
+    }
 }
 
 function canvasToBlob(canvas, type, quality) {
@@ -262,6 +448,17 @@ async function uploadFile(file, folder = "content", onProgress) {
             );
         }
 
+        // Pendant un réencodage vidéo, la barre de progression est partagée :
+        // 0-40 % pour la compression, 40-100 % pour l'envoi.
+        let progressOffset = 0;
+        let progressScale = 1;
+        const reportProgress = (percent) => {
+            if (typeof onProgress !== "function") return;
+            onProgress(
+                Math.min(100, Math.round(progressOffset + percent * progressScale)),
+            );
+        };
+
         if (isGif && file.size > MAX_GIF_SIZE_BYTES) {
             throw new Error(
                 `GIF trop lourd (${fileSizeMB.toFixed(1)} Mo). Maximum ${MAX_GIF_SIZE_BYTES / (1024 * 1024)} Mo : réduis-le ou publie-le en vidéo, c'est bien plus léger.`,
@@ -281,6 +478,20 @@ async function uploadFile(file, folder = "content", onProgress) {
                 throw new Error(
                     "Vidéo trop longue. Durée maximale autorisée : 60 minutes.",
                 );
+            }
+
+            if (
+                file.size >= VIDEO_SKIP_BELOW_BYTES &&
+                canTranscodeVideoInBrowser()
+            ) {
+                reportProgress(0);
+                const optimized = await transcodeVideoForUpload(
+                    file,
+                    (progress) => reportProgress(progress * 40),
+                );
+                progressOffset = 40;
+                progressScale = 0.6;
+                if (optimized) file = optimized;
             }
         }
 
@@ -344,7 +555,7 @@ async function uploadFile(file, folder = "content", onProgress) {
             );
 
             if (typeof onProgress === "function") {
-                onProgress(percent);
+                reportProgress(percent);
             } else if (typeof showUploadProgress === "function") {
                 showUploadProgress(uploadedBytes, totalBytes);
             }
@@ -355,10 +566,10 @@ async function uploadFile(file, folder = "content", onProgress) {
         const startFakeProgress = () => {
             if (typeof onProgress !== "function") return;
             let current = 0;
-            onProgress(0);
+            reportProgress(0);
             fakeProgressTimer = setInterval(() => {
                 current = Math.min(95, current + Math.random() * 8 + 4);
-                onProgress(current);
+                reportProgress(current);
             }, 350);
         };
         const stopFakeProgress = () => {
@@ -368,9 +579,7 @@ async function uploadFile(file, folder = "content", onProgress) {
             }
         };
 
-        if (typeof onProgress === "function") {
-            onProgress(0);
-        }
+        reportProgress(0);
 
         if (useResumable) {
             uploadResponse = await supabase.storage
