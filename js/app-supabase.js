@@ -22258,13 +22258,38 @@ async function openCreateMenu(
                           source: window.__xeraLatestMediaC2PA.source || null,
                       }
                     : null;
+            // En édition, on conserve les métadonnées existantes (sub_type des
+            // pages pro, miniature vidéo...) au lieu de les écraser.
+            const preservedMetadata =
+                isEdit &&
+                existingContent?.metadata &&
+                typeof existingContent.metadata === "object"
+                    ? { ...existingContent.metadata }
+                    : {};
+            const previousMediaUrl = isEdit
+                ? existingContent.media_url || existingContent.mediaUrl || null
+                : null;
+            if ((mediaUrl || null) !== previousMediaUrl) {
+                delete preservedMetadata.poster_url;
+                delete preservedMetadata.c2pa;
+                delete preservedMetadata.is_ai;
+            }
+            const latestPoster = window.__xeraLatestMediaPoster;
+            const posterUrl =
+                selectedType === "video" &&
+                latestPoster?.mediaUrl &&
+                latestPoster.mediaUrl === mediaUrl
+                    ? latestPoster.posterUrl
+                    : null;
             const contentMetadata = {
+                ...preservedMetadata,
                 ...(selectedMediaC2PA
                     ? {
                           c2pa: selectedMediaC2PA,
                           is_ai: selectedMediaC2PA.isAI,
                       }
                     : {}),
+                ...(posterUrl ? { poster_url: posterUrl } : {}),
             };
 
             const contentData = {
