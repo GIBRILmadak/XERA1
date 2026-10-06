@@ -10277,7 +10277,7 @@ function renderProfileContentMedia(content, options = {}) {
     if (content?.type === "video") {
         return `
             <div class="timeline-media profile-update-media ${compact ? "is-compact" : ""}" ${mediaContextAttrs} style="position: relative;">
-                <video src="${primaryMediaUrl}" controls playsinline preload="metadata"></video>
+                <video src="${primaryMediaUrl}"${content?.posterUrl ? ` poster="${escapeHtml(content.posterUrl)}" preload="none"` : ` preload="metadata"`} controls playsinline></video>
                 ${c2paBadge}
                 ${extraCount}
             </div>
