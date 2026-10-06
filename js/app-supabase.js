@@ -17429,7 +17429,11 @@ window.renderWeeklyProgressChart = async function (userId) {
         const canvas = document.getElementById(
             `weekly-progress-chart-${userId}`,
         );
-        if (!canvas || typeof Chart === "undefined") return;
+        if (!canvas) return;
+        if (typeof Chart === "undefined") {
+            if (typeof window.ensureChartJs !== "function") return;
+            await window.ensureChartJs();
+        }
 
         // Destroy existing chart instance if any
         if (!window._weeklyCharts) window._weeklyCharts = new Map();
