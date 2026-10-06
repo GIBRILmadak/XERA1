@@ -95,6 +95,75 @@ module.exports = function setupEngagementTracking(app, supabase) {
     });
 
     /**
+     * POST /api/app/interaction/track-batch
+     * Enregistre un lot (batch) d'interactions utilisateurs en une seule requête HTTP
+     */
+    app.post("/api/app/interaction/track-batch", async (req, res) => {
+        try {
+            const { interactions } = req.body;
+            if (!Array.isArray(interactions) || interactions.length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    error: "interactions array requis",
+                });
+            }
+
+            const {
+                data: { session },
+            } = await supabase.auth.getSession();
+            if (!session || !session.user) {
+                return res.status(401).json({
+                    success: false,
+                    error: "Non authentifié",
+                });
+            }
+
+            const viewer_id = session.user.id;
+            const rows = interactions
+                .filter(item => item && item.interaction_type && item.target_user_id)
+                .map(item => ({
+                    viewer_id,
+                    target_user_id: item.target_user_id,
+                    interaction_type: item.interaction_type,
+                    content_id: item.content_id || null,
+                    content_type: item.content_type || null,
+                    interaction_data: {
+                        engagement_duration: item.engagement_duration,
+                        ...item.metadata,
+                    },
+                }));
+
+            if (rows.length === 0) {
+                return res.json({ success: true, count: 0 });
+            }
+
+            const { data, error } = await supabase
+                .from("user_interactions")
+                .insert(rows)
+                .select("id");
+
+            if (error) {
+                console.error("Batch interaction tracking error:", error);
+                return res.status(500).json({
+                    success: false,
+                    error: "Erreur lors du tracking batch",
+                });
+            }
+
+            return res.json({
+                success: true,
+                count: data?.length || 0,
+            });
+        } catch (error) {
+            console.error("Track batch interaction error:", error);
+            return res.status(500).json({
+                success: false,
+                error: error?.message || "Erreur serveur",
+            });
+        }
+    });
+
+    /**
      * POST /api/app/feed/impression
      * Enregistre quand le feed affiche un créateur
      */
@@ -149,6 +218,71 @@ module.exports = function setupEngagementTracking(app, supabase) {
             });
         } catch (error) {
             console.error("Feed impression error:", error);
+            return res.status(500).json({
+                success: false,
+                error: error?.message || "Erreur serveur",
+            });
+        }
+    });
+
+    /**
+     * POST /api/app/feed/impressions-batch
+     * Enregistre un lot (batch) d'impressions de feed en une seule requête HTTP
+     */
+    app.post("/api/app/feed/impressions-batch", async (req, res) => {
+        try {
+            const { impressions } = req.body;
+            if (!Array.isArray(impressions) || impressions.length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    error: "impressions array requis",
+                });
+            }
+
+            const {
+                data: { session },
+            } = await supabase.auth.getSession();
+            if (!session || !session.user) {
+                return res.status(401).json({
+                    success: false,
+                    error: "Non authentifié",
+                });
+            }
+
+            const viewer_id = session.user.id;
+            const rows = impressions
+                .filter(item => item && item.creator_id)
+                .map(item => ({
+                    viewer_id,
+                    creator_id: item.creator_id,
+                    impression_type: item.impression_type || "regular",
+                    position: item.position || 1,
+                    recommendation_score: item.recommendation_score || 0,
+                }));
+
+            if (rows.length === 0) {
+                return res.json({ success: true, count: 0 });
+            }
+
+            const { data, error } = await supabase
+                .from("feed_impressions")
+                .insert(rows)
+                .select("id");
+
+            if (error) {
+                console.error("Batch feed impression error:", error);
+                return res.status(500).json({
+                    success: false,
+                    error: "Erreur lors du tracking batch",
+                });
+            }
+
+            return res.json({
+                success: true,
+                count: data?.length || 0,
+            });
+        } catch (error) {
+            console.error("Feed impressions batch error:", error);
             return res.status(500).json({
                 success: false,
                 error: error?.message || "Erreur serveur",

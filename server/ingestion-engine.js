@@ -85,7 +85,7 @@ function aggregateWorkItems(items) {
  * Moteur d'ingestion central
  */
 async function runIngestion(userId, tool) {
-    console.log(`[Ingestion] Début de la synchro pour ${userId} via ${tool}`);
+    logger.debug(`[Ingestion] Début de la synchro pour ${userId} via ${tool}`);
 
     // 1. Récupérer un access token valide, avec refresh automatique si nécessaire
     const accessToken = await getValidAccessToken(userId, tool);
@@ -106,7 +106,7 @@ async function runIngestion(userId, tool) {
     // 3. Normaliser et insérer
     for (const item of itemsToInsert) {
         await supabase.from("work_items").upsert(item, { onConflict: "id" });
-        console.log(`[Ingestion] WorkItem créé: ${item.id}`);
+        logger.debug(`[Ingestion] WorkItem créé: ${item.id}`);
     }
 }
 

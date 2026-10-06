@@ -1,3 +1,4 @@
+if (typeof global.WebSocket === "undefined") { try { global.WebSocket = require("ws"); } catch (e) {} }
 const { createClient } = require("@supabase/supabase-js");
 
 const DEFAULT_SUPABASE_URL = "https://ssbuagqwjptyhavinkxg.supabase.co";

@@ -569,7 +569,7 @@ async function getUserProjects(userId) {
 async function getUserContent(userId) {
     try {
         const columns = `
-            *,
+            id, user_id, author_id, author_type, page_id, project_id, arc_id, day_number, type, state, title, description, media_url, media_urls, views, encouragements_count, created_at, is_deleted,
             arcs (
                 id,
                 title,

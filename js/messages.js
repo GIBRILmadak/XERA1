@@ -4294,13 +4294,16 @@
             state.pollingTimer = null;
         }
 
+        // MINIMIZED: Poll every 60 seconds as fallback only when necessary
         state.pollingTimer = setInterval(() => {
             if (!isLoggedIn()) return;
             if (document.hidden) return;
+            // Skip fallback polling if realtime channel is subscribed
+            if (state.realtimeChannel && state.realtimeStatus === "SUBSCRIBED") return;
             refreshConversations({ preserveSelection: true }).catch((error) => {
                 console.error("DM polling refresh error:", error);
             });
-        }, 6000);
+        }, 60000);
     }
 
     async function resolveUser(userId) {

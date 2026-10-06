@@ -44,7 +44,7 @@ async function markAlertIfFailure(event, errorMessage) {
 }
 
 async function processActivityLog() {
-    console.log("[Fata Worker] Scanning activity log...");
+    logger.debug("[Fata Worker] Scanning activity log...");
 
     const { data: logs, error: logError } = await supabase
         .from("fata_activity_log")
@@ -276,7 +276,7 @@ async function queueEvent(
  * Process pending events and send to Fata
  */
 async function processPendingEvents() {
-    console.log("[Fata Worker] Processing pending events...");
+    logger.debug("[Fata Worker] Processing pending events...");
 
     const now = new Date().toISOString();
     const { data: events, error } = await supabase

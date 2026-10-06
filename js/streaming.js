@@ -78,8 +78,8 @@ if (!window.__streamingLoaded) {
     };
     const CHAT_AUTO_SCROLL_THRESHOLD = 56;
     const CHAT_FALLBACK_POLL_TICK_MS = 1000;
-    const CHAT_FALLBACK_FAST_SYNC_MS = 1200;
-    const CHAT_FALLBACK_STEADY_SYNC_MS = 6000;
+    const CHAT_FALLBACK_FAST_SYNC_MS = 2500;
+    const CHAT_FALLBACK_STEADY_SYNC_MS = 30000;
     const MODERATOR_ROLE_TEMPLATES = {
         lead: {
             label: "Lead mod",
@@ -2393,7 +2393,7 @@ if (!window.__streamingLoaded) {
 
         // Premier push rapide
         setTimeout(updatePreview, 800);
-        previewHeartbeat = setInterval(updatePreview, 3500);
+        previewHeartbeat = setInterval(updatePreview, 15000);
     }
 
     // Démarrer le heartbeat pour maintenir la présence

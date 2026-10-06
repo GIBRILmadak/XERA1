@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
+const logger = require("./logger");
 const { createClient } = require("@supabase/supabase-js");
 const webpush = require("web-push");
 
@@ -182,7 +183,7 @@ async function purgeStaleSubscription(endpoint) {
             .from("push_subscriptions")
             .delete()
             .eq("endpoint", endpoint);
-        console.log("Removed stale subscription", endpoint);
+        logger.debug("Removed stale subscription", endpoint);
     } catch (error) {
         console.error("Failed to remove stale subscription", endpoint, error);
     }
@@ -430,7 +431,7 @@ function startNotificationPushRelay() {
             },
         )
         .subscribe((status) => {
-            console.log("Notification push relay status:", status);
+            logger.debug("Notification push relay status:", status);
         });
 }
 
@@ -459,7 +460,7 @@ function startDirectMessagePushRelay() {
                     "DM push relay unavailable. Run sql/discovery-phase2-messaging.sql to enable messaging push.",
                 );
             } else {
-                console.log("DM push relay status:", status);
+                logger.debug("DM push relay status:", status);
             }
         });
 }
@@ -1023,7 +1024,7 @@ app.use((_req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`API listening on http://localhost:${PORT}`);
+    logger.debug(`API listening on http://localhost:${PORT}`);
     startPushRelay();
     startReminderScheduler();
 });

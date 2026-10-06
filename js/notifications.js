@@ -1186,13 +1186,14 @@ function startNotificationsPollingFallback() {
         notificationsPollingTimer = null;
     }
 
+    // MINIMIZED: Poll every 60 seconds as fallback
     notificationsPollingTimer = setInterval(() => {
         if (!currentUser) return;
         if (document.hidden) return;
         loadNotifications().catch((error) => {
             console.warn("Notifications fallback refresh failed:", error);
         });
-    }, 12000);
+    }, 60000);
 }
 
 // Demande d'envoi d'un push test depuis le serveur (pour debug/utilisateur)

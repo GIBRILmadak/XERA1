@@ -806,7 +806,7 @@ async function encourageAsBot(bot) {
         // Notifications pour encouragements faits par de vrais utilisateurs
         // sont gérées côté client. Les bots n'envoient pas de notifications.
 
-        console.log(`Bot ${bot.user_id} encouraged content ${target.id}`);
+        logger.debug(`Bot ${bot.user_id} encouraged content ${target.id}`);
         return rpcData;
     } catch (e) {
         console.warn(
@@ -1027,10 +1027,10 @@ async function loopOnce() {
 }
 
 async function main() {
-    console.log(
+    logger.debug(
         "🛑 Bot runner is DISABLED. All existing bot posts remain in the database but no new activities will be generated.",
     );
-    console.log("To re-enable: uncomment the loop below and rebuild.");
+    logger.debug("To re-enable: uncomment the loop below and rebuild.");
     process.exit(0);
     /* DISABLED: Bot loop stopped to minimize Egress
     while (true) {

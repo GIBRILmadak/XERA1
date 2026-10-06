@@ -105,7 +105,7 @@ async function processIngestionJobs(limit = 10) {
 }
 
 function startIngestionWorker() {
-    console.info(
+    logger.info(
         "[Ingestion Queue] Worker démarré, interval:",
         WORKER_INTERVAL_MS,
     );

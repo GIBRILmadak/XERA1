@@ -3,6 +3,7 @@ const fs = require("fs");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const path = require("path");
+const logger = require("./logger");
 const { createClient } = require("@supabase/supabase-js");
 const webpush = require("web-push");
 
@@ -431,7 +432,7 @@ async function purgeStaleSubscription(endpoint) {
             .from("push_subscriptions")
             .delete()
             .eq("endpoint", endpoint);
-        console.log("Removed stale subscription", endpoint);
+        logger.debug("Removed stale subscription", endpoint);
     } catch (error) {
         console.error("Failed to remove stale subscription", endpoint, error);
     }
@@ -755,7 +756,7 @@ function startNotificationPushRelay() {
             },
         )
         .subscribe((status) => {
-            console.log("Notification push relay status:", status);
+            logger.debug("Notification push relay status:", status);
         });
 }
 
@@ -986,23 +987,23 @@ app.use((req, res) => {
 
 // Démarrage du serveur
 app.listen(PORT, () => {
-    console.log(``);
-    console.log(
+    logger.debug(``);
+    logger.debug(
         `╔════════════════════════════════════════════════════════════╗`,
     );
-    console.log(
+    logger.debug(
         `║          XERA1 OPTIMIZED SERVER - PRODUCTION READY          ║`,
     );
-    console.log(
+    logger.debug(
         `╠════════════════════════════════════════════════════════════╣`,
     );
-    console.log(
+    logger.debug(
         `║  Server running on: http://localhost:${PORT}                   ║`,
     );
-    console.log(
+    logger.debug(
         `║  Environment: ${process.env.NODE_ENV || "development"}                        ║`,
     );
-    console.log(
+    logger.debug(
         `║  Session timeout: 4 hours                                   ║`,
     );
     console.log(
@@ -1011,10 +1012,10 @@ app.listen(PORT, () => {
     console.log(
         `║  Hot-reload: DISABLED (manual restart required)              ║`,
     );
-    console.log(
+    logger.debug(
         `╚════════════════════════════════════════════════════════════╝`,
     );
-    console.log(``);
+    logger.debug(``);
 
     startNotificationPushRelay();
     startReminderScheduler();
@@ -1022,11 +1023,11 @@ app.listen(PORT, () => {
 
 // Gestion graceful shutdown
 process.on("SIGTERM", () => {
-    console.log("SIGTERM received, shutting down gracefully...");
+    logger.debug("SIGTERM received, shutting down gracefully...");
     process.exit(0);
 });
 
 process.on("SIGINT", () => {
-    console.log("SIGINT received, shutting down gracefully...");
+    logger.debug("SIGINT received, shutting down gracefully...");
     process.exit(0);
 });

@@ -2,6 +2,8 @@ const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const path = require("path");
+const logger = require("./logger");
+if (typeof global.WebSocket === "undefined") { try { global.WebSocket = require("ws"); } catch (e) {} }
 const { createClient } = require("@supabase/supabase-js");
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const webpush = require("web-push");
@@ -179,7 +181,7 @@ try {
                 }),
             });
             firebaseAdminInitialized = true;
-            console.log("Firebase admin initialized for native push");
+            logger.info("Firebase admin initialized for native push");
         } catch (err) {
             console.warn(
                 "Failed to initialize Firebase admin:",
@@ -187,10 +189,10 @@ try {
             );
         }
     } else {
-        console.info("Firebase admin not configured; native push disabled.");
+        logger.info("Firebase admin not configured; native push disabled.");
     }
 } catch (err) {
-    console.info("firebase-admin not installed; native push disabled.");
+    logger.info("firebase-admin not installed; native push disabled.");
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -8482,7 +8484,7 @@ app.post("/api/admin/bots/delete-all", async (req, res) => {
         }
 
         const botUserIds = (bots || []).map((b) => b.user_id).filter(Boolean);
-        console.log("delete-all: found", botUserIds.length, "bots");
+        logger.debug("delete-all: found", botUserIds.length, "bots");
 
         let deleted = { bots: 0, users: 0 };
 
@@ -8531,7 +8533,7 @@ app.post("/api/admin/bots/delete-all", async (req, res) => {
             { onConflict: "key" },
         );
 
-        console.log("delete-all: success", deleted);
+        logger.debug("delete-all: success", deleted);
         return res.json({ success: true, deleted });
     } catch (e) {
         console.error("/api/admin/bots/delete-all error", e?.message || e);
@@ -9891,8 +9893,8 @@ if (isDirectRun) {
     });
 
     app.listen(PORT, () => {
-        console.log(`Server running on port ${PORT}`);
-        console.log(`API endpoints available at /api/*`);
+        logger.info(`Server running on port ${PORT}`);
+        logger.debug(`API endpoints available at /api/*`);
         if (supportsEmailReminders()) {
             startReminderScheduler();
         } else {

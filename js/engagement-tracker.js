@@ -165,7 +165,7 @@ class XERAEngagementTracker {
     }
 
     /**
-     * Envoie la queue d'interactions au serveur
+     * Envoie la queue d'interactions au serveur en un seul batch
      */
     async flush() {
         if (this.queue.length === 0) return;
@@ -173,8 +173,24 @@ class XERAEngagementTracker {
         const batch = this.queue.splice(0, this.batchSize);
 
         try {
-            for (const interaction of batch) {
-                await this.sendInteraction(interaction);
+            const response = await fetch(
+                `${this.baseUrl}/app/interaction/track-batch`,
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    credentials: "include",
+                    body: JSON.stringify({ interactions: batch }),
+                },
+            );
+
+            if (!response.ok) {
+                console.warn(
+                    "[XERAEngagementTracker] Batch interaction failed:",
+                    response.status,
+                );
+                throw new Error(`HTTP ${response.status}`);
             }
         } catch (error) {
             console.error("[XERAEngagementTracker] Flush error:", error);
@@ -258,19 +274,47 @@ class XERAEngagementTracker {
     }
 
     /**
-     * Enregistre les utilisateurs vus dans le feed
+     * Enregistre les utilisateurs vus dans le feed en une seule requête batch
      */
-    trackFeedUsers(users, impressionType = "regular") {
-        if (!Array.isArray(users)) return;
+    async trackFeedUsers(users, impressionType = "regular") {
+        if (!Array.isArray(users) || users.length === 0) return;
 
-        users.forEach((user, index) => {
-            this.trackFeedImpression({
-                creatorId: user.id,
-                impressionType,
+        const impressions = users
+            .filter((user) => user && user.id)
+            .map((user, index) => ({
+                creator_id: user.id,
+                impression_type: impressionType,
                 position: index + 1,
-                recommendationScore: user.recommendationScore || 0,
-            });
-        });
+                recommendation_score: user.recommendationScore || 0,
+            }));
+
+        if (impressions.length === 0) return;
+
+        try {
+            const response = await fetch(
+                `${this.baseUrl}/app/feed/impressions-batch`,
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    credentials: "include",
+                    body: JSON.stringify({ impressions }),
+                },
+            );
+
+            if (!response.ok) {
+                console.warn(
+                    "[XERAEngagementTracker] Feed impressions batch failed:",
+                    response.status,
+                );
+            }
+        } catch (error) {
+            console.error(
+                "[XERAEngagementTracker] Feed impressions batch error:",
+                error,
+            );
+        }
     }
 }
 
