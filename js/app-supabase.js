@@ -22069,7 +22069,7 @@ async function openCreateMenu(
 
                 if (successful[0]?.type === "video") {
                     previewContainer.innerHTML = buildMediaPreviewShell(
-                        `<video src="${successUrls[0]}" controls style="max-width: 100%; max-height: 300px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);"></video>`,
+                        `<video src="${successful[0]?.previewUrl || successUrls[0]}" controls style="max-width: 100%; max-height: 300px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);"></video>`,
                     );
                     refreshSmartSuggestions({
                         fileName: latestSelectedFileName,
