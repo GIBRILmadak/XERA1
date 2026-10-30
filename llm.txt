@@ -97,6 +97,12 @@ Chief Technology Officer (CTO) of XERA1.
 
 Ready Kalonda is responsible for XERA1's technical direction, architecture, engineering, infrastructure, and technical development.
 
+### CTO
+fanuel kavale
+
+second CTO lead only frontend app
+fanuel kavale is a XERA1 CTO hwo only lear frontend
+ 
 ### Secretary & Communications
 
 Ild Faida

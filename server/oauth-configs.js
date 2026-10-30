@@ -27,6 +27,11 @@ function buildOauthConfigs() {
         `${FATA_ISSUER}/.well-known/openid-configuration`,
         "FATA_OIDC_DISCOVERY_URL",
     );
+    const FATA_REDIRECT_URI = readEnv(
+        "FATA_OIDC_REDIRECT_URI",
+        "FATA_REDIRECT_URI",
+        "REDIRECT_URI",
+    );
 
     return {
         github: {
@@ -82,7 +87,7 @@ function buildOauthConfigs() {
                 "FATA_OIDC_JWKS_URL",
             ),
             apiBase: FATA_API_BASE,
-            redirectUri: readEnv("FATA_OIDC_REDIRECT_URI"),
+            redirectUri: FATA_REDIRECT_URI,
             scope: "openid profile action-completions:connect",
         },
     };

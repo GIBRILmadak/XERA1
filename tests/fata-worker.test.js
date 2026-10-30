@@ -5,14 +5,35 @@ process.env.SUPABASE_URL = "https://test.supabase.co";
 process.env.SUPABASE_SERVICE_ROLE_KEY = "test_key";
 process.env.FATA_TEST_CHALLENGE_ID = "xera1-test";
 
-const { queueEvent } = require("../server/fata-worker");
+const {
+    queueEvent,
+    decideFataDeliveryStatus,
+} = require("../server/fata-worker");
 
-function createDatabase({ error = null } = {}) {
+function createDatabase({ error = null, existingEvent = null } = {}) {
     const calls = [];
     return {
         calls,
         from(table) {
             return {
+                select() {
+                    return {
+                        eq(key, value) {
+                            return {
+                                async maybeSingle() {
+                                    return { data: existingEvent, error: null };
+                                },
+                            };
+                        },
+                    };
+                },
+                eq(key, value) {
+                    return {
+                        async maybeSingle() {
+                            return { data: existingEvent, error: null };
+                        },
+                    };
+                },
                 async upsert(values, options) {
                     calls.push({ table, values, options });
                     return { error };
@@ -91,4 +112,60 @@ test("queue rejects requirements that are not in the configured Fata contract", 
         /unmapped Fata requirement/,
     );
     assert.equal(database.calls.length, 0);
+});
+
+test("a same idempotency key with a different payload is treated as a contract conflict", async () => {
+    const database = createDatabase({
+        existingEvent: {
+            challenge_id: "xera1-test",
+            requirement_id: "req_arc",
+            occurred_at: "2026-09-24T12:00:00Z",
+        },
+    });
+
+    await assert.rejects(
+        queueEvent(
+            "user-1",
+            "fata-sub-1",
+            "xera1-test",
+            "req_arc",
+            "2026-09-24T12:05:00Z",
+            "arc-1",
+            database,
+        ),
+        /idempotency conflict/i,
+    );
+});
+
+test("Fata response handling follows the contract retry/stop matrix", () => {
+    assert.deepEqual(decideFataDeliveryStatus(200), { outcome: "delivered" });
+    assert.deepEqual(decideFataDeliveryStatus(401), {
+        outcome: "refresh",
+    });
+    assert.deepEqual(decideFataDeliveryStatus(403, { code: "link_revoked" }), {
+        outcome: "stop",
+        flag: "link_revoked",
+    });
+    assert.deepEqual(decideFataDeliveryStatus(409, { code: "idempotency_conflict" }), {
+        outcome: "stop",
+        flag: "idempotency_conflict",
+    });
+    assert.deepEqual(decideFataDeliveryStatus(422, { code: "not_registered" }), {
+        outcome: "stop",
+        flag: "not_registered",
+    });
+    assert.deepEqual(decideFataDeliveryStatus(422, { code: "outside_window" }), {
+        outcome: "stop",
+        flag: "outside_window",
+    });
+    assert.deepEqual(decideFataDeliveryStatus(422, { code: "receipt_deadline_passed" }), {
+        outcome: "stop",
+        flag: "receipt_deadline_passed",
+    });
+    assert.deepEqual(decideFataDeliveryStatus(429), { outcome: "retry" });
+    assert.deepEqual(decideFataDeliveryStatus(500), { outcome: "retry" });
+    assert.deepEqual(decideFataDeliveryStatus(400), {
+        outcome: "stop",
+        flag: "request",
+    });
 });

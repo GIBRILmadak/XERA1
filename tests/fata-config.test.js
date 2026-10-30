@@ -57,3 +57,23 @@ test('Fata config accepts the real production env names and exposes the binding 
   assert.equal(config.apiBase, 'https://fata.app/api');
   assert.match(config.scope, /action-completions:connect/);
 });
+
+test('Fata redirect URI honors the documented REDIRECT_URI and legacy FATA names', () => {
+  process.env.FATA_CLIENT_ID = 'xera1-test-client';
+  process.env.FATA_CLIENT_SECRET = 'test-secret';
+  process.env.REDIRECT_URI = 'http://localhost:3000/api/auth/fata/callback';
+  delete process.env.FATA_OIDC_REDIRECT_URI;
+  delete process.env.FATA_REDIRECT_URI;
+
+  const config = getConfig('fata');
+
+  assert.equal(config.redirectUri, 'http://localhost:3000/api/auth/fata/callback');
+
+  process.env.FATA_REDIRECT_URI = 'https://xera1.xyz/api/auth/fata/callback';
+  delete process.env.REDIRECT_URI;
+  const configured = getConfig('fata');
+  assert.equal(configured.redirectUri, 'https://xera1.xyz/api/auth/fata/callback');
+
+  delete process.env.FATA_REDIRECT_URI;
+  delete process.env.REDIRECT_URI;
+});

@@ -271,7 +271,10 @@ router.get("/:tool/callback", async (req, res) => {
                 .eq("state", state)
                 .eq("tool", tool);
         }
-        console.warn(`[OAuth] Provider error callback for ${tool}:`, errorMsg);
+        console.warn(
+            `[OAuth] Fata callback error for ${tool}:`,
+            { state: state || null, challengeId: callbackChallengeId, error: errorMsg },
+        );
         return sendOAuthError(400, errorMsg);
     }
 
@@ -291,6 +294,14 @@ router.get("/:tool/callback", async (req, res) => {
             return sendOAuthError(400, "State invalide");
         }
         callbackChallengeId = storedState.challenge_id || null;
+        console.info(
+            `[OAuth] Fata callback received:`,
+            {
+                state: state || null,
+                challengeId: callbackChallengeId,
+                userId: storedState.user_id || null,
+            },
+        );
 
         if (
             isFata &&
