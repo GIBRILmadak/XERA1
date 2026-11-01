@@ -178,15 +178,32 @@
             : "/login";
     }
 
+    function persistChallengeId(challengeId) {
+        const normalized = String(challengeId || "").trim();
+        if (!normalized) return;
+        try {
+            sessionStorage.setItem(FATA_STORAGE_KEY_CHALLENGE, normalized);
+        } catch (_) {
+            // Session storage may be unavailable in some browser contexts; fail
+            // softly so the Fata flow can continue with the current URL state.
+        }
+    }
+
     function parseUrlParams() {
         const search = window.location.search;
         const params = new URLSearchParams(search);
         const requestedChallengeId = params.get("challengeId");
+        const resolvedChallengeId =
+            requestedChallengeId ||
+            sessionStorage.getItem(FATA_STORAGE_KEY_CHALLENGE);
+
+        if (requestedChallengeId) {
+            persistChallengeId(requestedChallengeId);
+        }
+
         return {
             fata: params.get("fata"),
-            challengeId:
-                requestedChallengeId ||
-                sessionStorage.getItem(FATA_STORAGE_KEY_CHALLENGE),
+            challengeId: resolvedChallengeId,
             hasExplicitChallengeId: Boolean(requestedChallengeId),
             connection: params.get("connection"),
             reason: params.get("reason"),
@@ -309,6 +326,9 @@
         const connectionNote = document.querySelector(".fata-connection-note");
 
         const urlParams = parseUrlParams();
+        if (urlParams.challengeId) {
+            persistChallengeId(urlParams.challengeId);
+        }
 
         if (
             urlParams.fata === "success" ||
@@ -420,6 +440,11 @@
         }
 
         if (panel?.classList.contains("is-open")) await refreshStatus();
+    }
+
+    const initialParams = parseUrlParams();
+    if (initialParams.challengeId) {
+        persistChallengeId(initialParams.challengeId);
     }
 
     if (document.readyState === "loading") {

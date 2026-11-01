@@ -7,7 +7,11 @@ const source = fs.readFileSync("js/fata-integration.js", "utf8");
 const optimizedServer = fs.readFileSync("server/optimized-server.js", "utf8");
 
 function createIntegration(location, fetchImpl, config = {}) {
-    const window = { location, ...config };
+    const sessionStorage = config.sessionStorage || {
+        getItem() { return null; },
+        setItem() {},
+    };
+    const window = { location, ...config, sessionStorage };
     const document = { addEventListener() {} };
     vm.runInNewContext(source, {
         window,
@@ -21,7 +25,7 @@ function createIntegration(location, fetchImpl, config = {}) {
         console,
         alert() {},
         localStorage: { getItem() { return null; } },
-        sessionStorage: { getItem() { return null; }, setItem() {} },
+        sessionStorage,
     });
     return window.FataIntegration;
 }
@@ -154,4 +158,30 @@ test("allows arbitrary loopback ports only for local server origins", () => {
     assert.match(optimizedServer, /function isLocalDevelopmentOrigin\(origin\)/);
     assert.match(optimizedServer, /process\.env\.NODE_ENV === "production"/);
     assert.match(optimizedServer, /hasProductionOrigin/);
+});
+
+test("stores the challengeId returned by Fata in sessionStorage", async () => {
+    const storage = {};
+    const integration = createIntegration(
+        {
+            hostname: "xera1.xyz",
+            port: "",
+            protocol: "https:",
+            origin: "https://xera1.xyz/profile?fata=success&challengeId=xera1-test",
+            pathname: "/profile",
+            search: "?fata=success&challengeId=xera1-test",
+        },
+        async () => jsonResponse(true, { ok: true }),
+        {
+            sessionStorage: {
+                getItem: (key) => storage[key] ?? null,
+                setItem: (key, value) => {
+                    storage[key] = String(value);
+                },
+            },
+        },
+    );
+
+    assert.equal(storage["xera1_fata_challenge_id"], "xera1-test");
+    assert.equal(typeof integration.startFlow, "function");
 });

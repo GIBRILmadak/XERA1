@@ -1,7 +1,11 @@
 function readEnv(...keys) {
     for (const key of keys) {
         const value = process.env[key];
-        if (value !== undefined && value !== null && String(value).trim() !== "") {
+        if (
+            value !== undefined &&
+            value !== null &&
+            String(value).trim() !== ""
+        ) {
             return String(value).trim();
         }
     }
@@ -26,6 +30,11 @@ function buildOauthConfigs() {
     const FATA_DISCOVERY_URL = readEnvOrDefault(
         `${FATA_ISSUER}/.well-known/openid-configuration`,
         "FATA_OIDC_DISCOVERY_URL",
+    );
+    const FATA_REDIRECT_URI = readEnv(
+        "FATA_OIDC_REDIRECT_URI",
+        "FATA_REDIRECT_URI",
+        "REDIRECT_URI",
     );
 
     return {
@@ -58,15 +67,8 @@ function buildOauthConfigs() {
             scope: "https://www.googleapis.com/auth/cloud-platform.read-only",
         },
         fata: {
-            clientId: readEnvOrDefault(
-                "xera1-26f84726",
-                "FATA_CLIENT_ID",
-                "CLIENT_ID",
-            ),
-            clientSecret: readEnv(
-                "FATA_CLIENT_SECRET",
-                "CLIENT_SECRET",
-            ),
+            clientId: readEnv("FATA_CLIENT_ID") || "xera1-26f84726",
+            clientSecret: readEnv("FATA_CLIENT_SECRET"),
             issuer: FATA_ISSUER,
             discoveryUrl: FATA_DISCOVERY_URL,
             authUrl: readEnvOrDefault(
@@ -82,7 +84,7 @@ function buildOauthConfigs() {
                 "FATA_OIDC_JWKS_URL",
             ),
             apiBase: FATA_API_BASE,
-            redirectUri: readEnv("FATA_OIDC_REDIRECT_URI"),
+            redirectUri: FATA_REDIRECT_URI,
             scope: "openid profile action-completions:connect",
         },
     };

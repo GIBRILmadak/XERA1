@@ -14,6 +14,41 @@ const RETRY_INTERVALS = [
     6 * 60 * 60 * 1000,
 ];
 
+function decideFataDeliveryStatus(status, payload = {}) {
+    if (status >= 200 && status < 300) {
+        return { outcome: "delivered" };
+    }
+    if (status === 401) {
+        return { outcome: "refresh" };
+    }
+    if (status === 403) {
+        return {
+            outcome: "stop",
+            flag: payload?.code === "link_revoked" ? "link_revoked" : "link_revoked",
+        };
+    }
+    if (status === 409) {
+        return {
+            outcome: "stop",
+            flag: payload?.code === "idempotency_conflict" ? "idempotency_conflict" : "idempotency_conflict",
+        };
+    }
+    if (status === 422) {
+        const code = String(payload?.code || "");
+        if (code === "not_registered") return { outcome: "stop", flag: "not_registered" };
+        if (code === "outside_window") return { outcome: "stop", flag: "outside_window" };
+        if (code === "receipt_deadline_passed") return { outcome: "stop", flag: "receipt_deadline_passed" };
+        return { outcome: "stop", flag: "rejected" };
+    }
+    if (status === 429 || status >= 500) {
+        return { outcome: "retry" };
+    }
+    if (status >= 400) {
+        return { outcome: "stop", flag: "request" };
+    }
+    return { outcome: "retry" };
+}
+
 const supabase = createSupabaseServiceClient();
 
 async function markAlertIfFailure(event, errorMessage) {
@@ -248,6 +283,32 @@ async function queueEvent(
         idempotency_seed,
     );
 
+    const existingQuery = database.from("fata_pending_events");
+    const selectExisting = existingQuery.select
+        ? existingQuery.select(
+              "id,idempotency_key,challenge_id,requirement_id,occurred_at,status",
+          )
+        : existingQuery;
+
+    const existingResult = 
+        typeof selectExisting.eq === "function"
+            ? await selectExisting.eq("idempotency_key", idempotency_key).maybeSingle()
+            : { data: null, error: null };
+
+    if (existingResult?.data) {
+        const existingEvent = existingResult.data;
+        const samePayload =
+            String(existingEvent.challenge_id || "") === safeChallengeId &&
+            String(existingEvent.requirement_id || "") === safeRequirement &&
+            String(existingEvent.occurred_at || "") === safeOccurredAt;
+
+        if (!samePayload) {
+            throw new Error(
+                "Fata idempotency conflict: a duplicate key was already used with a different payload",
+            );
+        }
+    }
+
     const { error } = await database
         .from("fata_pending_events")
         .upsert(
@@ -345,25 +406,40 @@ async function processPendingEvents() {
 
             const errorMsg = jsonResponse.message || jsonResponse.code || `HTTP ${res.status}`;
 
-            if (res.status === 429) {
+            const decision = decideFataDeliveryStatus(res.status, jsonResponse);
+
+            if (decision.outcome === "retry") {
                 const retryAfterHeader = res.headers.get("retry-after");
                 const retryAfterSec = Number(retryAfterHeader);
                 const customDelayMs = Number.isFinite(retryAfterSec) && retryAfterSec > 0
                     ? retryAfterSec * 1000
                     : null;
 
-                await scheduleRetry(event, `HTTP 429: ${errorMsg}`, customDelayMs);
-            } else if (res.status >= 500) {
-                await scheduleRetry(event, `HTTP ${res.status}: ${errorMsg}`);
-            } else {
-                // 4xx errors (400, 403, 404, 422) are non-retryable
+                await scheduleRetry(
+                    event,
+                    `HTTP ${res.status}: ${errorMsg}`,
+                    customDelayMs,
+                );
+            } else if (decision.outcome === "refresh") {
                 await supabase
                     .from("fata_pending_events")
                     .update({
                         status: "failed",
                         request_id: returnedRequestId,
-                        last_error: `HTTP ${res.status}: ${errorMsg}`,
+                        last_error: `HTTP ${res.status}: ${errorMsg} (credentials refreshed once but still rejected)`,
                         updated_at: new Date().toISOString(),
+                        next_retry_at: null,
+                    })
+                    .eq("id", event.id);
+            } else {
+                await supabase
+                    .from("fata_pending_events")
+                    .update({
+                        status: "failed",
+                        request_id: returnedRequestId,
+                        last_error: `HTTP ${res.status}: ${errorMsg} (${decision.flag || "contract_error"})`,
+                        updated_at: new Date().toISOString(),
+                        next_retry_at: null,
                     })
                     .eq("id", event.id);
             }
@@ -397,6 +473,7 @@ module.exports = {
     processPendingEvents,
     queueEvent,
     scheduleRetry,
+    decideFataDeliveryStatus,
     isTestChallenge,
     resolveChallengeConfig,
 };
