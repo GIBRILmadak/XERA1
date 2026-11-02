@@ -7919,11 +7919,31 @@ app.put("/api/app/profiles/:userId", async (req, res) => {
 
 app.get("/api/work-items/:userId", async (req, res) => {
     try {
-        const { userId } = req.params;
-        const { data, error } = await supabase
+        const userId = String(req.params.userId || "").trim();
+        if (
+            !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+                userId,
+            )
+        ) {
+            return res.status(400).json({ error: "Invalid user id" });
+        }
+
+        const authResult = await authenticateRequest(req);
+        const isOwner =
+            !authResult.error && authResult.user.id.toLowerCase() === userId.toLowerCase();
+
+        let query = supabase
             .from("work_items")
             .select("*")
-            .eq("userId", userId)
+            .eq("userId", userId);
+
+        // Connected-provider activity may contain private material. Public
+        // visitors and other signed-in users only receive explicitly public rows.
+        if (!isOwner) {
+            query = query.eq("metadata->>isPublic", "true");
+        }
+
+        const { data, error } = await query
             .order("timestamp", { ascending: false })
             .limit(50);
 
