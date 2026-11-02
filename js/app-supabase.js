@@ -1797,7 +1797,24 @@ async function fetchCollaboratorArcs(userId) {
 async function fetchWorkItems(userId) {
     if (!userId) return [];
     try {
-        const response = await fetch(`/api/work-items/${userId}`);
+        const client = window.supabaseClient || window.supabase;
+        let accessToken = "";
+        if (client?.auth?.getSession) {
+            try {
+                const { data, error } = await client.auth.getSession();
+                if (!error) accessToken = data?.session?.access_token || "";
+            } catch (_) {
+                // The endpoint still returns explicitly public work items.
+            }
+        }
+
+        const headers = accessToken
+            ? { Authorization: `Bearer ${accessToken}` }
+            : {};
+        const response = await fetch(
+            `/api/work-items/${encodeURIComponent(userId)}`,
+            { headers },
+        );
         if (!response.ok) return [];
         return await response.json();
     } catch (e) {

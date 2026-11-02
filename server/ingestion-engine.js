@@ -105,7 +105,10 @@ async function runIngestion(userId, tool) {
 
     // 3. Normaliser et insérer
     for (const item of itemsToInsert) {
-        await supabase.from("work_items").upsert(item, { onConflict: "id" });
+        const { error } = await supabase
+            .from("work_items")
+            .upsert(item, { onConflict: "userId,id" });
+        if (error) throw error;
         logger.debug(`[Ingestion] WorkItem créé: ${item.id}`);
     }
 }
