@@ -29,7 +29,7 @@ La ligne du challenge dans `fata_challenges_config` doit contenir les trois iden
 
 ## Worker Vercel
 
-`/api/cron/fata-worker` traite la file toutes les cinq minutes. `CRON_SECRET` doit être défini; sans lui, le worker refuse de traiter la file. La fréquence configurée dans `vercel.json` requiert un plan Vercel Pro ou Enterprise; le plan Hobby n’autorise qu’une exécution quotidienne. [Limites officielles des Cron Jobs Vercel](https://vercel.com/docs/cron-jobs/usage-and-pricing).
+Sur le plan Hobby, `/api/cron/fata-worker` est planifié une fois par jour à 11:00 UTC dans `vercel.json`, afin que le déploiement soit accepté. `CRON_SECRET` doit être défini; sans lui, le worker refuse de traiter la file. Ce rythme peut retarder les confirmations jusqu’à près de 24 heures et ne garantit pas le respect d’une date limite courte. Pour le traitement toutes les cinq minutes prévu dans le parcours de production, passez le projet en plan Pro ou Enterprise puis remplacez l’expression par `*/5 * * * *`. [Limites officielles des Cron Jobs Vercel](https://vercel.com/docs/cron-jobs/usage-and-pricing).
 
 Les confirmations sont mises en file après enregistrement serveur de l’action. Le worker garde la même clé d’idempotence lors des reprises et arrête les essais après une erreur permanente du contrat.
 
