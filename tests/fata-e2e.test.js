@@ -15,6 +15,7 @@ process.env.SUPABASE_URL = "https://test.supabase.co";
 process.env.SUPABASE_SERVICE_ROLE_KEY = "test_key";
 
 const { getConfig } = require("../server/oauth-configs");
+const { validateFataRedirectUri } = require("../server/fata-redirect-uri");
 const {
     getFataChallengeConfig,
     resolveChallengeConfig,
@@ -37,6 +38,31 @@ test("OIDC config uses the configured issuer discovery and no proposal endpoint 
         "https://fata.app/oidc/.well-known/openid-configuration",
     );
     assert.equal(config.apiBase, "https://fata.app/api");
+});
+
+test("Fata callback accepts its registered static query but rejects OAuth collisions", () => {
+    assert.deepEqual(
+        validateFataRedirectUri(
+            "https://xera1.xyz/api/auth/fata/callback?challengeId=xera1-test",
+        ),
+        { valid: true },
+    );
+    assert.deepEqual(
+        validateFataRedirectUri(
+            "https://xera1.xyz/api/auth/fata/callback?state=untrusted",
+        ),
+        { valid: false, reason: "reserved_oidc_parameter" },
+    );
+    assert.deepEqual(
+        validateFataRedirectUri(
+            "https://xera1.xyz/profile?challengeId=xera1-test",
+        ),
+        { valid: false, reason: "callback_path_required" },
+    );
+    assert.deepEqual(
+        validateFataRedirectUri("http://xera1.xyz/api/auth/fata/callback"),
+        { valid: false, reason: "https_required" },
+    );
 });
 
 test("Challenge config resolves real vs test challenges correctly", () => {

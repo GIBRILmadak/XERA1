@@ -7,6 +7,7 @@ const { encryptToken } = require("./oauth-token-manager");
 const { enqueueIngestion } = require("./ingestion-queue");
 const { createSupabaseServiceClient } = require("./supabase-service-client");
 const { getFataOidcClient } = require("./fata-oidc");
+const { validateFataRedirectUri } = require("./fata-redirect-uri");
 
 // Réutiliser le client supabase du server principal si possible,
 // sinon créer une instance. Pour l'instant, on suppose qu'il est passé ou recréé.
@@ -131,23 +132,24 @@ router.post("/:tool/start", async (req, res) => {
 
         const redirectUri = getOAuthCallbackUri(tool, config);
         if (tool === "fata") {
-            let parsedRedirectUri;
-            try {
-                parsedRedirectUri = new URL(redirectUri);
-            } catch (_) {
+            const redirectUriValidation =
+                validateFataRedirectUri(redirectUri);
+            if (!redirectUriValidation.valid) {
+                const redirectUriErrors = {
+                    invalid_url: "L’adresse de retour OIDC Fata est invalide.",
+                    https_required:
+                        "L’adresse de retour OIDC Fata doit utiliser HTTPS.",
+                    callback_path_required:
+                        "L’adresse de retour OIDC Fata doit pointer vers /api/auth/fata/callback.",
+                    fragment_or_credentials_not_allowed:
+                        "L’adresse de retour OIDC Fata ne peut contenir de fragment ni d’identifiants.",
+                    reserved_oidc_parameter:
+                        "L’adresse de retour OIDC Fata contient un paramètre de réponse OAuth réservé.",
+                };
                 return res.status(503).json({
-                    error: "L’adresse de retour OIDC Fata est invalide.",
-                });
-            }
-            if (
-                parsedRedirectUri.protocol !== "https:" ||
-                parsedRedirectUri.search ||
-                parsedRedirectUri.hash ||
-                parsedRedirectUri.username ||
-                parsedRedirectUri.password
-            ) {
-                return res.status(503).json({
-                    error: "L’adresse de retour OIDC Fata doit être HTTPS et sans paramètres.",
+                    error:
+                        redirectUriErrors[redirectUriValidation.reason] ||
+                        "L’adresse de retour OIDC Fata est invalide.",
                 });
             }
         }
