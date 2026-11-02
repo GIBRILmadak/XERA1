@@ -849,6 +849,37 @@
     flex: 1;
 }
 
+.fata-arc-selection {
+    margin-top: 1rem;
+    padding: 1rem;
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.12));
+    border-radius: 12px;
+}
+
+.fata-arc-selection h4 {
+    margin: 0 0 0.4rem;
+}
+
+.fata-arc-selection p {
+    margin: 0.4rem 0 0.8rem;
+    line-height: 1.45;
+}
+
+.fata-arc-select-label {
+    display: block;
+    margin-bottom: 0.35rem;
+}
+
+.fata-arc-selection select {
+    width: 100%;
+    margin-bottom: 0.7rem;
+}
+
+.fata-arc-note {
+    font-size: 0.9rem;
+    overflow-wrap: anywhere;
+}
+
 .fata-auth-card {
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.1);
