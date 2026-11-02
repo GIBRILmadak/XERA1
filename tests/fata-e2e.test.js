@@ -2,13 +2,13 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 // Set test environment variables BEFORE requiring server modules
-process.env.FATA_CLIENT_ID = "xera1-26f84726";
+process.env.FATA_CLIENT_ID = "xera1-test-client";
 process.env.FATA_CLIENT_SECRET = "test_secret_123";
 process.env.FATA_OIDC_ISSUER = "https://fata.app/oidc";
 process.env.FATA_API_BASE_URL = "https://fata.app/api";
-process.env.FATA_OIDC_AUTH_URL = "https://fata.app/oidc/authorize";
-process.env.FATA_OIDC_TOKEN_URL = "https://fata.app/oidc/token";
-process.env.FATA_OIDC_JWKS_URL = "https://fata.app/oidc/jwks";
+process.env.FATA_REQ_ARC = "req_arc";
+process.env.FATA_REQ_PREUVE = "req_preuve";
+process.env.FATA_REQ_JALON = "req_jalon";
 process.env.FATA_TEST_CHALLENGE_ID = "xera1-test";
 process.env.FATA_REAL_CHALLENGE_ID = "xera1-real";
 process.env.SUPABASE_URL = "https://test.supabase.co";
@@ -29,12 +29,13 @@ const {
     sendActionCompletion,
 } = require("../server/fata-api-client");
 
-test("OIDC Config verifies production authorization URL /oidc/authorize", () => {
+test("OIDC config uses the configured issuer discovery and no proposal endpoint overrides", () => {
     const config = getConfig("fata");
-    assert.equal(config.authUrl, "https://fata.app/oidc/authorize");
-    assert.equal(config.tokenUrl, "https://fata.app/oidc/token");
-    assert.equal(config.jwksUrl, "https://fata.app/oidc/jwks");
     assert.equal(config.issuer, "https://fata.app/oidc");
+    assert.equal(
+        config.discoveryUrl,
+        "https://fata.app/oidc/.well-known/openid-configuration",
+    );
     assert.equal(config.apiBase, "https://fata.app/api");
 });
 
@@ -74,46 +75,62 @@ test("Idempotency key generation is deterministic and sha256 stable", () => {
 });
 
 test("Fata API client handles 401 token invalidation and single retry", async () => {
-    let callCount = 0;
+    let tokenRequestCount = 0;
+    let apiRequestCount = 0;
     const originalFetch = globalThis.fetch;
     let tokenRequestOptions = null;
 
     globalThis.fetch = async (url, options) => {
-        callCount++;
         const urlStr = String(url || "");
 
-        if (urlStr.includes("/oidc/token")) {
-            tokenRequestOptions = options;
-            return {
-                ok: true,
+        if (urlStr.includes("/.well-known/openid-configuration")) {
+            return new Response(JSON.stringify({
+                issuer: "https://fata.app/oidc",
+                authorization_endpoint: "https://fata.app/oidc/authorize",
+                token_endpoint: "https://fata.app/oidc/token",
+                jwks_uri: "https://fata.app/oidc/jwks",
+                response_types_supported: ["code"],
+                code_challenge_methods_supported: ["S256"],
+                token_endpoint_auth_methods_supported: ["client_secret_basic"],
+            }), {
                 status: 200,
-                json: async () => ({
-                    access_token: `mock_token_${callCount}`,
-                    expires_in: 3600,
-                }),
-            };
+                headers: { "content-type": "application/json" },
+            });
+        }
+
+        if (urlStr.includes("/oidc/token")) {
+            tokenRequestCount++;
+            tokenRequestOptions = options;
+            return new Response(JSON.stringify({
+                access_token: `mock_token_${tokenRequestCount}`,
+                token_type: "Bearer",
+                expires_in: 3600,
+            }), {
+                status: 200,
+                headers: { "content-type": "application/json" },
+            });
         }
 
         if (urlStr.includes("/v1/action-completions")) {
+            apiRequestCount++;
             // First completion attempt returns 401, second attempt succeeds with 200
-            if (callCount === 2) {
-                return {
-                    ok: false,
+            if (apiRequestCount === 1) {
+                return new Response(JSON.stringify({ message: "Unauthorized" }), {
                     status: 401,
-                    text: async () => "Unauthorized",
-                    json: async () => ({ message: "Unauthorized" }),
-                    headers: new Map(),
-                };
+                    headers: { "content-type": "application/json" },
+                });
             }
-            return {
-                ok: true,
+            return new Response(JSON.stringify({
+                eventId: "evt_12345",
+                requestId: "req_67890",
+                status: "recorded",
+            }), {
                 status: 200,
-                json: async () => ({
-                    eventId: "evt_12345",
-                    requestId: "req_67890",
-                }),
-                headers: new Map([["x-request-id", "req_67890"]]),
-            };
+                headers: {
+                    "content-type": "application/json",
+                    "x-request-id": "req_67890",
+                },
+            });
         }
 
         return originalFetch(url, options);
@@ -131,7 +148,7 @@ test("Fata API client handles 401 token invalidation and single retry", async ()
         const res = await sendActionCompletion(payload, "test_idempotency_key_123");
         assert.equal(res.ok, true);
         assert.equal(res.status, 200);
-        assert.match(tokenRequestOptions.headers.Authorization, /^Basic /);
+        assert.match(new Headers(tokenRequestOptions.headers).get("authorization"), /^Basic /);
         assert.equal(
             new URLSearchParams(tokenRequestOptions.body).get("scope"),
             "action-completions:write",
@@ -140,6 +157,8 @@ test("Fata API client handles 401 token invalidation and single retry", async ()
             new URLSearchParams(tokenRequestOptions.body).has("client_secret"),
             false,
         );
+        assert.equal(tokenRequestCount, 2);
+        assert.equal(apiRequestCount, 2);
 
         const data = await res.json();
         assert.equal(data.eventId, "evt_12345");

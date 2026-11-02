@@ -3,6 +3,7 @@ const assert = require("node:assert");
 
 const {
     getFataChallengeConfig,
+    areFataRequirementIdsConfigured,
     getConfiguredChallengeEntries,
     resolveChallengeConfig,
     isTestChallenge,
@@ -15,48 +16,78 @@ const {
     invalidateTechnicalToken,
 } = require("../server/fata-api-client");
 
-describe("Fata × XERA1 Contract & Logic Unit Tests", () => {
-    test("The documented test challenge is enabled by default", () => {
-        const previous = process.env.FATA_TEST_CHALLENGE_ID;
-        delete process.env.FATA_TEST_CHALLENGE_ID;
-        try {
-            const challenge = resolveChallengeConfig("xera1-test");
-            assert.strictEqual(challenge.id, "xera1-test");
-            assert.strictEqual(challenge.is_test, true);
-            assert.strictEqual(challenge.req_arc, "req_arc");
-            assert.strictEqual(challenge.req_preuve, "req_preuve");
-            assert.strictEqual(challenge.req_jalon, "req_jalon");
-        } finally {
-            if (previous === undefined) delete process.env.FATA_TEST_CHALLENGE_ID;
-            else process.env.FATA_TEST_CHALLENGE_ID = previous;
+const fataConfigKeys = [
+    "FATA_TEST_CHALLENGE_ID",
+    "FATA_REAL_CHALLENGE_ID",
+    "FATA_REQ_ARC",
+    "FATA_REQ_PREUVE",
+    "FATA_REQ_JALON",
+];
+
+function withFataConfig(config, callback) {
+    const previous = Object.fromEntries(
+        fataConfigKeys.map((key) => [key, process.env[key]]),
+    );
+    for (const key of fataConfigKeys) delete process.env[key];
+    Object.assign(process.env, config);
+    try {
+        return callback();
+    } finally {
+        for (const key of fataConfigKeys) {
+            if (previous[key] === undefined) delete process.env[key];
+            else process.env[key] = previous[key];
         }
+    }
+}
+
+const configuredTestFataValues = {
+    FATA_TEST_CHALLENGE_ID: "xera1-test",
+    FATA_REAL_CHALLENGE_ID: "xera1-real-prod",
+    FATA_REQ_ARC: "fata-req-arc",
+    FATA_REQ_PREUVE: "fata-req-preuve",
+    FATA_REQ_JALON: "fata-req-jalon",
+};
+
+describe("Fata × XERA1 Contract & Logic Unit Tests", () => {
+    test("challenge examples are not enabled without explicit Fata configuration", () => {
+        withFataConfig({}, () => {
+            assert.strictEqual(areFataRequirementIdsConfigured(), false);
+            assert.deepStrictEqual(getConfiguredChallengeEntries(), []);
+            assert.throws(
+                () => resolveChallengeConfig("xera1-test"),
+                /requirement IDs are not configured/,
+            );
+        });
     });
 
     test("Fata Challenge Config Resolution", () => {
-        // Set test env var
-        process.env.FATA_TEST_CHALLENGE_ID = "xera1-test";
-        process.env.FATA_REAL_CHALLENGE_ID = "xera1-real-prod";
+        withFataConfig(configuredTestFataValues, () => {
+            const config = getFataChallengeConfig();
+            assert.strictEqual(config.testChallengeId, "xera1-test");
+            assert.strictEqual(config.realChallengeId, "xera1-real-prod");
+            assert.strictEqual(config.req_arc, "fata-req-arc");
+            assert.strictEqual(config.req_preuve, "fata-req-preuve");
+            assert.strictEqual(config.req_jalon, "fata-req-jalon");
 
-        const config = getFataChallengeConfig();
-        assert.strictEqual(config.testChallengeId, "xera1-test");
-        assert.strictEqual(config.realChallengeId, "xera1-real-prod");
+            const challenge = resolveChallengeConfig("xera1-test");
+            assert.strictEqual(challenge.id, "xera1-test");
+            assert.strictEqual(challenge.is_test, true);
+            assert.strictEqual(challenge.req_arc, "fata-req-arc");
+            assert.strictEqual(challenge.req_preuve, "fata-req-preuve");
+            assert.strictEqual(challenge.req_jalon, "fata-req-jalon");
 
-        const testEntry = resolveChallengeConfig("xera1-test");
-        assert.strictEqual(testEntry.id, "xera1-test");
-        assert.strictEqual(testEntry.is_test, true);
+            const realEntry = resolveChallengeConfig("xera1-real-prod");
+            assert.strictEqual(realEntry.id, "xera1-real-prod");
+            assert.strictEqual(realEntry.is_test, false);
 
-        const realEntry = resolveChallengeConfig("xera1-real-prod");
-        assert.strictEqual(realEntry.id, "xera1-real-prod");
-        assert.strictEqual(realEntry.is_test, false);
-
-        assert.throws(() => {
-            resolveChallengeConfig("unknown-challenge-id");
-        }, /Invalid Fata challengeId/);
+            assert.throws(() => {
+                resolveChallengeConfig("unknown-challenge-id");
+            }, /Invalid Fata challengeId/);
+        });
     });
 
     test("Test Challenge Reward Protection Guard", () => {
-        process.env.FATA_TEST_CHALLENGE_ID = "xera1-test";
-        process.env.FATA_REAL_CHALLENGE_ID = "xera1-real-prod";
+        withFataConfig(configuredTestFataValues, () => {
 
         // Test challenge MUST NOT be eligible for real rewards
         assert.strictEqual(isTestChallenge("xera1-test"), true);
@@ -92,6 +123,7 @@ describe("Fata × XERA1 Contract & Logic Unit Tests", () => {
             }),
             false,
         );
+        });
     });
 
     test("Visibility Multiplier Calculation (Capped at 5.0)", () => {

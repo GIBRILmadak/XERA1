@@ -1,5 +1,10 @@
 {
     "$schema": "https://openapi.vercel.sh/vercel.json",
+    "functions": {
+        "api/router.js": {
+            "maxDuration": 60
+        }
+    },
     "rewrites": [
         { "source": "/sitemap.xml", "destination": "/api/sitemap" },
         { "source": "/api/:path*", "destination": "/api/router?path=:path*" },
@@ -36,6 +41,10 @@
         {
             "path": "/api/cron/daily",
             "schedule": "0 10 * * *"
+        },
+        {
+            "path": "/api/cron/fata-worker",
+            "schedule": "*/5 * * * *"
         }
     ]
 }

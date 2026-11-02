@@ -1,5 +1,6 @@
 const { getConfig } = require("./oauth-configs");
 const { resolveChallengeConfig } = require("./fata-contract");
+const { getFataOidcClient } = require("./fata-oidc");
 
 let cachedToken = null;
 let tokenExpiresAt = 0;
@@ -9,17 +10,6 @@ const REQUEST_TIMEOUT_MS = Math.max(
     1000,
     Number(process.env.FATA_API_TIMEOUT_MS) || 10000,
 );
-
-function encodeOAuthClientValue(value) {
-    return new URLSearchParams({ value: String(value) })
-        .toString()
-        .slice("value=".length);
-}
-
-function buildClientAuthorization(clientId, clientSecret) {
-    const credentials = `${encodeOAuthClientValue(clientId)}:${encodeOAuthClientValue(clientSecret)}`;
-    return `Basic ${Buffer.from(credentials).toString("base64")}`;
-}
 
 function invalidateTechnicalToken() {
     cachedToken = null;
@@ -47,36 +37,10 @@ async function requestTechnicalToken() {
     if (!config || !config.clientId || !config.clientSecret) {
         throw new Error("Fata OAuth configuration or credentials missing");
     }
-
-    const params = new URLSearchParams({
-        grant_type: "client_credentials",
+    const { oidc, configuration } = await getFataOidcClient(config);
+    const data = await oidc.clientCredentialsGrant(configuration, {
         scope: "action-completions:write",
     });
-
-    const response = await fetch(config.tokenUrl, {
-        method: "POST",
-        headers: {
-            Authorization: buildClientAuthorization(
-                config.clientId,
-                config.clientSecret,
-            ),
-            "Content-Type": "application/x-www-form-urlencoded",
-            Accept: "application/json",
-        },
-        body: params.toString(),
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    });
-
-    if (!response.ok) {
-        // The provider's error body is untrusted and may echo submitted
-        // credentials. Log only its status, never the response body.
-        console.error("[Fata API] Token request error:", response.status);
-        throw new Error(
-            `Failed to get Fata technical token: HTTP ${response.status}`,
-        );
-    }
-
-    const data = await response.json();
     if (!data || !data.access_token) {
         throw new Error("Invalid token response from Fata");
     }
@@ -128,8 +92,25 @@ async function sendActionCompletion(payload, idempotencyKey) {
     };
 
     const apiBase = String(
-        config.apiBase || process.env.FATA_API_BASE_URL || "https://fata.app/api",
+        config.apiBase || process.env.FATA_API_BASE_URL || "",
     ).replace(/\/$/, "");
+    let parsedApiBase;
+    try {
+        parsedApiBase = new URL(apiBase);
+    } catch (_) {
+        throw new Error("Fata API base URL is invalid");
+    }
+    if (
+        parsedApiBase.protocol !== "https:" ||
+        parsedApiBase.search ||
+        parsedApiBase.hash ||
+        parsedApiBase.username ||
+        parsedApiBase.password
+    ) {
+        throw new Error(
+            "Fata API base URL must use HTTPS and contain no credentials, query, or fragment",
+        );
+    }
 
     let token = await getTechnicalToken();
 
@@ -165,5 +146,4 @@ module.exports = {
     getTechnicalToken,
     invalidateTechnicalToken,
     sendActionCompletion,
-    buildClientAuthorization,
 };

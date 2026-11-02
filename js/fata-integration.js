@@ -45,6 +45,14 @@
                     <button type="button" class="fata-connect-btn">Connecter mon compte Fata</button>
                     <p class="fata-connection-note" hidden></p>
                 </div>
+                <div class="fata-arc-selection" hidden>
+                    <h4>ARC du challenge</h4>
+                    <p>Choisissez l’ARC qui servira pour les trois étapes. Cette sélection sera conservée pour ce challenge.</p>
+                    <label class="fata-arc-select-label" for="fata-arc-select">Votre ARC</label>
+                    <select id="fata-arc-select" class="form-input"></select>
+                    <button type="button" class="fata-select-arc-btn" disabled>Choisir cet ARC</button>
+                    <p class="fata-arc-note" aria-live="polite"></p>
+                </div>
             </div>
         `;
         document.body.appendChild(panel);
@@ -230,12 +238,14 @@
 
     async function startFataOidcFlow(overrideChallengeId) {
         const urlParams = parseUrlParams();
-        const challengeId =
-            overrideChallengeId ||
-            urlParams.challengeId ||
-            sessionStorage.getItem(FATA_STORAGE_KEY_CHALLENGE) ||
-            "xera1-test";
-        sessionStorage.setItem(FATA_STORAGE_KEY_CHALLENGE, challengeId);
+        const challengeId = overrideChallengeId || urlParams.challengeId;
+        if (!challengeId) {
+            alert(
+                "Ouvrez XERA1 depuis le challenge Fata avec « Continuer sur XERA1 » pour transmettre son identifiant.",
+            );
+            return;
+        }
+        persistChallengeId(challengeId);
 
         try {
             const token = await getAuthToken();
@@ -313,6 +323,37 @@
         return fataStatusPromise;
     }
 
+    async function selectPublishedArc(arcId) {
+        const challengeId = parseUrlParams().challengeId;
+        if (!challengeId || !arcId) return { selected: false, skipped: true };
+
+        const token = await getAuthToken();
+        if (!token) return { selected: false, skipped: true };
+
+        const response = await fetchApi("/api/fata/select-arc", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ challengeId, arcId }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            return {
+                selected: false,
+                status: response.status,
+                error: data.error || `HTTP ${response.status}`,
+            };
+        }
+
+        const arcNote = document.querySelector(".fata-arc-note");
+        if (arcNote) {
+            arcNote.textContent = `✓ ${data.arc?.title || "ARC"} est associé au challenge Fata.`;
+        }
+        return { selected: true, arc: data.arc, selection: data.selection };
+    }
+
     async function initFataUI() {
         const trigger = document.getElementById("nav-fata-btn");
         const panel =
@@ -324,6 +365,10 @@
         const authId = document.querySelector(".fata-auth-id");
         const authIcon = document.querySelector(".fata-auth-icon");
         const connectionNote = document.querySelector(".fata-connection-note");
+        const arcSelection = document.querySelector(".fata-arc-selection");
+        const arcSelect = document.getElementById("fata-arc-select");
+        const selectArcBtn = document.querySelector(".fata-select-arc-btn");
+        const arcNote = document.querySelector(".fata-arc-note");
 
         const urlParams = parseUrlParams();
         if (urlParams.challengeId) {
@@ -408,9 +453,45 @@
             });
         }
 
+        if (selectArcBtn && arcSelect) {
+            arcSelect.addEventListener("change", () => {
+                selectArcBtn.disabled = !arcSelect.value || arcSelect.disabled;
+            });
+            selectArcBtn.addEventListener("click", async () => {
+                const challengeId = parseUrlParams().challengeId;
+                if (!challengeId || !arcSelect.value) return;
+                const token = await getAuthToken();
+                if (!token) return;
+                selectArcBtn.disabled = true;
+                selectArcBtn.textContent = "Enregistrement…";
+                try {
+                    const response = await fetchApi("/api/fata/select-arc", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            Authorization: `Bearer ${token}`,
+                        },
+                        body: JSON.stringify({ challengeId, arcId: arcSelect.value }),
+                    });
+                    const data = await response.json().catch(() => ({}));
+                    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+                    if (arcNote) arcNote.textContent = `✓ ${data.arc?.title || "ARC"} est sélectionné pour ce challenge.`;
+                    arcSelect.disabled = true;
+                    selectArcBtn.hidden = true;
+                } catch (error) {
+                    if (arcNote) arcNote.textContent = error.message || "La sélection n’a pas pu être enregistrée.";
+                    selectArcBtn.disabled = !arcSelect.value;
+                    selectArcBtn.textContent = "Réessayer";
+                }
+            });
+        }
+
         async function refreshStatus() {
             const statusData = await checkFataStatus();
-            if (!statusData?.connected || !statusData.linkage) return;
+            if (!statusData?.connected || !statusData.linkage) {
+                if (arcSelection) arcSelection.hidden = true;
+                return;
+            }
 
             const username =
                 statusData.linkage.preferred_username || "(compte lié)";
@@ -437,6 +518,61 @@
                 connectionNote.textContent =
                     "✓ Votre compte Fata est associé à XERA1. Vos preuves et jalons sont synchronisés.";
             }
+
+            if (arcSelection) {
+                arcSelection.hidden = false;
+                const challengeId = parseUrlParams().challengeId;
+                if (!challengeId) {
+                    if (arcNote) arcNote.textContent = "Ouvrez XERA1 depuis le challenge Fata avec le bouton « Continuer sur XERA1 » pour charger son contexte.";
+                    if (arcSelect) arcSelect.disabled = true;
+                    if (selectArcBtn) selectArcBtn.disabled = true;
+                    return;
+                }
+                try {
+                    const response = await fetchApi(
+                        `/api/fata/arcs?challengeId=${encodeURIComponent(challengeId)}`,
+                        { headers: { Authorization: `Bearer ${await getAuthToken()}` } },
+                    );
+                    const data = await response.json().catch(() => ({}));
+                    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+                    if (arcSelect) {
+                        arcSelect.replaceChildren();
+                        const placeholder = document.createElement("option");
+                        placeholder.value = "";
+                        placeholder.textContent = "Sélectionnez un ARC conforme";
+                        arcSelect.appendChild(placeholder);
+                        for (const arc of data.arcs || []) {
+                            const option = document.createElement("option");
+                            option.value = arc.id;
+                            option.textContent = `${arc.title || "ARC sans titre"} — ${arc.milestoneCount}/3 jalons${arc.eligible ? "" : " (à compléter)"}`;
+                            option.disabled = !arc.eligible;
+                            option.selected = Boolean(arc.selected);
+                            arcSelect.appendChild(option);
+                        }
+                        const selected = Boolean(data.selection?.arc_id);
+                        arcSelect.disabled = selected;
+                        if (selectArcBtn) {
+                            selectArcBtn.hidden = selected;
+                            selectArcBtn.disabled = selected || !arcSelect.value;
+                            selectArcBtn.textContent = "Choisir cet ARC";
+                        }
+                        if (arcNote) {
+                            arcNote.textContent = selected
+                                ? "Cet ARC est conservé pour le challenge. Une correction doit passer par le support XERA1."
+                                : "Pour être sélectionnable, l’ARC doit être personnel, visible, avoir un titre, une description et trois jalons.";
+                        }
+                    }
+                } catch (error) {
+                    if (arcNote) arcNote.textContent = error.message || "Impossible de charger vos ARC.";
+                }
+            }
+
+            const needsReconnect = (statusData.pendingEvents || []).some(
+                (event) => event.status === "failed" && /link_revoked|authorization/i.test(event.last_error || ""),
+            );
+            if (needsReconnect && connectionNote) {
+                connectionNote.textContent = "L’autorisation Fata a été retirée. Reliez à nouveau le même compte Fata pour reprendre les confirmations en attente.";
+            }
         }
 
         if (panel?.classList.contains("is-open")) await refreshStatus();
@@ -456,6 +592,7 @@
     window.FataIntegration = {
         startFlow: startFataOidcFlow,
         checkStatus: checkFataStatus,
+        selectPublishedArc,
         initUI: initFataUI,
         resolveApiBaseUrl: getApiBaseUrl,
     };

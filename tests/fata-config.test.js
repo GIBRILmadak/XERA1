@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 
 const { getConfig } = require("../server/oauth-configs");
 
-test("Fata config defaults match the documented public endpoints", () => {
+test("Fata configuration does not fall back to unconfirmed proposal values", () => {
     const keys = [
         "FATA_CLIENT_ID",
         "FATA_CLIENT_SECRET",
@@ -24,17 +24,16 @@ test("Fata config defaults match the documented public endpoints", () => {
 
     try {
         const config = getConfig("fata");
-        assert.equal(config.clientId, "xera1-26f84726");
+        assert.equal(config.clientId, "");
         assert.equal(config.clientSecret, "");
-        assert.equal(config.issuer, "https://fata.app/oidc");
-        assert.equal(
-            config.discoveryUrl,
-            "https://fata.app/oidc/.well-known/openid-configuration",
-        );
-        assert.equal(config.authUrl, "https://fata.app/oidc/authorize");
-        assert.equal(config.tokenUrl, "https://fata.app/oidc/token");
-        assert.equal(config.jwksUrl, "https://fata.app/oidc/jwks");
-        assert.equal(config.apiBase, "https://fata.app/api");
+        assert.equal(config.issuer, "");
+        assert.equal(config.discoveryUrl, "");
+        assert.equal(config.apiBase, "");
+        assert.equal(config.redirectUri, "");
+        assert.equal(config.tokenAuthMethod, "client_secret_basic");
+        assert.equal(config.authUrl, undefined);
+        assert.equal(config.tokenUrl, undefined);
+        assert.equal(config.jwksUrl, undefined);
     } finally {
         for (const key of keys) {
             if (saved[key] === undefined) delete process.env[key];

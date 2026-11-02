@@ -7432,6 +7432,11 @@ app.get("/api/cron/evaluate-tech-badges", async (req, res) => {
 
 // Fata Cron Worker
 app.all(["/api/cron/fata-worker", "/cron/fata-worker"], async (req, res) => {
+    if (!String(process.env.CRON_SECRET || "").trim()) {
+        return res.status(503).json({
+            error: "CRON_SECRET must be configured before enabling the Fata worker.",
+        });
+    }
     const auth = authorizeCronRequest(req);
     if (!auth.ok) {
         return res.status(auth.status || 401).json({
@@ -7458,6 +7463,174 @@ app.all(["/api/cron/fata-worker", "/cron/fata-worker"], async (req, res) => {
     }
 });
 
+// List ARC candidates and the immutable selection for the current Fata challenge.
+app.get("/api/fata/arcs", async (req, res) => {
+    const auth = await authenticateRequest(req);
+    if (auth.error) {
+        return res.status(auth.error.status).json({ error: auth.error.message });
+    }
+
+    const challengeId = String(req.query.challengeId || "").trim();
+    let challenge;
+    try {
+        const { resolveChallengeConfig, areFataRequirementIdsConfigured, getChallengeSelection, countArcMilestones, isArcFataEligible, challengeRequirementIdsMatch, hasValidChallengeWindow } = require("./fata-contract");
+        if (!areFataRequirementIdsConfigured()) {
+            return res.status(503).json({ error: "Les identifiants d’étapes Fata ne sont pas configurés." });
+        }
+        challenge = resolveChallengeConfig(challengeId);
+        const config = require("./oauth-configs").getConfig("fata");
+        const [{ data: linkage, error: linkageError }, { data: challengeRow, error: challengeError }] = await Promise.all([
+            supabase.from("fata_linkages").select("user_id,fata_iss,fata_sub,created_at,metadata").eq("user_id", auth.user.id).eq("fata_iss", config.issuer).maybeSingle(),
+            supabase.from("fata_challenges_config").select("id,is_active,opens_at,close_at,receipt_deadline_at,req_arc,req_preuve,req_jalon").eq("id", challenge.id).maybeSingle(),
+        ]);
+        if (linkageError || challengeError) throw linkageError || challengeError;
+        if (!linkage || linkage.fata_iss !== config.issuer) {
+            return res.status(409).json({ error: "Connectez votre compte Fata avant de choisir un ARC." });
+        }
+        if (!challengeRow?.is_active) {
+            return res.status(409).json({ error: "Ce challenge Fata n'est pas actif sur XERA1." });
+        }
+        if (!hasValidChallengeWindow(challengeRow)) {
+            return res.status(503).json({ error: "Les dates du challenge Fata ne sont pas configurées correctement." });
+        }
+        if (!challengeRequirementIdsMatch(challenge.id, challengeRow)) {
+            return res.status(503).json({ error: "La configuration des étapes Fata doit être corrigée avant de choisir un ARC." });
+        }
+        const now = Date.now();
+        if ((challengeRow.opens_at && now < Date.parse(challengeRow.opens_at)) ||
+            (challengeRow.close_at && now > Date.parse(challengeRow.close_at))) {
+            return res.status(409).json({ error: "La période d'activité de ce challenge n'est pas ouverte." });
+        }
+        if (challengeRow.receipt_deadline_at && now > Date.parse(challengeRow.receipt_deadline_at)) {
+            return res.status(409).json({ error: "La date limite de réception de ce challenge est dépassée." });
+        }
+
+        const { data: arcs, error: arcsError } = await supabase
+            .from("arcs")
+            .select("id,user_id,page_id,title,description,status,milestones,created_at")
+            .eq("user_id", auth.user.id)
+            .is("page_id", null)
+            .order("created_at", { ascending: false })
+            .limit(100);
+        if (arcsError) throw arcsError;
+
+        const selection = getChallengeSelection(linkage, challenge.id);
+        return res.json({
+            challengeId: challenge.id,
+            selection,
+            arcs: (arcs || []).map((arc) => ({
+                id: arc.id,
+                title: arc.title,
+                description: arc.description,
+                created_at: arc.created_at,
+                milestoneCount: countArcMilestones(arc),
+                eligible: isArcFataEligible(arc, auth.user.id),
+                selected: String(selection?.arc_id || "") === String(arc.id),
+            })),
+        });
+    } catch (error) {
+        if (/Invalid Fata challengeId/i.test(error?.message || "")) {
+            return res.status(400).json({ error: "Challenge Fata inconnu." });
+        }
+        console.error("Fata ARC list error:", error);
+        return res.status(500).json({ error: "Impossible de charger les ARC pour Fata." });
+    }
+});
+
+// Persist one ARC per participant and challenge, then ensure action 1 is in
+// the durable outbox. The worker also reconciles this selection after crashes.
+app.post("/api/fata/select-arc", async (req, res) => {
+    const auth = await authenticateRequest(req);
+    if (auth.error) {
+        return res.status(auth.error.status).json({ error: auth.error.message });
+    }
+
+    const challengeId = String(req.body?.challengeId || "").trim();
+    const arcId = String(req.body?.arcId || "").trim();
+    let challenge;
+    try {
+        const { resolveChallengeConfig, areFataRequirementIdsConfigured, getChallengeSelection, getArcPresentationOccurredAt, isArcFataEligible, challengeRequirementIdsMatch, hasValidChallengeWindow } = require("./fata-contract");
+        if (!areFataRequirementIdsConfigured()) {
+            return res.status(503).json({ error: "Les identifiants d’étapes Fata ne sont pas configurés." });
+        }
+        challenge = resolveChallengeConfig(challengeId);
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(arcId)) {
+            return res.status(400).json({ error: "ARC invalide." });
+        }
+        const config = require("./oauth-configs").getConfig("fata");
+        const [{ data: linkage, error: linkageError }, { data: challengeRow, error: challengeError }, { data: arc, error: arcError }] = await Promise.all([
+            supabase.from("fata_linkages").select("user_id,fata_iss,fata_sub,created_at,metadata").eq("user_id", auth.user.id).eq("fata_iss", config.issuer).maybeSingle(),
+            supabase.from("fata_challenges_config").select("id,is_active,opens_at,close_at,receipt_deadline_at,req_arc,req_preuve,req_jalon").eq("id", challenge.id).maybeSingle(),
+            supabase.from("arcs").select("id,user_id,page_id,title,description,status,milestones,created_at").eq("id", arcId).maybeSingle(),
+        ]);
+        if (linkageError || challengeError || arcError) throw linkageError || challengeError || arcError;
+        if (!linkage || linkage.fata_iss !== config.issuer) {
+            return res.status(409).json({ error: "Connectez votre compte Fata avant de choisir un ARC." });
+        }
+        if (!challengeRow?.is_active) {
+            return res.status(409).json({ error: "Ce challenge Fata n'est pas actif sur XERA1." });
+        }
+        if (!hasValidChallengeWindow(challengeRow)) {
+            return res.status(503).json({ error: "Les dates du challenge Fata ne sont pas configurées correctement." });
+        }
+        if (!challengeRequirementIdsMatch(challenge.id, challengeRow)) {
+            return res.status(503).json({ error: "La configuration des étapes Fata doit être corrigée avant de choisir un ARC." });
+        }
+        const now = Date.now();
+        if ((challengeRow.opens_at && now < Date.parse(challengeRow.opens_at)) ||
+            (challengeRow.close_at && now > Date.parse(challengeRow.close_at))) {
+            return res.status(409).json({ error: "La période d'activité de ce challenge n'est pas ouverte." });
+        }
+        if (challengeRow.receipt_deadline_at && now > Date.parse(challengeRow.receipt_deadline_at)) {
+            return res.status(409).json({ error: "La date limite de réception de ce challenge est dépassée." });
+        }
+        if (!isArcFataEligible(arc, auth.user.id)) {
+            return res.status(422).json({ error: "Choisissez un ARC personnel publié avec un titre, une description et au moins trois jalons." });
+        }
+
+        const previousSelection = getChallengeSelection(linkage, challenge.id);
+        if (previousSelection && String(previousSelection.arc_id) !== arcId) {
+            return res.status(409).json({
+                error: "Un ARC est déjà associé à cette étape du challenge. Contactez le support XERA1 pour corriger cette sélection.",
+                selection: previousSelection,
+            });
+        }
+
+        const { data: selection, error: selectionError } = await supabase.rpc(
+            "record_fata_arc_selection",
+            {
+                p_user_id: auth.user.id,
+                p_issuer: config.issuer,
+                p_challenge_id: challenge.id,
+                p_arc_id: arcId,
+            },
+        );
+        if (selectionError) {
+            if (selectionError.code === "23505") {
+                return res.status(409).json({ error: "Un ARC est déjà associé à ce challenge." });
+            }
+            throw selectionError;
+        }
+
+        const { queueEvent } = require("./fata-worker");
+        await queueEvent(
+            auth.user.id,
+            linkage.fata_sub,
+            challenge.id,
+            challenge.req_arc,
+            getArcPresentationOccurredAt(arc, linkage, selection, challengeRow),
+            `selection-${challenge.id}-${arcId}`,
+        );
+        return res.status(200).json({ selection, arc: { id: arc.id, title: arc.title } });
+    } catch (error) {
+        if (/Invalid Fata challengeId/i.test(error?.message || "")) {
+            return res.status(400).json({ error: "Challenge Fata inconnu." });
+        }
+        console.error("Fata ARC selection error:", error);
+        return res.status(500).json({ error: "Impossible d'enregistrer la sélection de l'ARC." });
+    }
+});
+
 // Fata Linkage & Challenge Status for Authenticated User
 app.get("/api/fata/status", async (req, res) => {
     const auth = await authenticateRequest(req);
@@ -7469,10 +7642,12 @@ app.get("/api/fata/status", async (req, res) => {
 
     try {
         const userId = auth.user.id;
+        const fataIssuer = require("./oauth-configs").getConfig("fata")?.issuer;
         const { data: linkage } = await supabase
             .from("fata_linkages")
             .select("*")
             .eq("user_id", userId)
+            .eq("fata_iss", fataIssuer || "")
             .maybeSingle();
 
         const { data: pendingEvents } = await supabase
@@ -7544,6 +7719,7 @@ app.post("/api/admin/fata/qualifications", async (req, res) => {
         rewardsApplied: !isTest,
     };
 
+    const currentFataIssuer = require("./oauth-configs").getConfig("fata")?.issuer || "";
     for (const rawSub of subjects) {
         const fataSub = String(rawSub || "").trim();
         if (!fataSub) continue;
@@ -7552,6 +7728,7 @@ app.post("/api/admin/fata/qualifications", async (req, res) => {
             .from("fata_linkages")
             .select("user_id, fata_iss")
             .eq("fata_sub", fataSub)
+            .eq("fata_iss", currentFataIssuer)
             .maybeSingle();
 
         if (!linkage || !linkage.user_id) {

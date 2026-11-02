@@ -7,22 +7,28 @@ function normalizeText(value) {
 function getFataChallengeConfig() {
     const config = {
         realChallengeId: normalizeText(process.env.FATA_REAL_CHALLENGE_ID),
-        testChallengeId: normalizeText(
-            process.env.FATA_TEST_CHALLENGE_ID || "xera1-test",
-        ),
-        req_arc: normalizeText(process.env.FATA_REQ_ARC || "req_arc"),
-        req_preuve: normalizeText(process.env.FATA_REQ_PREUVE || "req_preuve"),
-        req_jalon: normalizeText(process.env.FATA_REQ_JALON || "req_jalon"),
+        testChallengeId: normalizeText(process.env.FATA_TEST_CHALLENGE_ID),
+        req_arc: normalizeText(process.env.FATA_REQ_ARC),
+        req_preuve: normalizeText(process.env.FATA_REQ_PREUVE),
+        req_jalon: normalizeText(process.env.FATA_REQ_JALON),
     };
 
     return config;
 }
 
+function areFataRequirementIdsConfigured() {
+    const config = getFataChallengeConfig();
+    return Boolean(config.req_arc && config.req_preuve && config.req_jalon);
+}
+
 function getConfiguredChallengeEntries() {
     const config = getFataChallengeConfig();
     const entries = [];
+    const hasRequirementIds = Boolean(
+        config.req_arc && config.req_preuve && config.req_jalon,
+    );
 
-    if (config.realChallengeId) {
+    if (config.realChallengeId && hasRequirementIds) {
         entries.push({
             id: config.realChallengeId,
             is_test: false,
@@ -32,7 +38,7 @@ function getConfiguredChallengeEntries() {
         });
     }
 
-    if (config.testChallengeId) {
+    if (config.testChallengeId && hasRequirementIds) {
         entries.push({
             id: config.testChallengeId,
             is_test: true,
@@ -50,6 +56,9 @@ function resolveChallengeConfig(challengeId) {
     if (!normalized) {
         throw new Error("Invalid Fata challengeId: missing challengeId");
     }
+    if (!areFataRequirementIdsConfigured()) {
+        throw new Error("Fata challenge requirement IDs are not configured");
+    }
 
     const challenge = getConfiguredChallengeEntries().find(
         (entry) => entry.id === normalized,
@@ -59,6 +68,81 @@ function resolveChallengeConfig(challengeId) {
     }
 
     return challenge;
+}
+
+function countArcMilestones(arc) {
+    const milestones = Array.isArray(arc?.milestones) ? arc.milestones : [];
+    return milestones.filter((milestone) => {
+        if (typeof milestone === "string") return Boolean(milestone.trim());
+        return Boolean(String(milestone?.title || "").trim());
+    }).length;
+}
+
+function getChallengeSelection(linkage, challengeId) {
+    const selections = linkage?.metadata?.challenge_selections;
+    if (!selections || typeof selections !== "object" || Array.isArray(selections)) {
+        return null;
+    }
+    const selection = selections[normalizeText(challengeId)];
+    if (!selection || typeof selection !== "object") return null;
+    if (!normalizeText(selection.arc_id) || !normalizeText(selection.selected_at)) {
+        return null;
+    }
+    return selection;
+}
+
+function challengeRequirementIdsMatch(challengeId, row = {}) {
+    try {
+        const expected = resolveChallengeConfig(challengeId);
+        return (
+            row.req_arc === expected.req_arc &&
+            row.req_preuve === expected.req_preuve &&
+            row.req_jalon === expected.req_jalon
+        );
+    } catch (_) {
+        return false;
+    }
+}
+
+function hasValidChallengeWindow(row = {}) {
+    const opensAt = Date.parse(row.opens_at || "");
+    const closesAt = Date.parse(row.close_at || "");
+    const receiptDeadlineAt = Date.parse(row.receipt_deadline_at || "");
+    return (
+        Number.isFinite(opensAt) &&
+        Number.isFinite(closesAt) &&
+        Number.isFinite(receiptDeadlineAt) &&
+        opensAt <= closesAt &&
+        closesAt <= receiptDeadlineAt
+    );
+}
+
+function isArcFataEligible(arc, userId) {
+    if (!arc || arc.user_id !== userId || arc.page_id) return false;
+    if (!normalizeText(arc.title) || !normalizeText(arc.description)) return false;
+    if (["draft", "deleted", "private"].includes(normalizeText(arc.status).toLowerCase())) {
+        return false;
+    }
+    return countArcMilestones(arc) >= 3;
+}
+
+function getArcPresentationOccurredAt(arc, linkage, selection, challenge) {
+    const arcCreatedAt = Date.parse(arc?.created_at || "");
+    const linkedAt = Date.parse(linkage?.created_at || "");
+    const opensAt = Date.parse(challenge?.opens_at || "");
+    const closesAt = Date.parse(challenge?.close_at || "");
+    if (
+        Number.isFinite(arcCreatedAt) &&
+        Number.isFinite(linkedAt) &&
+        Number.isFinite(opensAt) &&
+        Number.isFinite(closesAt) &&
+        arcCreatedAt >= linkedAt &&
+        arcCreatedAt >= opensAt &&
+        arcCreatedAt <= closesAt
+    ) {
+        return arc.created_at;
+    }
+    return selection?.selected_at || null;
 }
 
 function isTestChallenge(challengeId) {
@@ -138,8 +222,15 @@ function buildIdempotencyKey(
 
 module.exports = {
     getFataChallengeConfig,
+    areFataRequirementIdsConfigured,
     getConfiguredChallengeEntries,
     resolveChallengeConfig,
+    countArcMilestones,
+    getChallengeSelection,
+    challengeRequirementIdsMatch,
+    hasValidChallengeWindow,
+    isArcFataEligible,
+    getArcPresentationOccurredAt,
     isTestChallenge,
     resolveVisibilityMultiplier,
     isRewardEligible,

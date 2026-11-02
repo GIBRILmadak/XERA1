@@ -10,6 +10,7 @@ const webpush = require("web-push");
 dotenv.config();
 
 const oauthHandler = require("./oauth-handler");
+const { createFataApiRouter } = require("./fata-api-routes");
 
 const {
     APP_BASE_URL = "http://localhost:3000",
@@ -112,6 +113,7 @@ app.use(
 );
 
 app.use("/api/auth", oauthHandler);
+app.use("/api/fata", createFataApiRouter(supabase));
 
 const PRIMARY_ORIGIN =
     APP_FRONTEND_URL.split(",")[0]?.trim() ||
@@ -319,6 +321,29 @@ app.get("/api/fata/status", async (req, res) => {
     } catch (error) {
         console.error("Fata status error:", error?.message || "query failed");
         return res.status(500).json({ error: "Failed to fetch Fata status" });
+    }
+});
+
+app.all("/api/cron/fata-worker", async (req, res) => {
+    const configuredSecret = String(process.env.CRON_SECRET || "").trim();
+    if (!configuredSecret) {
+        return res.status(503).json({ error: "CRON_SECRET must be configured." });
+    }
+    const authorization = String(req.headers.authorization || "");
+    const providedSecret = authorization.startsWith("Bearer ")
+        ? authorization.slice(7).trim()
+        : String(req.headers["x-cron-secret"] || "").trim();
+    if (providedSecret !== configuredSecret) {
+        return res.status(401).json({ error: "Unauthorized cron request." });
+    }
+    try {
+        const { processActivityLog, processPendingEvents } = require("./fata-worker");
+        await processActivityLog();
+        await processPendingEvents();
+        return res.status(200).json({ ok: true, message: "Fata worker processed successfully" });
+    } catch (error) {
+        console.error("[Fata Cron Worker Error]:", error);
+        return res.status(500).json({ error: "Fata worker error" });
     }
 });
 

@@ -17,20 +17,18 @@ function readEnvOrDefault(defaultValue, ...keys) {
 }
 
 function buildOauthConfigs() {
-    const FATA_ISSUER = readEnvOrDefault(
-        "https://fata.app/oidc",
+    const FATA_ISSUER = readEnv(
         "FATA_OIDC_ISSUER",
         "FATA_ISSUER",
-    ).replace(/\/$/, "");
-    const FATA_API_BASE = readEnvOrDefault(
-        "https://fata.app/api",
+    );
+    const FATA_API_BASE = readEnv(
         "FATA_API_BASE_URL",
         "FATA_API_BASE",
     ).replace(/\/$/, "");
-    const FATA_DISCOVERY_URL = readEnvOrDefault(
-        `${FATA_ISSUER}/.well-known/openid-configuration`,
-        "FATA_OIDC_DISCOVERY_URL",
-    );
+    const FATA_DISCOVERY_URL = readEnv("FATA_OIDC_DISCOVERY_URL") ||
+        (FATA_ISSUER
+            ? `${FATA_ISSUER.replace(/\/$/, "")}/.well-known/openid-configuration`
+            : "");
     const FATA_REDIRECT_URI = readEnv(
         "FATA_OIDC_REDIRECT_URI",
         "FATA_REDIRECT_URI",
@@ -67,24 +65,16 @@ function buildOauthConfigs() {
             scope: "https://www.googleapis.com/auth/cloud-platform.read-only",
         },
         fata: {
-            clientId: readEnv("FATA_CLIENT_ID") || "xera1-26f84726",
+            clientId: readEnv("FATA_CLIENT_ID"),
             clientSecret: readEnv("FATA_CLIENT_SECRET"),
             issuer: FATA_ISSUER,
             discoveryUrl: FATA_DISCOVERY_URL,
-            authUrl: readEnvOrDefault(
-                "https://fata.app/oidc/authorize",
-                "FATA_OIDC_AUTH_URL",
-            ),
-            tokenUrl: readEnvOrDefault(
-                "https://fata.app/oidc/token",
-                "FATA_OIDC_TOKEN_URL",
-            ),
-            jwksUrl: readEnvOrDefault(
-                "https://fata.app/oidc/jwks",
-                "FATA_OIDC_JWKS_URL",
-            ),
             apiBase: FATA_API_BASE,
             redirectUri: FATA_REDIRECT_URI,
+            tokenAuthMethod: readEnvOrDefault(
+                "client_secret_basic",
+                "FATA_TOKEN_AUTH_METHOD",
+            ),
             scope: "openid profile action-completions:connect",
         },
     };

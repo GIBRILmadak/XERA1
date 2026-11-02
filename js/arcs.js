@@ -324,6 +324,14 @@ function renderArcCreationForm(arcToEdit = null) {
         : inspiredSeed?.description
           ? `Inspiré par "${inspiredSeed.title}".\n\n${inspiredSeed.description}`
           : "";
+    const defaultMilestonesValue = isEdit && Array.isArray(arcToEdit.milestones)
+        ? arcToEdit.milestones
+              .map((milestone) =>
+                  typeof milestone === "string" ? milestone : milestone?.title || "",
+              )
+              .filter(Boolean)
+              .join("\n")
+        : "";
 
     // Default dates
     const today = new Date().toISOString().split("T")[0];
@@ -390,6 +398,12 @@ function renderArcCreationForm(arcToEdit = null) {
                 <div class="form-group">
                     <label for="arc-description">Description</label>
                     <textarea id="arc-description" name="description" placeholder="Détails supplémentaires..." rows="5" class="form-input large-textarea">${xeraEscapeHtml(defaultDescriptionValue)}</textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="arc-milestones">Jalons du projet</label>
+                    <textarea id="arc-milestones" name="milestones" placeholder="Un jalon par ligne\nEx. Maquette terminée\nEx. Première version fonctionnelle\nEx. Mise en ligne" rows="4" class="form-input large-textarea">${xeraEscapeHtml(defaultMilestonesValue)}</textarea>
+                    <p class="form-hint">Pour le challenge Fata, l’ARC doit avoir au moins trois jalons nommés. Les jalons restent modifiables dans votre ARC.</p>
                 </div>
 
                 <div class="form-group">
@@ -898,6 +912,11 @@ async function handleCreateArc(e) {
         title: formData.get("title"),
         goal: formData.get("goal"),
         description: formData.get("description"),
+        milestones: String(formData.get("milestones") || "")
+            .split(/\r?\n/)
+            .map((title) => title.trim())
+            .filter(Boolean)
+            .map((title) => ({ title })),
         stage_level: normalizeArcStageLevel(formData.get("stage_level")),
         opportunity_intents:
             selectedOpportunityIntents.length > 0
@@ -994,6 +1013,16 @@ async function handleCreateArc(e) {
 
         if (!arcId && createdArc && createdArc.id) {
             await createArcLaunchTrace(createdArc, arcData, authUser);
+            if (typeof window.FataIntegration?.selectPublishedArc === "function") {
+                try {
+                    await window.FataIntegration.selectPublishedArc(createdArc.id);
+                } catch (fataSelectionError) {
+                    console.warn(
+                        "New ARC could not be associated with the Fata challenge:",
+                        fataSelectionError,
+                    );
+                }
+            }
             if (inspiredSeed?.sourceArcId) {
                 await recordArcInspiration(
                     inspiredSeed.sourceArcId,
@@ -1684,24 +1713,29 @@ async function validateArcMilestone(arcId, contentId = null) {
             contentId,
         );
         if (!arc || !content) throw new Error("Jalon introuvable");
-        if (arc.user_id === window.currentUser.id) {
-            xeraToast(
-                "info",
-                "Déjà builder",
-                "La validation doit venir d'une autre personne.",
-            );
+        const isOwner = arc.user_id === window.currentUser.id;
+        if (isOwner && content.user_id !== window.currentUser.id) {
+            xeraToast("error", "Preuve invalide", "Choisissez une preuve publiée sur votre propre ARC.");
             return;
         }
 
-        const comment =
-            prompt("Ajouter un court retour de validation (optionnel).", "") ||
-            "";
+        const comment = prompt(
+            isOwner
+                ? "Décrivez le résultat obtenu pour ce jalon. Ce texte sera envoyé à Fata comme description de validation."
+                : "Ajouter un court retour de validation (optionnel).",
+            "",
+        );
+        if (comment === null) return;
+        if (isOwner && !comment.trim()) {
+            xeraToast("info", "Description requise", "Décrivez le résultat obtenu avant de valider ce jalon.");
+            return;
+        }
         const contentKey = xeraGetContentId(content);
         const payload = {
             arc_id: arc.id,
             content_id: contentKey,
             validator_user_id: window.currentUser.id,
-            validation_type: "witnessed",
+            validation_type: isOwner ? "self_reported" : "witnessed",
             comment: comment.trim() || null,
         };
 
@@ -1743,8 +1777,10 @@ async function validateArcMilestone(arcId, contentId = null) {
         });
         xeraToast(
             "success",
-            "Jalon validé",
-            "Votre validation renforce la preuve de progression.",
+            isOwner ? "Résultat publié" : "Jalon validé",
+            isOwner
+                ? "Votre résultat est publié sur cet ARC et peut être transmis au challenge Fata."
+                : "Votre validation renforce la preuve de progression.",
         );
     } catch (error) {
         console.error("validateArcMilestone error:", error);
@@ -1944,10 +1980,11 @@ function renderArcGrowthPanel(arc, isOwner, content = []) {
         return `
             <div class="xera1-growth-panel">
                 <div>
-                    <h3>Preuve sociale</h3>
-                    <p>Transformez une progression réelle en validation, retour ou collaboration.</p>
+                    <h3>Progression de l’ARC</h3>
+                    <p>Publiez le résultat d’un jalon et reliez-le à une preuve de cet ARC.</p>
                 </div>
                 <div class="xera1-growth-action-grid">
+                    <button type="button" class="btn btn-primary" onclick="validateArcMilestone('${arc.id}', ${contentArg})" ${latestContentId ? "" : "disabled"}>Publier un résultat</button>
                     <button type="button" class="btn btn-primary" onclick="openProofCardModal('${arc.id}', ${contentArg})" ${latestContentId ? "" : "disabled"}>Carte preuve</button>
                     <button type="button" class="btn btn-ghost" onclick="requestArcWitness('${arc.id}', ${contentArg})" ${latestContentId ? "" : "disabled"}>Ajouter un témoin</button>
                     <button type="button" class="btn btn-ghost" onclick="openArcCoBuilderRole('${arc.id}')">Ouvrir un rôle</button>
