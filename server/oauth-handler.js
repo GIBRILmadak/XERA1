@@ -45,6 +45,16 @@ function getOAuthCallbackUri(tool, config) {
     return `${callbackBase}/api/auth/${tool}/callback`;
 }
 
+function getFataOidcErrorMessage(error) {
+    if (
+        error?.name === "TimeoutError" ||
+        /timed? out|timeout|aborted due to timeout/i.test(error?.message || "")
+    ) {
+        return "Le document de découverte OIDC de Fata n’a pas répondu dans le délai configuré.";
+    }
+    return "La configuration OIDC de Fata est indisponible.";
+}
+
 function buildFataReturnUrl(params = {}) {
     const fallback = `${getSafeRedirectBase()}/profile`;
     const target = String(process.env.FATA_APP_RETURN_URL || fallback).trim();
@@ -111,7 +121,7 @@ router.post("/:tool/start", async (req, res) => {
             } catch (error) {
                 console.error("[OAuth] Fata OIDC discovery error:", error.message);
                 return res.status(503).json({
-                    error: "La configuration OIDC de Fata est indisponible.",
+                    error: getFataOidcErrorMessage(error),
                 });
             }
             try {
@@ -350,7 +360,7 @@ router.get("/:tool/callback", async (req, res) => {
                 fataOidcClient = await getFataOidcClient(config);
             } catch (error) {
                 console.error("[OAuth] Fata OIDC discovery error:", error.message);
-                return sendOAuthError(503, "La configuration OIDC de Fata est indisponible.");
+                return sendOAuthError(503, getFataOidcErrorMessage(error));
             }
         }
 

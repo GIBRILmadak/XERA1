@@ -6,7 +6,7 @@
     const FATA_STORAGE_KEY_CHALLENGE = "xera1_fata_challenge_id";
     const API_PROBE_TIMEOUT_MS = 800;
     const API_STATUS_TIMEOUT_MS = 3000;
-    const API_START_TIMEOUT_MS = 6000;
+    const API_START_TIMEOUT_MS = 25000;
     let apiBasePromise = null;
     let apiBaseError = null;
     let apiBaseErrorUntil = 0;
