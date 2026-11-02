@@ -16,6 +16,7 @@ process.env.SUPABASE_SERVICE_ROLE_KEY = "test_key";
 
 const { getConfig } = require("../server/oauth-configs");
 const { validateFataRedirectUri } = require("../server/fata-redirect-uri");
+const { getFataOidcDiscoveryTimeoutMs } = require("../server/fata-oidc");
 const {
     getFataChallengeConfig,
     resolveChallengeConfig,
@@ -63,6 +64,13 @@ test("Fata callback accepts its registered static query but rejects OAuth collis
         validateFataRedirectUri("http://xera1.xyz/api/auth/fata/callback"),
         { valid: false, reason: "https_required" },
     );
+});
+
+test("Fata OIDC discovery timeout has a safe default and bounds", () => {
+    assert.equal(getFataOidcDiscoveryTimeoutMs(undefined), 15000);
+    assert.equal(getFataOidcDiscoveryTimeoutMs("500"), 1000);
+    assert.equal(getFataOidcDiscoveryTimeoutMs("7000"), 7000);
+    assert.equal(getFataOidcDiscoveryTimeoutMs("60000"), 30000);
 });
 
 test("Challenge config resolves real vs test challenges correctly", () => {

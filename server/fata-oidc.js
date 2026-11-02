@@ -1,5 +1,14 @@
 const metadataCache = new Map();
 let openidClientPromise;
+const DEFAULT_DISCOVERY_TIMEOUT_MS = 15000;
+
+function getFataOidcDiscoveryTimeoutMs(value = process.env.FATA_OIDC_DISCOVERY_TIMEOUT_MS) {
+    const configured = Number(value);
+    if (!Number.isFinite(configured) || configured <= 0) {
+        return DEFAULT_DISCOVERY_TIMEOUT_MS;
+    }
+    return Math.min(30000, Math.max(1000, Math.floor(configured)));
+}
 
 async function loadOpenidClient() {
     if (!openidClientPromise) {
@@ -22,10 +31,27 @@ async function getFataOidcMetadata(config) {
     const cached = metadataCache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) return cached.metadata;
 
-    const response = await fetch(config.discoveryUrl, {
-        headers: { Accept: "application/json" },
-        signal: AbortSignal.timeout(5000),
-    });
+    const timeoutMs = getFataOidcDiscoveryTimeoutMs();
+    let response;
+    try {
+        response = await fetch(config.discoveryUrl, {
+            headers: { Accept: "application/json" },
+            signal: AbortSignal.timeout(timeoutMs),
+        });
+    } catch (error) {
+        if (
+            error?.name === "TimeoutError" ||
+            /timed? out|timeout|aborted due to timeout/i.test(
+                error?.message || "",
+            )
+        ) {
+            throw new Error(
+                `Fata OIDC discovery timed out after ${timeoutMs}ms`,
+                { cause: error },
+            );
+        }
+        throw error;
+    }
     if (!response.ok) {
         throw new Error(`Fata OIDC discovery failed: HTTP ${response.status}`);
     }
@@ -109,4 +135,8 @@ async function getFataOidcClient(config) {
     return { oidc, configuration, metadata };
 }
 
-module.exports = { getFataOidcMetadata, getFataOidcClient };
+module.exports = {
+    getFataOidcMetadata,
+    getFataOidcClient,
+    getFataOidcDiscoveryTimeoutMs,
+};
