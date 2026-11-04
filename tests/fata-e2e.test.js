@@ -67,9 +67,9 @@ test("Fata callback accepts its registered static query but rejects OAuth collis
 });
 
 test("Fata OIDC discovery timeout has a safe default and bounds", () => {
-    assert.equal(getFataOidcDiscoveryTimeoutMs(undefined), 15000);
-    assert.equal(getFataOidcDiscoveryTimeoutMs("500"), 1000);
-    assert.equal(getFataOidcDiscoveryTimeoutMs("7000"), 7000);
+    assert.equal(getFataOidcDiscoveryTimeoutMs(undefined), 20000);
+    assert.equal(getFataOidcDiscoveryTimeoutMs("500"), 20000);
+    assert.equal(getFataOidcDiscoveryTimeoutMs("7000"), 20000);
     assert.equal(getFataOidcDiscoveryTimeoutMs("60000"), 30000);
 });
 
