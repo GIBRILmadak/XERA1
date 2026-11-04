@@ -6,7 +6,9 @@
     const FATA_STORAGE_KEY_CHALLENGE = "xera1_fata_challenge_id";
     const API_PROBE_TIMEOUT_MS = 800;
     const API_STATUS_TIMEOUT_MS = 3000;
-    const API_START_TIMEOUT_MS = 25000;
+    // The Vercel API route has a 60-second execution limit. Leave enough time
+    // for a cold start, Supabase auth lookup, and Fata's OIDC discovery call.
+    const API_START_TIMEOUT_MS = 55000;
     let apiBasePromise = null;
     let apiBaseError = null;
     let apiBaseErrorUntil = 0;
@@ -161,7 +163,7 @@
         } catch (error) {
             if (error?.name === "AbortError") {
                 throw new Error(
-                    "Le serveur API XERA1 ne répond pas. Vérifie qu'il est démarré puis réessaie.",
+                    "L’API XERA1 met trop de temps à répondre. Réessaie dans quelques instants.",
                 );
             }
             if (
