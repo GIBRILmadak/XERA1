@@ -20132,3 +20132,507 @@ body.messages-screen .messages-page {
     height: 100% !important;
     min-height: 0 !important;
 }
+
+/* --- FATA × XERA1 COMPLETION CELEBRATION --- */
+.fata-celebration-dialog {
+    position: fixed;
+    inset: 0;
+    display: none;
+    place-items: center;
+    box-sizing: border-box;
+    width: 100vw;
+    max-width: none;
+    height: 100vh;
+    height: 100dvh;
+    max-height: none;
+    margin: 0;
+    padding: clamp(0.7rem, 3vw, 1.5rem);
+    overflow-x: hidden;
+    overflow-y: auto;
+    border: 0;
+    background: transparent;
+    color: #f8f7fb;
+    font-family: inherit;
+}
+
+.fata-celebration-dialog[open] {
+    display: grid;
+}
+
+.fata-celebration-dialog::backdrop {
+    background: rgba(5, 5, 10, 0.82);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    animation: fata-celebration-backdrop-in 0.25s ease-out both;
+}
+
+.fata-celebration-card {
+    position: relative;
+    z-index: 1;
+    isolation: isolate;
+    box-sizing: border-box;
+    width: min(100%, 548px);
+    max-height: calc(100dvh - 2rem);
+    overflow-x: hidden;
+    overflow-y: auto;
+    margin: auto;
+    padding: clamp(1.35rem, 5vw, 2.4rem);
+    border: 1px solid rgba(216, 174, 98, 0.26);
+    border-radius: 26px;
+    background:
+        radial-gradient(ellipse at 50% -10%, rgba(156, 88, 208, 0.2), transparent 50%),
+        radial-gradient(ellipse at 100% 100%, rgba(209, 165, 78, 0.08), transparent 42%),
+        linear-gradient(155deg, rgba(28, 25, 35, 0.99), rgba(13, 14, 18, 0.99) 58%);
+    box-shadow:
+        0 34px 110px rgba(0, 0, 0, 0.68),
+        0 0 0 1px rgba(255, 255, 255, 0.035),
+        0 0 70px rgba(131, 67, 176, 0.19),
+        inset 0 1px 0 rgba(255, 255, 255, 0.09);
+    animation: fata-celebration-enter 0.52s cubic-bezier(0.18, 0.84, 0.25, 1.08) both;
+}
+
+.fata-celebration-card::before,
+.fata-celebration-card::after {
+    position: absolute;
+    z-index: -1;
+    content: "";
+    pointer-events: none;
+}
+
+.fata-celebration-card::before {
+    inset: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.045);
+    border-radius: 19px;
+}
+
+.fata-celebration-card::after {
+    top: -70px;
+    left: 50%;
+    width: 250px;
+    height: 150px;
+    transform: translateX(-50%);
+    border-radius: 50%;
+    background: rgba(184, 119, 224, 0.11);
+    filter: blur(54px);
+}
+
+.fata-celebration-dialog.is-closing .fata-celebration-card {
+    animation: fata-celebration-exit 0.2s ease-in both;
+}
+
+.fata-celebration-close {
+    position: absolute;
+    z-index: 2;
+    top: 1rem;
+    right: 1rem;
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    border: 1px solid rgba(255, 255, 255, 0.13);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.055);
+    color: #dedbe4;
+    font-size: 1.45rem;
+    line-height: 1;
+    cursor: pointer;
+    transition:
+        background 0.18s ease,
+        border-color 0.18s ease,
+        transform 0.18s ease;
+}
+
+.fata-celebration-close:hover {
+    transform: rotate(4deg);
+    border-color: rgba(239, 198, 120, 0.4);
+    background: rgba(255, 255, 255, 0.11);
+}
+
+.fata-celebration-close:focus-visible,
+.fata-celebration-cta:focus-visible {
+    outline: 3px solid #f2c66d;
+    outline-offset: 3px;
+}
+
+.fata-celebration-eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    margin: 0 3.1rem 1.2rem 0;
+    color: #c8b9d6;
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.15em;
+    line-height: 1.4;
+}
+
+.fata-celebration-eyebrow span {
+    width: 7px;
+    height: 7px;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    background: #e9bd65;
+    box-shadow: 0 0 14px rgba(233, 189, 101, 0.75);
+}
+
+.fata-celebration-brands {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    margin: 0 auto 1.25rem;
+}
+
+.fata-celebration-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    color: #f5f2f8;
+    font-size: 0.9rem;
+    font-weight: 750;
+    letter-spacing: 0.02em;
+}
+
+.fata-celebration-brand img {
+    width: 38px;
+    height: 38px;
+    box-sizing: border-box;
+    object-fit: contain;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.06);
+    box-shadow: 0 5px 18px rgba(0, 0, 0, 0.26);
+}
+
+.fata-celebration-brand--xera img {
+    padding: 4px;
+    background: #111116;
+}
+
+.fata-celebration-times {
+    color: #d8b15f;
+    font-family: Georgia, serif;
+    font-size: 1.55rem;
+    line-height: 1;
+}
+
+.fata-celebration-check {
+    display: grid;
+    place-items: center;
+    width: 54px;
+    height: 54px;
+    margin: 0 auto 0.8rem;
+    border: 1px solid rgba(234, 190, 100, 0.43);
+    border-radius: 18px;
+    background: linear-gradient(145deg, rgba(234, 190, 100, 0.2), rgba(146, 90, 189, 0.21));
+    color: #f1ca76;
+    font-size: 1.55rem;
+    font-weight: 800;
+    box-shadow:
+        0 12px 32px rgba(185, 134, 52, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    animation: fata-celebration-seal 0.58s 0.15s cubic-bezier(0.16, 1.4, 0.3, 1) both;
+}
+
+.fata-celebration-card h2 {
+    margin: 0;
+    color: #fcfaff;
+    font-size: clamp(1.7rem, 6vw, 2.25rem);
+    font-weight: 800;
+    letter-spacing: -0.045em;
+    line-height: 1.12;
+    text-align: center;
+    text-wrap: balance;
+}
+
+.fata-celebration-message {
+    max-width: 41ch;
+    margin: 0.75rem auto 1.45rem;
+    color: #b4aebd;
+    font-size: 0.98rem;
+    line-height: 1.6;
+    text-align: center;
+    text-wrap: pretty;
+}
+
+.fata-celebration-rewards {
+    display: grid;
+    gap: 0.65rem;
+    margin: 0 0 1.25rem;
+}
+
+.fata-celebration-reward {
+    display: grid;
+    grid-template-columns: 42px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 0;
+    padding: 0.85rem 0.9rem;
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 15px;
+    background: linear-gradient(110deg, rgba(255, 255, 255, 0.058), rgba(255, 255, 255, 0.022));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.fata-celebration-reward-icon,
+.fata-celebration-multiplier {
+    display: grid;
+    place-items: center;
+    width: 42px;
+    height: 42px;
+    border: 1px solid rgba(196, 145, 225, 0.28);
+    border-radius: 13px;
+    background: linear-gradient(145deg, rgba(152, 91, 190, 0.25), rgba(116, 84, 161, 0.12));
+    color: #e5c2ff;
+    font-size: 1.1rem;
+    font-weight: 800;
+}
+
+.fata-celebration-multiplier {
+    border-color: rgba(227, 182, 94, 0.31);
+    background: linear-gradient(145deg, rgba(227, 182, 94, 0.2), rgba(171, 112, 48, 0.09));
+    color: #f2cf7b;
+    font-size: 0.92rem;
+}
+
+.fata-celebration-reward-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 0.22rem;
+    min-width: 0;
+}
+
+.fata-celebration-reward-copy strong {
+    color: #f1eef5;
+    font-size: 0.91rem;
+    font-weight: 750;
+    line-height: 1.35;
+}
+
+.fata-celebration-reward-copy small {
+    color: #aaa3b1;
+    font-size: 0.73rem;
+    line-height: 1.4;
+}
+
+.fata-celebration-unlocked {
+    padding: 0.32rem 0.48rem;
+    border: 1px solid rgba(102, 210, 165, 0.24);
+    border-radius: 999px;
+    background: rgba(36, 157, 113, 0.11);
+    color: #80dfb4;
+    font-size: 0.56rem;
+    font-weight: 850;
+    letter-spacing: 0.07em;
+    white-space: nowrap;
+}
+
+.fata-celebration-cta {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.7rem;
+    width: 100%;
+    min-height: 52px;
+    padding: 0.85rem 1.2rem;
+    border: 1px solid rgba(231, 197, 126, 0.46);
+    border-radius: 14px;
+    background: linear-gradient(105deg, #9e5bb9 0%, #8550aa 50%, #7250a5 100%);
+    box-shadow:
+        0 12px 30px rgba(112, 61, 149, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.19);
+    color: #fff;
+    font: inherit;
+    font-size: 0.93rem;
+    font-weight: 800;
+    cursor: pointer;
+    transition:
+        transform 0.18s ease,
+        box-shadow 0.18s ease,
+        filter 0.18s ease;
+}
+
+.fata-celebration-cta:hover {
+    transform: translateY(-2px);
+    filter: brightness(1.08);
+    box-shadow:
+        0 16px 34px rgba(112, 61, 149, 0.37),
+        0 0 22px rgba(226, 187, 111, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.fata-celebration-cta span {
+    font-size: 1.2rem;
+    transition: transform 0.18s ease;
+}
+
+.fata-celebration-cta:hover span {
+    transform: translateX(3px);
+}
+
+.fata-celebration-footnote {
+    margin: 0.8rem 0 0;
+    color: #88818f;
+    font-size: 0.7rem;
+    line-height: 1.45;
+    text-align: center;
+}
+
+.fata-celebration-confetti {
+    position: absolute;
+    z-index: 2;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.fata-confetti-piece {
+    position: absolute;
+    top: -14px;
+    display: block;
+    width: 7px;
+    height: 12px;
+    border-radius: 2px;
+    opacity: 0;
+    animation: fata-confetti-fall var(--fata-confetti-duration, 4s) var(--fata-confetti-delay, 0s) cubic-bezier(0.34, 0, 0.65, 1) both;
+}
+
+.fata-confetti-piece:nth-child(3n) {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+}
+
+.fata-confetti-piece:nth-child(4n) {
+    width: 5px;
+    height: 15px;
+    border-radius: 4px;
+}
+
+.fata-confetti-piece--gold {
+    background: #edc66f;
+    box-shadow: 0 0 9px rgba(237, 198, 111, 0.3);
+}
+
+.fata-confetti-piece--violet {
+    background: #c28be4;
+    box-shadow: 0 0 9px rgba(194, 139, 228, 0.28);
+}
+
+.fata-confetti-piece--white {
+    background: #f5e9ce;
+    box-shadow: 0 0 8px rgba(245, 233, 206, 0.24);
+}
+
+@keyframes fata-celebration-backdrop-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes fata-celebration-enter {
+    from { opacity: 0; transform: translateY(18px) scale(0.96); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes fata-celebration-exit {
+    to { opacity: 0; transform: translateY(8px) scale(0.98); }
+}
+
+@keyframes fata-celebration-seal {
+    from { opacity: 0; transform: scale(0.55) rotate(-12deg); }
+    to { opacity: 1; transform: scale(1) rotate(0); }
+}
+
+@keyframes fata-confetti-fall {
+    0% {
+        opacity: 0;
+        transform: translate3d(0, -3vh, 0) rotate(0);
+    }
+    12% { opacity: 0.94; }
+    82% { opacity: 0.84; }
+    100% {
+        opacity: 0;
+        transform: translate3d(var(--fata-confetti-drift, 0), 108vh, 0) rotate(var(--fata-confetti-rotation, 540deg));
+    }
+}
+
+@media (max-width: 520px) {
+    .fata-celebration-dialog {
+        padding: max(0.55rem, env(safe-area-inset-top)) 0.55rem
+            max(0.55rem, env(safe-area-inset-bottom));
+    }
+
+    .fata-celebration-card {
+        width: 100%;
+        max-height: calc(100dvh - 1.1rem);
+        padding: 1.35rem 1rem 1.1rem;
+        border-radius: 22px;
+    }
+
+    .fata-celebration-card::before {
+        inset: 7px;
+        border-radius: 16px;
+    }
+
+    .fata-celebration-eyebrow {
+        max-width: calc(100% - 2.7rem);
+        margin-bottom: 0.85rem;
+        font-size: 0.61rem;
+        letter-spacing: 0.12em;
+    }
+
+    .fata-celebration-close {
+        top: 0.75rem;
+        right: 0.75rem;
+    }
+
+    .fata-celebration-brands {
+        margin-bottom: 0.85rem;
+    }
+
+    .fata-celebration-check {
+        width: 46px;
+        height: 46px;
+        margin-bottom: 0.65rem;
+        border-radius: 15px;
+    }
+
+    .fata-celebration-message {
+        margin: 0.6rem auto 1rem;
+        font-size: 0.9rem;
+    }
+
+    .fata-celebration-reward {
+        grid-template-columns: 38px minmax(0, 1fr);
+        gap: 0.65rem;
+        padding: 0.72rem;
+    }
+
+    .fata-celebration-reward-icon,
+    .fata-celebration-multiplier {
+        width: 38px;
+        height: 38px;
+    }
+
+    .fata-celebration-unlocked {
+        grid-column: 2;
+        justify-self: start;
+        margin-top: -0.2rem;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .fata-celebration-dialog::backdrop,
+    .fata-celebration-card,
+    .fata-celebration-check,
+    .fata-confetti-piece {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+    }
+
+    .fata-celebration-close,
+    .fata-celebration-cta,
+    .fata-celebration-cta span {
+        transition-duration: 0.01ms !important;
+    }
+}

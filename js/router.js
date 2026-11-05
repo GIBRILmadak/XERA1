@@ -612,7 +612,7 @@
                 return;
             }
             const fataScript = document.createElement("script");
-            fataScript.src = "/js/fata-integration.js?v=20261102-1";
+            fataScript.src = "/js/fata-integration.js?v=20261105-1";
             document.body.appendChild(fataScript);
         };
 
@@ -656,7 +656,7 @@
 
                 if (!existingScript) {
                     navigationScript.src =
-                        "/js/navigation-hub.js?v=20261004-2";
+                        "/js/navigation-hub.js?v=20261105-1";
                     document.body.appendChild(navigationScript);
                 }
             }).finally(() => {

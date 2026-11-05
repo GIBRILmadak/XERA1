@@ -7647,16 +7647,26 @@ app.get("/api/fata/status", async (req, res) => {
             .eq("user_id", userId)
             .order("created_at", { ascending: false });
 
-        const { data: qualification } = await supabase
-            .from("fata_qualifications")
-            .select("*")
-            .eq("user_id", userId)
-            .maybeSingle();
+        const realChallengeId = String(process.env.FATA_REAL_CHALLENGE_ID || "").trim();
+        let qualification = null;
+        if (realChallengeId) {
+            const { data, error } = await supabase
+                .from("fata_qualifications")
+                .select("*")
+                .eq("user_id", userId)
+                .eq("challenge_id", realChallengeId)
+                .maybeSingle();
+            if (error) throw error;
+            qualification = data || null;
+        }
+
+        const { isFataCelebrationPending } = require("./fata-contract");
 
         return res.json({
             connected: Boolean(linkage),
             linkage: linkage || null,
-            qualification: qualification || null,
+            qualification,
+            celebrationPending: isFataCelebrationPending(qualification || {}),
             pendingEvents: pendingEvents || [],
         });
     } catch (error) {
@@ -7664,6 +7674,33 @@ app.get("/api/fata/status", async (req, res) => {
         return res
             .status(500)
             .json({ error: error?.message || "Failed to fetch Fata status" });
+    }
+});
+
+// Acknowledge the completion celebration only after the authenticated user closes it.
+app.post("/api/fata/celebration/seen", async (req, res) => {
+    const auth = await authenticateRequest(req);
+    if (auth.error) {
+        return res
+            .status(auth.error.status)
+            .json({ error: auth.error.message });
+    }
+
+    const challengeId = String(process.env.FATA_REAL_CHALLENGE_ID || "").trim();
+    if (!challengeId) {
+        return res.status(503).json({ error: "Fata challenge is not configured." });
+    }
+
+    try {
+        const { data, error } = await supabase.rpc("mark_fata_celebration_seen", {
+            p_user_id: auth.user.id,
+            p_challenge_id: challengeId,
+        });
+        if (error) throw error;
+        return res.json({ ok: Boolean(data) });
+    } catch (error) {
+        console.error("Fata celebration acknowledgement error:", error?.message || error);
+        return res.status(500).json({ error: "Failed to acknowledge Fata celebration" });
     }
 });
 
@@ -7679,7 +7716,6 @@ app.post("/api/admin/fata/qualifications", async (req, res) => {
     const {
         challengeId,
         subjects,
-        visibilityMultiplier = 5.0,
     } = req.body || {};
 
     if (!challengeId || !Array.isArray(subjects) || subjects.length === 0) {
@@ -7729,34 +7765,20 @@ app.post("/api/admin/fata/qualifications", async (req, res) => {
 
         results.matchedCount += 1;
 
-        const multiplierVal = isTest
-            ? 1.0
-            : Math.min(5.0, Math.max(1.0, Number(visibilityMultiplier) || 5.0));
-
-        const { error: qualError } = await supabase
-            .from("fata_qualifications")
-            .upsert(
-                {
-                    user_id: linkage.user_id,
-                    challenge_id: challengeConfig.id,
-                    fata_sub: fataSub,
-                    qualified_at: new Date().toISOString(),
-                    validated_by: auth.user.id,
-                    badge_awarded: !isTest,
-                    visibility_boost_active: !isTest,
-                    visibility_multiplier: multiplierVal,
-                    boost_started_at: isTest ? null : new Date().toISOString(),
-                    metadata: {
-                        imported_by: auth.user.id,
-                        imported_at: new Date().toISOString(),
-                        is_test: isTest,
-                    },
-                },
-                { onConflict: "user_id,challenge_id" },
-            );
+        const { error: qualError } = await supabase.rpc(
+            "award_fata_qualification",
+            {
+                p_user_id: linkage.user_id,
+                p_challenge_id: challengeConfig.id,
+                p_fata_sub: fataSub,
+                p_validated_by: auth.user.id,
+            },
+        );
 
         if (!qualError) {
             results.qualificationsCreated += 1;
+        } else {
+            console.error("Fata qualification award error:", qualError.message);
         }
     }
 

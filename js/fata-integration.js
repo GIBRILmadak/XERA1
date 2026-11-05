@@ -13,6 +13,12 @@
     let apiBaseError = null;
     let apiBaseErrorUntil = 0;
     let fataStatusPromise = null;
+    let celebrationDialog = null;
+    let celebrationRestoreFocus = null;
+    let celebrationClosing = false;
+    let celebrationDismissedKey = "";
+    let celebrationCurrentKey = "";
+    let celebrationAuthenticatedUserId = "";
 
     function clearApiBaseError() {
         apiBaseError = null;
@@ -203,9 +209,17 @@
         const search = window.location.search;
         const params = new URLSearchParams(search);
         const requestedChallengeId = params.get("challengeId");
+        let storedChallengeId = null;
+        try {
+            storedChallengeId = sessionStorage.getItem(
+                FATA_STORAGE_KEY_CHALLENGE,
+            );
+        } catch (_) {
+            // Storage can be disabled by browser privacy settings. The menu
+            // and challenge panel must still initialize without it.
+        }
         const resolvedChallengeId =
-            requestedChallengeId ||
-            sessionStorage.getItem(FATA_STORAGE_KEY_CHALLENGE);
+            requestedChallengeId || storedChallengeId;
 
         if (requestedChallengeId) {
             persistChallengeId(requestedChallengeId);
@@ -325,6 +339,209 @@
         return fataStatusPromise;
     }
 
+    function createCelebrationDialog() {
+        if (celebrationDialog?.isConnected) return celebrationDialog;
+        celebrationDialog = document.getElementById("fata-celebration-dialog");
+        if (celebrationDialog) return celebrationDialog;
+
+        const dialog = document.createElement("dialog");
+        dialog.id = "fata-celebration-dialog";
+        dialog.className = "fata-celebration-dialog";
+        dialog.setAttribute("aria-labelledby", "fata-celebration-title");
+        dialog.setAttribute("aria-describedby", "fata-celebration-message");
+        dialog.innerHTML = `
+            <div class="fata-celebration-confetti" aria-hidden="true"></div>
+            <article class="fata-celebration-card">
+                <div class="fata-celebration-glow" aria-hidden="true"></div>
+                <button type="button" class="fata-celebration-close" aria-label="Fermer cette annonce">&times;</button>
+                <div class="fata-celebration-eyebrow"><span aria-hidden="true"></span> CHALLENGE OFFICIEL VALIDÉ</div>
+                <div class="fata-celebration-brands" aria-label="Fata et XERA1">
+                    <div class="fata-celebration-brand"><img src="icons/fata.webp" alt="Fata"><span>Fata</span></div>
+                    <span class="fata-celebration-times" aria-hidden="true">×</span>
+                    <div class="fata-celebration-brand fata-celebration-brand--xera"><img src="icons/logo.png" alt=""><span>XERA1</span></div>
+                </div>
+                <div class="fata-celebration-check" aria-hidden="true">✓</div>
+                <h2 id="fata-celebration-title">Bravo, tu l’as fait&nbsp;!</h2>
+                <p id="fata-celebration-message" class="fata-celebration-message">
+                    Ton challenge Fata est officiellement validé. Tu viens de débloquer des avantages exclusifs sur XERA1.
+                </p>
+                <div class="fata-celebration-rewards" aria-label="Avantages débloqués">
+                    <div class="fata-celebration-reward">
+                        <span class="fata-celebration-reward-icon" aria-hidden="true">✦</span>
+                        <span class="fata-celebration-reward-copy"><strong>Badge officiel Fata</strong><small>Une distinction sur ton profil XERA1</small></span>
+                        <span class="fata-celebration-unlocked">DÉBLOQUÉ</span>
+                    </div>
+                    <div class="fata-celebration-reward">
+                        <span class="fata-celebration-multiplier" data-fata-visibility-value>×5</span>
+                        <span class="fata-celebration-reward-copy"><strong>Visibilité XERA1 dans le feed</strong><small>Une visibilité renforcée pour tes publications</small></span>
+                        <span class="fata-celebration-unlocked">DÉBLOQUÉ</span>
+                    </div>
+                </div>
+                <button type="button" class="fata-celebration-cta">Découvrir le feed XERA1 <span aria-hidden="true">→</span></button>
+                <p class="fata-celebration-footnote">Ces récompenses sont liées à ton compte XERA1.</p>
+            </article>
+        `;
+        document.body.appendChild(dialog);
+        celebrationDialog = dialog;
+
+        dialog.addEventListener("cancel", (event) => {
+            event.preventDefault();
+            dismissCelebration(false);
+        });
+        dialog.addEventListener("click", (event) => {
+            if (event.target === dialog) dismissCelebration(false);
+        });
+        dialog.querySelector(".fata-celebration-close")?.addEventListener(
+            "click",
+            () => dismissCelebration(false),
+        );
+        dialog.querySelector(".fata-celebration-cta")?.addEventListener(
+            "click",
+            () => dismissCelebration(true),
+        );
+        return dialog;
+    }
+
+    function addCelebrationConfetti(dialog) {
+        const layer = dialog.querySelector(".fata-celebration-confetti");
+        if (!layer) return;
+        layer.replaceChildren();
+        const colors = ["gold", "violet", "white"];
+        for (let index = 0; index < 34; index += 1) {
+            const piece = document.createElement("span");
+            const color = colors[index % colors.length];
+            piece.className = `fata-confetti-piece fata-confetti-piece--${color}`;
+            piece.style.left = `${2 + Math.random() * 96}%`;
+            piece.style.setProperty(
+                "--fata-confetti-drift",
+                `${Math.round((Math.random() - 0.5) * 150)}px`,
+            );
+            piece.style.setProperty(
+                "--fata-confetti-duration",
+                `${3.3 + Math.random() * 2.2}s`,
+            );
+            piece.style.setProperty(
+                "--fata-confetti-delay",
+                `${Math.random() * 1.1}s`,
+            );
+            piece.style.setProperty(
+                "--fata-confetti-rotation",
+                `${Math.round(240 + Math.random() * 720)}deg`,
+            );
+            layer.appendChild(piece);
+        }
+    }
+
+    function presentCelebration(statusData) {
+        if (statusData?.celebrationPending !== true || celebrationClosing) {
+            return false;
+        }
+
+        const qualification = statusData.qualification || {};
+        const userId = String(
+            celebrationAuthenticatedUserId ||
+            window.currentUser?.id ||
+            window.currentUserId ||
+            "session",
+        );
+        const challengeId = String(qualification.challenge_id || "official");
+        const key = `${userId}:${challengeId}`;
+        if (celebrationDismissedKey === key) return false;
+
+        const dialog = createCelebrationDialog();
+        if (dialog.open) return true;
+        const multiplier = Number(qualification.visibility_multiplier);
+        const multiplierLabel =
+            Number.isFinite(multiplier) && multiplier > 0
+                ? `×${Number.isInteger(multiplier) ? multiplier : multiplier.toFixed(1)}`
+                : "×5";
+        const multiplierNode = dialog.querySelector(
+            "[data-fata-visibility-value]",
+        );
+        if (multiplierNode) multiplierNode.textContent = multiplierLabel;
+
+        celebrationCurrentKey = key;
+        celebrationRestoreFocus = document.activeElement;
+        addCelebrationConfetti(dialog);
+        dialog.showModal();
+        dialog.querySelector(".fata-celebration-close")?.focus();
+        return true;
+    }
+
+    async function acknowledgeCelebration() {
+        const token = await getAuthToken();
+        if (!token) return false;
+        const response = await fetchApi(
+            "/api/fata/celebration/seen",
+            {
+                method: "POST",
+                headers: { Authorization: `Bearer ${token}` },
+            },
+            API_STATUS_TIMEOUT_MS,
+        );
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || `HTTP ${response.status}`);
+        }
+        return true;
+    }
+
+    function dismissCelebration(goToFeed) {
+        const dialog = celebrationDialog;
+        if (!dialog?.open || celebrationClosing) return;
+
+        celebrationClosing = true;
+        celebrationDismissedKey = celebrationCurrentKey;
+        void acknowledgeCelebration().catch((error) => {
+            console.warn("[Fata Celebration Acknowledge Error]:", error);
+        });
+        dialog.classList.add("is-closing");
+
+        const reduceMotion = window.matchMedia?.(
+            "(prefers-reduced-motion: reduce)",
+        ).matches;
+        window.setTimeout(() => {
+            if (dialog.open) dialog.close();
+            dialog.classList.remove("is-closing");
+            dialog.querySelector(".fata-celebration-confetti")?.replaceChildren();
+            celebrationClosing = false;
+            if (celebrationRestoreFocus?.isConnected) {
+                celebrationRestoreFocus.focus?.();
+            }
+            celebrationRestoreFocus = null;
+
+            if (goToFeed) {
+                document.getElementById("discover")?.scrollIntoView({
+                    behavior: reduceMotion ? "auto" : "smooth",
+                    block: "start",
+                });
+            }
+        }, reduceMotion ? 0 : 220);
+    }
+
+    function handlePanelStatus(statusData) {
+        return presentCelebration(statusData);
+    }
+
+    async function checkCelebrationStatus() {
+        return handlePanelStatus(await checkFataStatus());
+    }
+
+    function bindCelebrationAuthEvents() {
+        if (window.__fataCelebrationAuthEventsBound) return;
+        window.__fataCelebrationAuthEventsBound = true;
+        const handleAuthenticated = (event) => {
+            const userId = String(event.detail?.userId || "");
+            if (userId && userId !== celebrationAuthenticatedUserId) {
+                celebrationAuthenticatedUserId = userId;
+                celebrationDismissedKey = "";
+            }
+            void checkCelebrationStatus();
+        };
+        window.addEventListener("xera:user-authenticated", handleAuthenticated);
+        document.addEventListener("xera:user-authenticated", handleAuthenticated);
+    }
+
     async function selectPublishedArc(arcId) {
         const challengeId = parseUrlParams().challengeId;
         if (!challengeId || !arcId) return { selected: false, skipped: true };
@@ -357,6 +574,14 @@
     }
 
     async function initFataUI() {
+        createCelebrationDialog();
+        bindCelebrationAuthEvents();
+        if (!celebrationAuthenticatedUserId) {
+            celebrationAuthenticatedUserId = String(
+                window.currentUser?.id || window.currentUserId || "",
+            );
+        }
+
         const trigger = document.getElementById("nav-fata-btn");
         const panel =
             document.getElementById("fata-challenge-panel") ||
@@ -490,6 +715,7 @@
 
         async function refreshStatus() {
             const statusData = await checkFataStatus();
+            handlePanelStatus(statusData);
             if (!statusData?.connected || !statusData.linkage) {
                 if (arcSelection) arcSelection.hidden = true;
                 return;
@@ -577,7 +803,13 @@
             }
         }
 
-        if (panel?.classList.contains("is-open")) await refreshStatus();
+        if (panel?.classList.contains("is-open")) {
+            await refreshStatus();
+        } else if (await getAuthToken()) {
+            // Covers pages where auth completed before this deferred or
+            // navigation-loaded integration script was initialized.
+            void checkCelebrationStatus();
+        }
     }
 
     const initialParams = parseUrlParams();
@@ -594,6 +826,8 @@
     window.FataIntegration = {
         startFlow: startFataOidcFlow,
         checkStatus: checkFataStatus,
+        checkCelebrationStatus,
+        handlePanelStatus,
         selectPublishedArc,
         initUI: initFataUI,
         resolveApiBaseUrl: getApiBaseUrl,

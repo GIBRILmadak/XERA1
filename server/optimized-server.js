@@ -286,6 +286,15 @@ app.get("/api/fata/status", async (req, res) => {
             return res.status(401).json({ error: "Utilisateur non identifié" });
         }
 
+        const realChallengeId = String(process.env.FATA_REAL_CHALLENGE_ID || "").trim();
+        const qualificationQuery = realChallengeId
+            ? supabase
+                  .from("fata_qualifications")
+                  .select("*")
+                  .eq("user_id", user.id)
+                  .eq("challenge_id", realChallengeId)
+                  .maybeSingle()
+            : Promise.resolve({ data: null, error: null });
         const [linkageResult, pendingResult, qualificationResult] =
             await Promise.all([
                 supabase
@@ -298,11 +307,7 @@ app.get("/api/fata/status", async (req, res) => {
                     .select("*")
                     .eq("user_id", user.id)
                     .order("created_at", { ascending: false }),
-                supabase
-                    .from("fata_qualifications")
-                    .select("*")
-                    .eq("user_id", user.id)
-                    .maybeSingle(),
+                qualificationQuery,
             ]);
 
         const queryError =
@@ -312,15 +317,50 @@ app.get("/api/fata/status", async (req, res) => {
         if (queryError) throw queryError;
 
         const linkage = linkageResult.data || null;
+        const qualification = qualificationResult.data || null;
+        const { isFataCelebrationPending } = require("./fata-contract");
         return res.json({
             connected: Boolean(linkage),
             linkage,
-            qualification: qualificationResult.data || null,
+            qualification,
+            celebrationPending: isFataCelebrationPending(qualification),
             pendingEvents: pendingResult.data || [],
         });
     } catch (error) {
         console.error("Fata status error:", error?.message || "query failed");
         return res.status(500).json({ error: "Failed to fetch Fata status" });
+    }
+});
+
+app.post("/api/fata/celebration/seen", async (req, res) => {
+    const token = getBearerToken(req);
+    if (!token) {
+        return res.status(401).json({ error: "Utilisateur non identifié" });
+    }
+
+    const challengeId = String(process.env.FATA_REAL_CHALLENGE_ID || "").trim();
+    if (!challengeId) {
+        return res.status(503).json({ error: "Fata challenge is not configured." });
+    }
+
+    try {
+        const {
+            data: { user },
+            error: authError,
+        } = await supabase.auth.getUser(token);
+        if (authError || !user) {
+            return res.status(401).json({ error: "Utilisateur non identifié" });
+        }
+
+        const { data, error } = await supabase.rpc("mark_fata_celebration_seen", {
+            p_user_id: user.id,
+            p_challenge_id: challengeId,
+        });
+        if (error) throw error;
+        return res.json({ ok: Boolean(data) });
+    } catch (error) {
+        console.error("Fata celebration acknowledgement error:", error?.message || error);
+        return res.status(500).json({ error: "Failed to acknowledge Fata celebration" });
     }
 });
 

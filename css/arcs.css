@@ -781,14 +781,122 @@
     overflow: hidden;
 }
 
+/* The home page uses the full challenge card as drawer content instead of
+   the compact .fata-panel-body used on profile pages. Let that card own the
+   drawer width and let the panel itself scroll. */
+.index-page #fata-challenge-panel > .container {
+    width: 100%;
+    max-width: none;
+    min-height: 100%;
+    margin: 0;
+    padding: 1rem;
+    box-sizing: border-box;
+}
+
+.index-page #fata-challenge-panel {
+    display: block;
+    padding: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+    scrollbar-gutter: stable;
+}
+
+.index-page #fata-challenge-panel > .container > .fata-mini-shell {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.index-page #fata-challenge-panel > .container .fata-mini-header {
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.index-page #fata-challenge-panel > .container .fata-mini-copy {
+    max-width: 100%;
+}
+
+.index-page #fata-challenge-panel > .container .fata-mini-header h2 {
+    font-size: clamp(2rem, 7vw, 2.5rem);
+}
+
+.index-page #fata-challenge-panel > .container .fata-mini-meta {
+    justify-content: flex-start;
+}
+
+.index-page #fata-challenge-panel > .container .fata-mini-grid {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.index-page #fata-challenge-panel > .container .fata-mini-summary,
+.index-page #fata-challenge-panel > .container .fata-badge-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+}
+
+.index-page #fata-challenge-panel > .container .fata-badge-pill,
+.index-page #fata-challenge-panel > .container .fata-certificate-card {
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+.index-page #fata-challenge-panel > .container .fata-mini-card,
+.index-page #fata-challenge-panel > .container .fata-mini-summary-item {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.index-page #fata-challenge-panel > .container .fata-step-pill {
+    max-width: 100%;
+    white-space: normal;
+}
+
+.index-page #fata-challenge-panel > .container .fata-close-btn {
+    position: fixed;
+    top: max(1rem, env(safe-area-inset-top));
+    right: max(1rem, env(safe-area-inset-right));
+}
+
+@media (max-width: 600px) {
+    .index-page #fata-challenge-panel > .container {
+        padding: max(0.75rem, env(safe-area-inset-top)) 0.75rem
+            max(1rem, env(safe-area-inset-bottom));
+    }
+
+    .index-page #fata-challenge-panel > .container .fata-mini-header {
+        padding-right: 2.5rem;
+        gap: 0.75rem;
+    }
+
+    .index-page #fata-challenge-panel > .container .fata-mini-header h2 {
+        font-size: clamp(1.8rem, 9vw, 2.5rem);
+        overflow-wrap: anywhere;
+    }
+
+    .index-page #fata-challenge-panel > .container .fata-mini-meta {
+        align-items: flex-start;
+        justify-content: flex-start;
+    }
+}
+
 .fata-challenge-panel.is-open {
+    display: flex;
     transform: translateX(0);
+}
+
+.index-page #fata-challenge-panel.is-open {
+    display: block;
 }
 
 .fata-panel-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    flex-shrink: 0;
     padding: 1.25rem 1.5rem;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
     background: rgba(18, 22, 30, 0.8);
@@ -843,6 +951,7 @@
 .fata-panel-body {
     padding: 1.5rem;
     overflow-y: auto;
+    min-height: 0;
     display: flex;
     flex-direction: column;
     gap: 1.5rem;

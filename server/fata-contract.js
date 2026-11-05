@@ -200,6 +200,17 @@ function isRewardEligible(challengeId, qualification = {}) {
     return resolveVisibilityMultiplier(qualification) > 1.0;
 }
 
+function isFataCelebrationPending(qualification = {}) {
+    return Boolean(
+        isRewardEligible(qualification.challenge_id, qualification) &&
+            qualification.badge_awarded &&
+            qualification.visibility_boost_active &&
+            Number(qualification.visibility_multiplier) >= 5 &&
+            !qualification.celebration_seen_at &&
+            qualification.metadata?.is_test !== true,
+    );
+}
+
 function buildIdempotencyKey(
     userId,
     challengeId,
@@ -234,5 +245,6 @@ module.exports = {
     isTestChallenge,
     resolveVisibilityMultiplier,
     isRewardEligible,
+    isFataCelebrationPending,
     buildIdempotencyKey,
 };

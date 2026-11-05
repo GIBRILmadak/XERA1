@@ -6214,6 +6214,7 @@ const VERIFICATION_ADMIN_IDS = new Set([SUPER_ADMIN_ID]);
 let verifiedCreatorUserIds = new Set();
 let verifiedStaffUserIds = new Set();
 let verifiedPageIds = new Set();
+let verifiedFataUserIds = new Set();
 let verificationRequests = [];
 
 function isSuperAdmin() {
@@ -6339,15 +6340,18 @@ async function fetchVerifiedBadges() {
         const creators = new Set();
         const staff = new Set();
         const pages = new Set();
+        const fata = new Set();
         (data || []).forEach((item) => {
             if (item.type === "staff") staff.add(item.user_id);
             if (item.type === "creator") creators.add(item.user_id);
             if (item.type === "page") pages.add(item.user_id);
+            if (item.type === "fata") fata.add(item.user_id);
         });
 
         verifiedCreatorUserIds = creators;
         verifiedStaffUserIds = staff;
         verifiedPageIds = pages;
+        verifiedFataUserIds = fata;
 
         // Fallback local: le super admin est toujours staff vérifié côté UI
         if (SUPER_ADMIN_ID) {
@@ -6357,6 +6361,8 @@ async function fetchVerifiedBadges() {
         console.error("Erreur récupération badges vérifiés:", error);
         verifiedCreatorUserIds = new Set();
         verifiedStaffUserIds = new Set();
+        verifiedPageIds = new Set();
+        verifiedFataUserIds = new Set();
         if (SUPER_ADMIN_ID) {
             verifiedStaffUserIds.add(SUPER_ADMIN_ID);
         }
@@ -6368,7 +6374,12 @@ function getVerifiedBadgeSets() {
         creators: new Set(verifiedCreatorUserIds || []),
         staff: new Set(verifiedStaffUserIds || []),
         pages: new Set(verifiedPageIds || []),
+        fata: new Set(verifiedFataUserIds || []),
     };
+}
+
+function isFataBadgeUserId(userId) {
+    return Boolean(userId && verifiedFataUserIds.has(userId));
 }
 
 function escapeHtml(value) {
@@ -9017,7 +9028,8 @@ function renderVerificationBadgeById(userId) {
 }
 
 function renderVerificationBadgeOnly(userId) {
-    const verificationHtml = renderVerificationBadgeById(userId);
+    const verificationHtml =
+        renderVerificationBadgeById(userId) + renderFataBadgeById(userId);
     if (!verificationHtml) return "";
     return `<div class="badge-container">${verificationHtml}</div>`;
 }
@@ -9033,6 +9045,11 @@ function renderVerifiedPageBadge(pageId) {
     return `<img src="icons/verify_page.svg" alt="Page vérifiée" class="verification-badge page-verification-badge">`;
 }
 
+function renderFataBadgeById(userId) {
+    if (!isFataBadgeUserId(userId)) return "";
+    return `<img src="icons/fata.webp?v=${BADGE_ASSET_VERSION}" alt="Challenge Fata validé" title="Challenge Fata validé" class="fata-verification-badge">`;
+}
+
 function renderVerifiedPageName(nameHtml, pageId) {
     if (!nameHtml) return "";
     const badgeHtml = renderVerifiedPageBadge(pageId);
@@ -9043,7 +9060,8 @@ function renderVerifiedPageName(nameHtml, pageId) {
 function renderUsernameForProfile(nameHtml, userId) {
     if (!nameHtml) return "";
     const labelHtml = wrapUsernameLabel(nameHtml);
-    const verificationHtml = renderVerificationBadgeById(userId);
+    const verificationHtml =
+        renderVerificationBadgeById(userId) + renderFataBadgeById(userId);
     if (verificationHtml) {
         return `<span class="username-with-badge">${labelHtml}${verificationHtml}</span>`;
     }
@@ -9116,7 +9134,8 @@ function renderUsernameWithBadge(nameHtml, userId, isPage = false) {
         return renderVerifiedPageName(labelHtml, userId);
     }
 
-    const verificationHtml = renderVerificationBadgeById(userId);
+    const verificationHtml =
+        renderVerificationBadgeById(userId) + renderFataBadgeById(userId);
     if (verificationHtml) {
         return `<span class="username-with-badge">${labelHtml}${verificationHtml}</span>`;
     }
@@ -10087,7 +10106,8 @@ function renderBadges(badgesList) {
 }
 
 function renderUserBadges(userId) {
-    const verificationHtml = renderVerificationBadgeById(userId);
+    const verificationHtml =
+        renderVerificationBadgeById(userId) + renderFataBadgeById(userId);
     const contributorBadgeHtml = getContributorBadgeHtml(userId);
     const userBadges = getUserBadges(userId);
     if (!verificationHtml && !contributorBadgeHtml && userBadges.length === 0)
