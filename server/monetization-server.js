@@ -7537,8 +7537,8 @@ app.get("/api/fata/arcs", async (req, res) => {
     }
 });
 
-// Persist one ARC per participant and challenge, then ensure action 1 is in
-// the durable outbox. The worker also reconciles this selection after crashes.
+// Persist one ARC per participant and challenge. The database RPC writes the
+// action and its outbox task atomically; the worker remains a recovery path.
 app.post("/api/fata/select-arc", async (req, res) => {
     const auth = await authenticateRequest(req);
     if (auth.error) {
@@ -7549,7 +7549,7 @@ app.post("/api/fata/select-arc", async (req, res) => {
     const arcId = String(req.body?.arcId || "").trim();
     let challenge;
     try {
-        const { resolveChallengeConfig, areFataRequirementIdsConfigured, getChallengeSelection, getArcPresentationOccurredAt, isArcFataEligible, challengeRequirementIdsMatch, hasValidChallengeWindow } = require("./fata-contract");
+        const { resolveChallengeConfig, areFataRequirementIdsConfigured, getChallengeSelection, isArcFataEligible, challengeRequirementIdsMatch, hasValidChallengeWindow } = require("./fata-contract");
         if (!areFataRequirementIdsConfigured()) {
             return res.status(503).json({ error: "Les identifiants d’étapes Fata ne sont pas configurés." });
         }
@@ -7612,15 +7612,6 @@ app.post("/api/fata/select-arc", async (req, res) => {
             throw selectionError;
         }
 
-        const { queueEvent } = require("./fata-worker");
-        await queueEvent(
-            auth.user.id,
-            linkage.fata_sub,
-            challenge.id,
-            challenge.req_arc,
-            getArcPresentationOccurredAt(arc, linkage, selection, challengeRow),
-            `selection-${challenge.id}-${arcId}`,
-        );
         return res.status(200).json({ selection, arc: { id: arc.id, title: arc.title } });
     } catch (error) {
         if (/Invalid Fata challengeId/i.test(error?.message || "")) {

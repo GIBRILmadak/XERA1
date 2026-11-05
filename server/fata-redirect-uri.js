@@ -18,7 +18,14 @@ function validateFataRedirectUri(value) {
         return { valid: false, reason: "invalid_url" };
     }
 
-    if (redirectUrl.protocol !== "https:") {
+    // Fata's development client is explicitly registered with this localhost
+    // callback. Keep the HTTP exception narrow; every non-local callback must
+    // use HTTPS.
+    const isRegisteredLocalDevelopmentUri =
+        redirectUrl.protocol === "http:" &&
+        redirectUrl.hostname === "localhost" &&
+        redirectUrl.port === "3000";
+    if (redirectUrl.protocol !== "https:" && !isRegisteredLocalDevelopmentUri) {
         return { valid: false, reason: "https_required" };
     }
     if (

@@ -147,7 +147,6 @@ function createFataApiRouter(supabase) {
                 resolveChallengeConfig,
                 areFataRequirementIdsConfigured,
                 getChallengeSelection,
-                getArcPresentationOccurredAt,
                 isArcFataEligible,
                 challengeRequirementIdsMatch,
                 hasValidChallengeWindow,
@@ -256,15 +255,6 @@ function createFataApiRouter(supabase) {
                 throw selectionError;
             }
 
-            const { queueEvent } = require("./fata-worker");
-            await queueEvent(
-                user.id,
-                linkage.fata_sub,
-                challenge.id,
-                challenge.req_arc,
-                getArcPresentationOccurredAt(arc, linkage, selection, challengeRow),
-                `selection-${challenge.id}-${arcId}`,
-            );
             return res.status(200).json({
                 selection,
                 arc: { id: arc.id, title: arc.title },

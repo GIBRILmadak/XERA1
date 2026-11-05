@@ -23,7 +23,7 @@ Les URLs du document de proposition ne sont pas considérées comme le contrat f
 
 ## Configuration Supabase
 
-Avant de déployer la version applicative, appliquer [la migration Fata](sql/20261102_fata_contract_compliance.sql). Elle ajoute les jalons aux ARC, le contexte de sélection à la liaison, les dates de réception du challenge et la fonction atomique de sélection.
+Avant de déployer la version applicative, appliquer [la migration Fata](sql/20261102_fata_contract_compliance.sql), puis [la migration de file transactionnelle](sql/20261105090000_fata_transactional_outbox.sql). La seconde conserve les déclencheurs d’activité existants et ajoute la tâche Fata dans la même transaction que la publication d’une preuve ou la validation d’un jalon. La sélection d’un ARC écrit aussi son événement et sa tâche dans la transaction de sélection. Le worker garde la file existante comme chemin de reprise et de réconciliation.
 
 La ligne du challenge dans `fata_challenges_config` doit contenir les trois identifiants d’étape, `opens_at`, `close_at`, `receipt_deadline_at` et `is_active`, selon les valeurs communiquées par Fata. XERA1 refuse l’envoi si les identifiants de la base et de la configuration serveur divergent.
 
@@ -31,6 +31,6 @@ La ligne du challenge dans `fata_challenges_config` doit contenir les trois iden
 
 Sur le plan Hobby, `/api/cron/fata-worker` est planifié une fois par jour à 11:00 UTC dans `vercel.json`, afin que le déploiement soit accepté. `CRON_SECRET` doit être défini; sans lui, le worker refuse de traiter la file. Ce rythme peut retarder les confirmations jusqu’à près de 24 heures et ne garantit pas le respect d’une date limite courte. Pour le traitement toutes les cinq minutes prévu dans le parcours de production, passez le projet en plan Pro ou Enterprise puis remplacez l’expression par `*/5 * * * *`. [Limites officielles des Cron Jobs Vercel](https://vercel.com/docs/cron-jobs/usage-and-pricing).
 
-Les confirmations sont mises en file après enregistrement serveur de l’action. Le worker garde la même clé d’idempotence lors des reprises et arrête les essais après une erreur permanente du contrat.
+Les actions et leurs tâches d’envoi sont validées ensemble par PostgreSQL : si l’écriture de la tâche échoue, l’action est annulée. Le worker Vercel reste quotidien pour le moment; il dépile ces tâches, conserve la même clé d’idempotence lors des reprises et arrête les essais après une erreur permanente du contrat.
 
 Un ARC créé pendant la période d’activité après la liaison des comptes est associé automatiquement au challenge lorsqu’il est conforme; son `created_at` sert de date pour l’action 1. Pour un ARC déjà existant, l’heure de sélection enregistrée côté serveur sert de date d’action.
