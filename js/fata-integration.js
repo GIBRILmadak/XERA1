@@ -19,6 +19,7 @@
     let celebrationDismissedKey = "";
     let celebrationCurrentKey = "";
     let celebrationAuthenticatedUserId = "";
+    let refreshFataPanelStatus = null;
 
     function clearApiBaseError() {
         apiBaseError = null;
@@ -65,6 +66,45 @@
         `;
         document.body.appendChild(panel);
         return panel;
+    }
+
+    // Bind the menu action as soon as this script is evaluated. The profile
+    // hub can rebuild its popover, and status initialization may fail while
+    // the API is unavailable; neither should leave the challenge button inert.
+    if (!window.__fataTriggerDelegateBound) {
+        window.__fataTriggerDelegateBound = true;
+        document.addEventListener(
+            "click",
+            function (event) {
+                const clickedTrigger = event.target?.closest?.(
+                    "#nav-fata-btn, [data-fata-trigger]",
+                );
+                if (!clickedTrigger) return;
+
+                const activePanel =
+                    document.getElementById("fata-challenge-panel") ||
+                    createFataPanel();
+                event.preventDefault();
+                const isOpen = activePanel.classList.toggle("is-open");
+                activePanel.setAttribute("aria-hidden", String(!isOpen));
+                clickedTrigger.setAttribute("aria-expanded", String(isOpen));
+                if (isOpen) {
+                    window.XeraNavHub?.closeProfileHub?.();
+                    void window.FataIntegration?.refreshPanelStatus?.();
+                }
+            },
+            true,
+        );
+
+        document.addEventListener("click", function (event) {
+            if (!event.target?.closest?.("#fata-challenge-panel .fata-close-btn")) return;
+            const panel = document.getElementById("fata-challenge-panel");
+            panel?.classList.remove("is-open");
+            panel?.setAttribute("aria-hidden", "true");
+            document.querySelectorAll("#nav-fata-btn, [data-fata-trigger]").forEach((trigger) => {
+                trigger.setAttribute("aria-expanded", "false");
+            });
+        });
     }
 
     async function probeApi(baseUrl) {
@@ -681,35 +721,6 @@
             );
         }
 
-        // Use delegation: the navigation hub can replace/rebuild its popover
-        // after this script initializes, discarding listeners on its button.
-        if (!window.__fataTriggerDelegateBound) {
-            window.__fataTriggerDelegateBound = true;
-            document.addEventListener(
-                "click",
-                function (event) {
-                    const clickedTrigger = event.target?.closest?.(
-                        "#nav-fata-btn, [data-fata-trigger]",
-                    );
-                    if (!clickedTrigger) return;
-
-                    const activePanel =
-                        document.getElementById("fata-challenge-panel") ||
-                        createFataPanel();
-                    event.preventDefault();
-                    const isOpen = activePanel.classList.toggle("is-open");
-                    activePanel.setAttribute("aria-hidden", String(!isOpen));
-                    clickedTrigger.setAttribute(
-                        "aria-expanded",
-                        String(isOpen),
-                    );
-                    if (isOpen) window.XeraNavHub?.closeProfileHub?.();
-                    if (isOpen) void refreshStatus();
-                },
-                true,
-            );
-        }
-
         if (closeBtn && panel) {
             closeBtn.addEventListener("click", function () {
                 panel.classList.remove("is-open");
@@ -861,6 +872,8 @@
             }
         }
 
+        refreshFataPanelStatus = refreshStatus;
+
         if (panel?.classList.contains("is-open")) {
             await refreshStatus();
         } else if (await getAuthToken()) {
@@ -890,6 +903,7 @@
         checkStatus: checkFataStatus,
         checkCelebrationStatus,
         handlePanelStatus,
+        refreshPanelStatus: (...args) => refreshFataPanelStatus?.(...args),
         selectPublishedArc,
         initUI: initFataUI,
         resolveApiBaseUrl: getApiBaseUrl,
