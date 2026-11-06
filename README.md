@@ -1,231 +1,73 @@
-# XΞRA
+# XΞRA (`xera-platform`)
 
-<div align="center">
-  <img src="./icons/logo.png" alt="XERA1 Logo" width="180" />
+> **"Traditional social media asks you to look successful. XΞRA demands proof of progression."**
 
-### Transform ideas into results.
+![XERA Platform Banner](https://raw.githubusercontent.com/placeholder/xera/main/icons/logo.png)
 
-Build ARCs.  
- Log traces.  
- Make progression visible.
+XΞRA est une plateforme **SocialTech** conçue pour les *builders* — ingénieurs, créateurs, indépendants, étudiants et hackers qui construisent activement au lieu de chercher la dopamine des algorithmes traditionnels.
 
-</div>
+Là où le web social classique valorise le bruit et la perfection artificielle, XΞRA récompense la **trajectoire**, la **régularité** et le **travail vérifiable**.
 
 ---
 
-## What is XΞRA?
+## 💡 Le Concept Central
 
-XΞRA is a SocialTech platform built for builders.
+L'écosystème XΞRA repose sur trois piliers fondamentaux :
 
-Not influencers.  
-Not dopamine addicts dancing for algorithms.
-
-Builders.
-
-Engineers, creators, entrepreneurs, students, indie hackers — people actually creating things and progressing in real life.
-
-Most social platforms reward noise.  
-XΞRA rewards proof of progression.
-
-The platform revolves around 3 core concepts:
-
-- **ARCs** → structured goals/projects
-- **Traces** → documented progress updates
-- **Trajectory** → your visible evolution over time
-
-Instead of posting fake perfection, users document the process.
-
-Because the grind should be visible.
+1. **ARCs** : Vos objectifs structurés (e.g., *Lancer un SaaS*, *Master l'ingénierie IA*, *Concevoir un PCB en génie électrique*). Chaque ARC contient un but, des étapes clés et un historique d'exécution.
+2. **Traces** : La preuve quotidienne de votre travail. Textes, métriques, extraits de code, visuels ou livrables. Pas de blabla, juste de l'exécution.
+3. **Trajectory** : Votre tableau de bord dynamique visualisant votre constance, votre momentum, vos progrès réels et la croissance de vos ARCs au fil du temps.
 
 ---
 
-# Core Concept
+## 🛠 Tech Stack
 
-## 1. Create an ARC
-
-An ARC is a mission.
-
-Examples:
-
-- Build a startup
-- Learn AI engineering
-- Launch a game
-- Finish an electrical engineering project
-- Lose weight
-- Become a better programmer
-
-Each ARC contains:
-
-- a goal
-- milestones
-- progression history
-- traces
+| Couche | Technologies |
+| :--- | :--- |
+| **Frontend** | HTML5, CSS3 Moderne, JavaScript (ES6+ Vanilla) |
+| **Backend & APIs** | Node.js, Express.js, WebSockets, Web Push API |
+| **Base de données & Infra** | Supabase (PostgreSQL / Auth / Realtime), Netlify, Firebase Admin |
 
 ---
 
-## 2. Log Traces
-
-Traces are daily proof of work.
-
-A trace can contain:
-
-- text
-- images
-- videos
-- updates
-- metrics
-- progress proof
-
-This creates a public timeline of execution instead of fake motivational posting.
-
----
-
-## 3. Trajectory Dashboard
-
-Every trace feeds the user's trajectory.
-
-The dashboard visualizes:
-
-- consistency
-- activity
-- momentum
-- progression
-- engagement
-- ARC growth
-
-XΞRA focuses on movement, not vanity metrics.
-
----
-
-# Philosophy
-
-Traditional social media says:
-
-> "Look successful."
-
-XΞRA says:
-
-> "Prove progression."
-
-The platform is intentionally designed around:
-
-- execution
-- consistency
-- public building
-- visible effort
-- long-term progression
-
-Not endless scrolling.
-
-Not brainrot feeds.
-
-Tiny difference. Massive consequence.
-
----
-
-# Main Features
-
-## ARC System
-
-Structured project and goal management.
-
-## Trace Logging
-
-Daily progression documentation with proof.
-
-## Social Feed
-
-Discover builders and active trajectories.
-
-## Trajectory Dashboard
-
-Track growth and consistency in real time.
-
-## Recommendation Algorithm
-
-Custom feed system based on:
-
-- dwell time
-- engagement quality
-- progression relevance
-- mood analysis
-
-### Feed Distribution Logic
-
-- 65% verified builders
-- 35% organic discovery
-
-The algorithm prioritizes serious builders instead of pure virality.
-
-Because the internet already has enough clowns.
-
----
-
-# Tech Stack
-
-## Frontend
-
-- HTML5
-- CSS3
-- JavaScript (ES6+)
-
-## Backend
-
-- Node.js
-- Express.js
-
-## Database & Infra
-
-- Supabase
-- Netlify
-
-## Additional Services
-
-- Firebase Admin
-- Web Push API
-- WebSocket
-
----
-
-# Project Structure
+## 📂 Architecture du Projet
 
 ```bash
 XERA1/
-├── icons/                      # Logos, SVGs and visual assets
-├── js/                         # Frontend application logic
-│   ├── app.js
-│   ├── streaming.js
-│   ├── monetization.js
-│   ├── analytics.js
-│   ├── creator-dashboard.js
-│   ├── messages.js
-│   ├── notifications.js
-│   ├── subscription-plans.js
-│   └── supabase-config.js
+├── icons/                      # Logos, assets graphiques et SVGs
+├── js/                         # Logique applicative Frontend
+│   ├── app.js                  # Cœur de l'application & routage client
+│   ├── supabase-config.js      # Client & authentification Supabase
+│   ├── streaming.js            # Flux live et intégration vidéo
+│   ├── monetization.js         # Logique d'abonnement & monétisation
+│   ├── creator-dashboard.js    # Métriques créateur & tableaux de bord
+│   ├── analytics.js            # Calculs de trajectoire & statistiques
+│   ├── messages.js             # Système de messagerie en temps réel
+│   ├── notifications.js        # Web Push & alertes contextuelles
+│   └── subscription-plans.js   # Gestion des offres et tiers
 │
-├── css/                        # Application styles
-│   ├── style.css
-│   ├── monetization.css
-│   ├── streaming-analytics.css
-│   └── login.css
+├── css/                        # Feuilles de style
+│   ├── style.css               # Design system global & layout
+│   ├── monetization.css        # UI de facturation & grilles de prix
+│   ├── streaming-analytics.css # Dashboard analytique & composants stream
+│   └── login.css               # UI Auth & onboarding
 │
-├── api/                        # Backend API routes
-│   ├── admin/
-│   ├── monetization/
-│   └── reminders/
+├── api/                        # Serverless Functions & Routes API
+│   ├── admin/                  # Endpoints d'administration
+│   ├── monetization/           # Traitement des paiements & webhooks
+│   └── reminders/              # Microservices de relances automatiques
 │
-├── sql/                        # Database schemas & migrations
+├── sql/                        # Schemas, migrations & RLS Supabase
 │
-├── server/                     # Backend services
-│   ├── index.js
-│   ├── monetization-server.js
-│   └── bot-runner.js
+├── server/                     # Backend Node.js / Express
+│   ├── index.js                # Serveur principal & endpoints REST
+│   ├── monetization-server.js  # Serveur dédié aux transactions
+│   └── bot-runner.js           # Tâches de fond & bots d'automatisation
 │
-├── html/                       # Main pages
-│   ├── index.html
-│   ├── stream.html
-│   ├── creator-dashboard.html
-│   └── monetization.html
+├── html/                       # Vues et pages principales
+│   ├── index.html              # Landing page & Feed principal
+│   ├── stream.html             # Interface de live streaming
+│   ├── creator-dashboard.html  # Espace de gestion builder/créateur
+│   └── monetization.html       # Hub d'abonnement
 │
-└── manifest.json               # PWA configuration
-```
+└── manifest.json               # Configuration Progressive Web App (PWA)

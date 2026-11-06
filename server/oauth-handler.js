@@ -91,7 +91,7 @@ router.post("/:tool/start", async (req, res) => {
             return res.status(401).json({ error: "Utilisateur non identifié" });
         }
 
-    let state = crypto.randomBytes(16).toString("hex");
+        let state = crypto.randomBytes(16).toString("hex");
         const requestBody = req.body || {};
         let fataOidcClient = null;
         const requestedChallengeId = requestBody.challengeId;
@@ -118,7 +118,9 @@ router.post("/:tool/start", async (req, res) => {
             }
             if (
                 !String(
-                    requestedChallengeId || process.env.FATA_REAL_CHALLENGE_ID || "",
+                    requestedChallengeId ||
+                        process.env.FATA_REAL_CHALLENGE_ID ||
+                        "",
                 ).trim()
             ) {
                 return res.status(503).json({
@@ -128,15 +130,19 @@ router.post("/:tool/start", async (req, res) => {
             try {
                 fataOidcClient = await getFataOidcClient(config);
             } catch (error) {
-                console.error("[OAuth] Fata OIDC discovery error:", error.message);
+                console.error(
+                    "[OAuth] Fata OIDC discovery error:",
+                    error.message,
+                );
                 return res.status(503).json({
                     error: getFataOidcErrorMessage(error),
                 });
             }
             try {
-                storedChallengeId = resolveChallengeConfigOrRealDefault(
-                    requestedChallengeId,
-                ).id;
+                storedChallengeId =
+                    resolveChallengeConfigOrRealDefault(
+                        requestedChallengeId,
+                    ).id;
             } catch (error) {
                 return res.status(400).json({
                     error: error.message || "Challenge Fata invalide",
@@ -145,16 +151,16 @@ router.post("/:tool/start", async (req, res) => {
 
             state = fataOidcClient.oidc.randomState();
             codeVerifier = fataOidcClient.oidc.randomPKCECodeVerifier();
-            codeChallenge = await fataOidcClient.oidc.calculatePKCECodeChallenge(
-                codeVerifier,
-            );
+            codeChallenge =
+                await fataOidcClient.oidc.calculatePKCECodeChallenge(
+                    codeVerifier,
+                );
             nonce = fataOidcClient.oidc.randomNonce();
         }
 
         const redirectUri = getOAuthCallbackUri(tool, config);
         if (tool === "fata") {
-            const redirectUriValidation =
-                validateFataRedirectUri(redirectUri);
+            const redirectUriValidation = validateFataRedirectUri(redirectUri);
             if (!redirectUriValidation.valid) {
                 const redirectUriErrors = {
                     invalid_url: "L’adresse de retour OIDC Fata est invalide.",
@@ -214,7 +220,10 @@ router.post("/:tool/start", async (req, res) => {
             authorizationUrl.searchParams.set("state", state);
             authorizationUrl.searchParams.set("response_type", "code");
             if (codeChallenge) {
-                authorizationUrl.searchParams.set("code_challenge", codeChallenge);
+                authorizationUrl.searchParams.set(
+                    "code_challenge",
+                    codeChallenge,
+                );
                 authorizationUrl.searchParams.set(
                     "code_challenge_method",
                     "S256",
@@ -271,12 +280,21 @@ router.get("/status", async (req, res) => {
 // GET /api/auth/:tool/callback
 router.get("/:tool/callback", async (req, res) => {
     const { tool } = req.params;
-    const { code, state, error: oauthError, error_description: oauthErrorDesc } = req.query;
+    const {
+        code,
+        state,
+        error: oauthError,
+        error_description: oauthErrorDesc,
+    } = req.query;
     const config = getConfig(tool);
 
     const isFata = tool === "fata";
     let callbackChallengeId = null;
-    const sendOAuthError = (statusCode, message, challengeId = callbackChallengeId) => {
+    const sendOAuthError = (
+        statusCode,
+        message,
+        challengeId = callbackChallengeId,
+    ) => {
         if (isFata) {
             const redirectUrl = buildFataReturnUrl({
                 fata: "error",
@@ -307,10 +325,11 @@ router.get("/:tool/callback", async (req, res) => {
                 .eq("state", state)
                 .eq("tool", tool);
         }
-        console.warn(
-            `[OAuth] Fata callback error for ${tool}:`,
-            { state: state || null, challengeId: callbackChallengeId, error: errorMsg },
-        );
+        console.warn(`[OAuth] Fata callback error for ${tool}:`, {
+            state: state || null,
+            challengeId: callbackChallengeId,
+            error: errorMsg,
+        });
         return sendOAuthError(400, errorMsg);
     }
 
@@ -330,14 +349,11 @@ router.get("/:tool/callback", async (req, res) => {
             return sendOAuthError(400, "State invalide");
         }
         callbackChallengeId = storedState.challenge_id || null;
-        console.info(
-            `[OAuth] Fata callback received:`,
-            {
-                state: state || null,
-                challengeId: callbackChallengeId,
-                userId: storedState.user_id || null,
-            },
-        );
+        console.info(`[OAuth] Fata callback received:`, {
+            state: state || null,
+            challengeId: callbackChallengeId,
+            userId: storedState.user_id || null,
+        });
 
         if (
             isFata &&
@@ -356,12 +372,22 @@ router.get("/:tool/callback", async (req, res) => {
 
         if (isFata) {
             try {
-                resolveChallengeConfig(storedState.challenge_id);
+                resolveChallengeConfigOrRealDefault(storedState.challenge_id);
             } catch (error) {
-                if (/requirement IDs are not configured/i.test(error?.message || "")) {
-                    return sendOAuthError(503, "Les identifiants d’étapes Fata ne sont pas configurés.");
+                if (
+                    /requirement IDs are not configured/i.test(
+                        error?.message || "",
+                    )
+                ) {
+                    return sendOAuthError(
+                        503,
+                        "Les identifiants d’étapes Fata ne sont pas configurés.",
+                    );
                 }
-                return sendOAuthError(400, error.message || "Challenge Fata invalide");
+                return sendOAuthError(
+                    400,
+                    error.message || "Challenge Fata invalide",
+                );
             }
         }
 
@@ -370,7 +396,10 @@ router.get("/:tool/callback", async (req, res) => {
             try {
                 fataOidcClient = await getFataOidcClient(config);
             } catch (error) {
-                console.error("[OAuth] Fata OIDC discovery error:", error.message);
+                console.error(
+                    "[OAuth] Fata OIDC discovery error:",
+                    error.message,
+                );
                 return sendOAuthError(503, getFataOidcErrorMessage(error));
             }
         }
@@ -384,24 +413,31 @@ router.get("/:tool/callback", async (req, res) => {
                 incomingUrl.searchParams.forEach((value, key) => {
                     callbackUrl.searchParams.append(key, value);
                 });
-                const tokenResponse = await fataOidcClient.oidc.authorizationCodeGrant(
-                    fataOidcClient.configuration,
-                    callbackUrl,
-                    {
-                        expectedState: String(state),
-                        pkceCodeVerifier: storedState.code_verifier,
-                        expectedNonce: storedState.nonce,
-                        idTokenExpected: true,
-                    },
-                );
+                const tokenResponse =
+                    await fataOidcClient.oidc.authorizationCodeGrant(
+                        fataOidcClient.configuration,
+                        callbackUrl,
+                        {
+                            expectedState: String(state),
+                            pkceCodeVerifier: storedState.code_verifier,
+                            expectedNonce: storedState.nonce,
+                            idTokenExpected: true,
+                        },
+                    );
                 const claims = tokenResponse.claims();
                 if (!claims || typeof claims.sub !== "string" || !claims.sub) {
                     return sendOAuthError(401, "L’identité Fata est invalide");
                 }
                 tokenData = { ...tokenResponse, claims };
             } catch (error) {
-                console.warn("[OAuth] Fata OIDC response validation failed:", error.message);
-                return sendOAuthError(401, "Échec de vérification de l'identité Fata");
+                console.warn(
+                    "[OAuth] Fata OIDC response validation failed:",
+                    error.message,
+                );
+                return sendOAuthError(
+                    401,
+                    "Échec de vérification de l'identité Fata",
+                );
             }
         } else {
             const tokenParams = new URLSearchParams({
@@ -429,15 +465,24 @@ router.get("/:tool/callback", async (req, res) => {
             });
 
             if (!tokenResponse.ok) {
-                console.error("[OAuth] token exchange failed:", tokenResponse.status);
-                return sendOAuthError(502, "Impossible de récupérer le token OAuth");
+                console.error(
+                    "[OAuth] token exchange failed:",
+                    tokenResponse.status,
+                );
+                return sendOAuthError(
+                    502,
+                    "Impossible de récupérer le token OAuth",
+                );
             }
             tokenData = await tokenResponse.json();
         }
 
         if (!tokenData.access_token) {
             console.error("[OAuth] Token response missing access token");
-            return sendOAuthError(500, "Impossible de récupérer le token OAuth");
+            return sendOAuthError(
+                500,
+                "Impossible de récupérer le token OAuth",
+            );
         }
 
         // --- FATA SPECIFIC LOGIC ---
@@ -459,8 +504,14 @@ router.get("/:tool/callback", async (req, res) => {
                 .maybeSingle();
 
             if (existingUser.error || existingLinkage.error) {
-                console.error("[OAuth] Fata linkage lookup error:", existingUser.error || existingLinkage.error);
-                return sendOAuthError(500, "Impossible de vérifier la liaison du compte Fata");
+                console.error(
+                    "[OAuth] Fata linkage lookup error:",
+                    existingUser.error || existingLinkage.error,
+                );
+                return sendOAuthError(
+                    500,
+                    "Impossible de vérifier la liaison du compte Fata",
+                );
             }
 
             if (
@@ -488,7 +539,10 @@ router.get("/:tool/callback", async (req, res) => {
             const metadata = {
                 ...oldMetadata,
                 source: "oidc",
-                linked_at: oldMetadata.linked_at || existingLinkage.data?.created_at || now,
+                linked_at:
+                    oldMetadata.linked_at ||
+                    existingLinkage.data?.created_at ||
+                    now,
             };
 
             const { error: linkError } = await supabase
@@ -498,8 +552,7 @@ router.get("/:tool/callback", async (req, res) => {
                         user_id: storedState.user_id,
                         fata_iss: config.issuer,
                         fata_sub: decoded.sub,
-                        preferred_username:
-                            decoded.preferred_username || null,
+                        preferred_username: decoded.preferred_username || null,
                         metadata,
                         updated_at: now,
                     },
@@ -526,7 +579,9 @@ router.get("/:tool/callback", async (req, res) => {
                 .eq("user_id", storedState.user_id)
                 .eq("fata_sub", decoded.sub)
                 .eq("status", "failed")
-                .or("last_error.ilike.%link_revoked%,last_error.ilike.%authorization%");
+                .or(
+                    "last_error.ilike.%link_revoked%,last_error.ilike.%authorization%",
+                );
         }
 
         if (!isFata) {
@@ -544,7 +599,8 @@ router.get("/:tool/callback", async (req, res) => {
                             : null,
                         expires_at: tokenData.expires_in
                             ? new Date(
-                                  Date.now() + Number(tokenData.expires_in) * 1000,
+                                  Date.now() +
+                                      Number(tokenData.expires_in) * 1000,
                               ).toISOString()
                             : null,
                         status: "active",
@@ -555,7 +611,10 @@ router.get("/:tool/callback", async (req, res) => {
 
             if (tokenUpsertError) {
                 console.error("[OAuth] token save error:", tokenUpsertError);
-                return sendOAuthError(500, "Impossible de sauvegarder le token OAuth");
+                return sendOAuthError(
+                    500,
+                    "Impossible de sauvegarder le token OAuth",
+                );
             }
         }
 
@@ -575,7 +634,10 @@ router.get("/:tool/callback", async (req, res) => {
                     source: "oauth_connect",
                 });
             } catch (ingestionError) {
-                console.warn("[OAuth] ingestion enqueue warning:", ingestionError);
+                console.warn(
+                    "[OAuth] ingestion enqueue warning:",
+                    ingestionError,
+                );
             }
         }
 
