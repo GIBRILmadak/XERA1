@@ -85,13 +85,15 @@
                     document.getElementById("fata-challenge-panel") ||
                     createFataPanel();
                 event.preventDefault();
-                const isOpen = activePanel.classList.toggle("is-open");
-                activePanel.setAttribute("aria-hidden", String(!isOpen));
-                clickedTrigger.setAttribute("aria-expanded", String(isOpen));
-                if (isOpen) {
-                    window.XeraNavHub?.closeProfileHub?.();
-                    void window.FataIntegration?.refreshPanelStatus?.();
-                }
+                event.stopPropagation();
+                activePanel.classList.add("is-open");
+                activePanel.setAttribute("aria-hidden", "false");
+                clickedTrigger.setAttribute("aria-expanded", "true");
+                activePanel
+                    .querySelector(".fata-close-btn")
+                    ?.focus({ preventScroll: true });
+                window.XeraNavHub?.closeProfileHub?.();
+                void window.FataIntegration?.refreshPanelStatus?.();
             },
             true,
         );
