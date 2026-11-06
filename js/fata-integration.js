@@ -243,8 +243,13 @@
                 }
             } catch (_) {}
         }
-        const storedSession =
-            localStorage.getItem("sb-ssbuagqwjptyhavinkxg-auth-token") || "";
+        let storedSession = "";
+        try {
+            storedSession =
+                localStorage.getItem("sb-ssbuagqwjptyhavinkxg-auth-token") || "";
+        } catch (_) {
+            return "";
+        }
         try {
             return JSON.parse(storedSession).access_token || "";
         } catch (_) {
@@ -255,13 +260,7 @@
     async function startFataOidcFlow(overrideChallengeId) {
         const urlParams = parseUrlParams();
         const challengeId = overrideChallengeId || urlParams.challengeId;
-        if (!challengeId) {
-            alert(
-                "Ouvrez XERA1 depuis le challenge Fata avec « Continuer sur XERA1 » pour transmettre son identifiant.",
-            );
-            return;
-        }
-        persistChallengeId(challengeId);
+        if (challengeId) persistChallengeId(challengeId);
 
         try {
             const token = await getAuthToken();
@@ -281,7 +280,7 @@
                     "Content-Type": "application/json",
                     Authorization: `Bearer ${token}`,
                 },
-                body: JSON.stringify({ challengeId }),
+                body: JSON.stringify(challengeId ? { challengeId } : {}),
             }, API_START_TIMEOUT_MS);
 
             if (!response.ok) {
@@ -314,6 +313,7 @@
             const response = await fetchApi(
                 "/api/fata/status",
                 {
+                    cache: "no-store",
                     headers: {
                         Authorization: `Bearer ${token}`,
                     },
@@ -361,24 +361,24 @@
                     <div class="fata-celebration-brand fata-celebration-brand--xera"><img src="icons/logo.png" alt=""><span>XERA1</span></div>
                 </div>
                 <div class="fata-celebration-check" aria-hidden="true">✓</div>
-                <h2 id="fata-celebration-title">Bravo, tu l’as fait&nbsp;!</h2>
+                <h2 id="fata-celebration-title">Bravo, challenge validé&nbsp;!</h2>
                 <p id="fata-celebration-message" class="fata-celebration-message">
-                    Ton challenge Fata est officiellement validé. Tu viens de débloquer des avantages exclusifs sur XERA1.
+                    Votre challenge Fata est officiellement validé. Vous avez débloqué les avantages offerts par XERA1.
                 </p>
                 <div class="fata-celebration-rewards" aria-label="Avantages débloqués">
                     <div class="fata-celebration-reward">
                         <span class="fata-celebration-reward-icon" aria-hidden="true">✦</span>
-                        <span class="fata-celebration-reward-copy"><strong>Badge officiel Fata</strong><small>Une distinction sur ton profil XERA1</small></span>
+                        <span class="fata-celebration-reward-copy"><strong>Badge officiel Fata</strong><small>Une distinction sur votre profil XERA1</small></span>
                         <span class="fata-celebration-unlocked">DÉBLOQUÉ</span>
                     </div>
                     <div class="fata-celebration-reward">
                         <span class="fata-celebration-multiplier" data-fata-visibility-value>×5</span>
-                        <span class="fata-celebration-reward-copy"><strong>Visibilité XERA1 dans le feed</strong><small>Une visibilité renforcée pour tes publications</small></span>
+                        <span class="fata-celebration-reward-copy"><strong>Visibilité XERA1 dans le feed</strong><small>Une visibilité renforcée pour vos publications</small></span>
                         <span class="fata-celebration-unlocked">DÉBLOQUÉ</span>
                     </div>
                 </div>
                 <button type="button" class="fata-celebration-cta">Découvrir le feed XERA1 <span aria-hidden="true">→</span></button>
-                <p class="fata-celebration-footnote">Ces récompenses sont liées à ton compte XERA1.</p>
+                <p class="fata-celebration-footnote">Ces récompenses sont liées à votre compte XERA1.</p>
             </article>
         `;
         document.body.appendChild(dialog);
@@ -468,6 +468,46 @@
         return true;
     }
 
+    function updateRewardStatus(statusData) {
+        const qualification = statusData?.qualification;
+        if (!qualification) return;
+
+        const badgeStatus = document.querySelector("[data-fata-badge-status]");
+        if (badgeStatus) {
+            badgeStatus.textContent = qualification.badge_awarded
+                ? "Badge officiel attribué sur votre profil."
+                : "Offert après validation officielle du challenge.";
+        }
+
+        const visibilityStatus = document.querySelector(
+            "[data-fata-visibility-status]",
+        );
+        if (visibilityStatus) {
+            visibilityStatus.textContent = qualification.visibility_boost_active
+                ? "Actif"
+                : "À débloquer";
+            visibilityStatus.classList.toggle(
+                "status-badge--pending",
+                !qualification.visibility_boost_active,
+            );
+            visibilityStatus.classList.toggle(
+                "status-badge--success",
+                Boolean(qualification.visibility_boost_active),
+            );
+        }
+
+        const visibilityTitle = document.querySelector(
+            "[data-fata-visibility-title]",
+        );
+        const multiplier = Number(qualification.visibility_multiplier);
+        if (visibilityTitle && Number.isFinite(multiplier) && multiplier > 0) {
+            const multiplierLabel = Number.isInteger(multiplier)
+                ? multiplier
+                : multiplier.toFixed(1);
+            visibilityTitle.textContent = `Visibilité XERA1 ×${multiplierLabel} dans le feed`;
+        }
+    }
+
     async function acknowledgeCelebration() {
         const token = await getAuthToken();
         if (!token) return false;
@@ -490,10 +530,14 @@
         const dialog = celebrationDialog;
         if (!dialog?.open || celebrationClosing) return;
 
+        const dismissedKey = celebrationCurrentKey;
         celebrationClosing = true;
-        celebrationDismissedKey = celebrationCurrentKey;
+        celebrationDismissedKey = dismissedKey;
         void acknowledgeCelebration().catch((error) => {
             console.warn("[Fata Celebration Acknowledge Error]:", error);
+            if (celebrationDismissedKey === dismissedKey) {
+                celebrationDismissedKey = "";
+            }
         });
         dialog.classList.add("is-closing");
 
@@ -520,6 +564,7 @@
     }
 
     function handlePanelStatus(statusData) {
+        updateRewardStatus(statusData);
         return presentCelebration(statusData);
     }
 
@@ -539,7 +584,11 @@
             void checkCelebrationStatus();
         };
         window.addEventListener("xera:user-authenticated", handleAuthenticated);
-        document.addEventListener("xera:user-authenticated", handleAuthenticated);
+        window.addEventListener("online", () => {
+            if (window.currentUser?.id || window.currentUserId) {
+                void checkCelebrationStatus();
+            }
+        });
     }
 
     async function selectPublishedArc(arcId) {
@@ -716,6 +765,15 @@
         async function refreshStatus() {
             const statusData = await checkFataStatus();
             handlePanelStatus(statusData);
+            const configuredChallengeId = String(
+                statusData?.challengeId || "",
+            ).trim();
+            if (
+                configuredChallengeId &&
+                !parseUrlParams().hasExplicitChallengeId
+            ) {
+                persistChallengeId(configuredChallengeId);
+            }
             if (!statusData?.connected || !statusData.linkage) {
                 if (arcSelection) arcSelection.hidden = true;
                 return;
@@ -816,6 +874,10 @@
     if (initialParams.challengeId) {
         persistChallengeId(initialParams.challengeId);
     }
+
+    // Bind before DOMContentLoaded so a fast auth restore cannot emit its
+    // completion event before the celebration listener is ready.
+    bindCelebrationAuthEvents();
 
     if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", initFataUI, { once: true });

@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const crypto = require("crypto");
 const { getConfig } = require("./oauth-configs");
-const { resolveChallengeConfig } = require("./fata-contract");
+const { resolveChallengeConfigOrRealDefault } = require("./fata-contract");
 const { encryptToken } = require("./oauth-token-manager");
 const { enqueueIngestion } = require("./ingestion-queue");
 const { createSupabaseServiceClient } = require("./supabase-service-client");
@@ -94,11 +94,11 @@ router.post("/:tool/start", async (req, res) => {
     let state = crypto.randomBytes(16).toString("hex");
         const requestBody = req.body || {};
         let fataOidcClient = null;
-        const { challengeId } = requestBody;
+        const requestedChallengeId = requestBody.challengeId;
         let codeVerifier = requestBody.codeVerifier || null;
         let codeChallenge = requestBody.codeChallenge || null;
         let nonce = requestBody.nonce || null;
-        let storedChallengeId = challengeId || null;
+        let storedChallengeId = requestedChallengeId || null;
 
         if (tool === "fata") {
             if (
@@ -116,6 +116,15 @@ router.post("/:tool/start", async (req, res) => {
                     error: "Les identifiants d’étapes Fata ne sont pas configurés.",
                 });
             }
+            if (
+                !String(
+                    requestedChallengeId || process.env.FATA_REAL_CHALLENGE_ID || "",
+                ).trim()
+            ) {
+                return res.status(503).json({
+                    error: "L’identifiant du challenge Fata officiel n’est pas configuré.",
+                });
+            }
             try {
                 fataOidcClient = await getFataOidcClient(config);
             } catch (error) {
@@ -125,7 +134,9 @@ router.post("/:tool/start", async (req, res) => {
                 });
             }
             try {
-                storedChallengeId = resolveChallengeConfig(challengeId).id;
+                storedChallengeId = resolveChallengeConfigOrRealDefault(
+                    requestedChallengeId,
+                ).id;
             } catch (error) {
                 return res.status(400).json({
                     error: error.message || "Challenge Fata invalide",

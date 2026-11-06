@@ -70,6 +70,12 @@ function resolveChallengeConfig(challengeId) {
     return challenge;
 }
 
+function resolveChallengeConfigOrRealDefault(challengeId) {
+    const requestedId = normalizeText(challengeId);
+    const realChallengeId = getFataChallengeConfig().realChallengeId;
+    return resolveChallengeConfig(requestedId || realChallengeId);
+}
+
 function countArcMilestones(arc) {
     const milestones = Array.isArray(arc?.milestones) ? arc.milestones : [];
     return milestones.filter((milestone) => {
@@ -236,6 +242,7 @@ module.exports = {
     areFataRequirementIdsConfigured,
     getConfiguredChallengeEntries,
     resolveChallengeConfig,
+    resolveChallengeConfigOrRealDefault,
     countArcMilestones,
     getChallengeSelection,
     challengeRequirementIdsMatch,

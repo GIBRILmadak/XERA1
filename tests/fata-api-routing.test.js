@@ -11,7 +11,12 @@ function createIntegration(location, fetchImpl, config = {}) {
         getItem() { return null; },
         setItem() {},
     };
-    const window = { location, ...config, sessionStorage };
+    const window = {
+        location,
+        ...config,
+        sessionStorage,
+        addEventListener() {},
+    };
     const document = { addEventListener() {} };
     vm.runInNewContext(source, {
         window,
@@ -24,7 +29,7 @@ function createIntegration(location, fetchImpl, config = {}) {
         clearTimeout,
         console,
         alert() {},
-        localStorage: { getItem() { return null; } },
+        localStorage: config.localStorage || { getItem() { return null; } },
         sessionStorage,
     });
     return window.FataIntegration;
@@ -184,4 +189,35 @@ test("stores the challengeId returned by Fata in sessionStorage", async () => {
 
     assert.equal(storage["xera1_fata_challenge_id"], "xera1-test");
     assert.equal(typeof integration.startFlow, "function");
+});
+
+test("starts the production Fata flow without a challengeId in the page URL", async () => {
+    const location = {
+        hostname: "xera1.xyz",
+        port: "",
+        protocol: "https:",
+        origin: "https://xera1.xyz",
+        pathname: "/",
+        search: "",
+        href: "https://xera1.xyz/",
+    };
+    let requestBody;
+    const integration = createIntegration(
+        location,
+        async (url, options) => {
+            assert.equal(url, "/api/auth/fata/start");
+            requestBody = JSON.parse(options.body);
+            return jsonResponse(true, { authUrl: "https://fata.example/authorize" });
+        },
+        {
+            localStorage: {
+                getItem: () => JSON.stringify({ access_token: "xera-session-token" }),
+            },
+        },
+    );
+
+    await integration.startFlow();
+
+    assert.deepEqual(requestBody, {});
+    assert.equal(location.href, "https://fata.example/authorize");
 });

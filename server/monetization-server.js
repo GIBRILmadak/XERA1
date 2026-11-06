@@ -7624,6 +7624,7 @@ app.post("/api/fata/select-arc", async (req, res) => {
 
 // Fata Linkage & Challenge Status for Authenticated User
 app.get("/api/fata/status", async (req, res) => {
+    res.setHeader("Cache-Control", "private, no-store, max-age=0");
     const auth = await authenticateRequest(req);
     if (auth.error) {
         return res
@@ -7665,6 +7666,7 @@ app.get("/api/fata/status", async (req, res) => {
         return res.json({
             connected: Boolean(linkage),
             linkage: linkage || null,
+            challengeId: realChallengeId || null,
             qualification,
             celebrationPending: isFataCelebrationPending(qualification || {}),
             pendingEvents: pendingEvents || [],
@@ -7743,6 +7745,7 @@ app.post("/api/admin/fata/qualifications", async (req, res) => {
         matchedCount: 0,
         unmatchedSubjects: [],
         qualificationsCreated: 0,
+        qualificationErrors: 0,
         rewardsApplied: !isTest,
     };
 
@@ -7778,8 +7781,17 @@ app.post("/api/admin/fata/qualifications", async (req, res) => {
         if (!qualError) {
             results.qualificationsCreated += 1;
         } else {
+            results.qualificationErrors += 1;
             console.error("Fata qualification award error:", qualError.message);
         }
+    }
+
+    if (results.qualificationErrors > 0) {
+        return res.status(500).json({
+            ok: false,
+            error: "Some Fata qualifications could not be recorded. Check that the rewards migration is applied, then retry.",
+            results,
+        });
     }
 
     return res.json({ ok: true, results });

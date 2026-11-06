@@ -272,6 +272,7 @@ app.get("/api/health", (req, res) => {
 
 // Fata linkage and challenge status for the authenticated XERA1 user.
 app.get("/api/fata/status", async (req, res) => {
+    res.setHeader("Cache-Control", "private, no-store, max-age=0");
     const token = getBearerToken(req);
     if (!token) {
         return res.status(401).json({ error: "Utilisateur non identifié" });
@@ -322,6 +323,7 @@ app.get("/api/fata/status", async (req, res) => {
         return res.json({
             connected: Boolean(linkage),
             linkage,
+            challengeId: realChallengeId || null,
             qualification,
             celebrationPending: isFataCelebrationPending(qualification),
             pendingEvents: pendingResult.data || [],

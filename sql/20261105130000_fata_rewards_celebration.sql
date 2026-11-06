@@ -11,6 +11,32 @@ alter table public.verified_badges
     add constraint verified_badges_type_check
     check (type = any (array['creator'::text, 'staff'::text, 'page'::text, 'fata'::text]));
 
+-- Bring previously imported official qualifications into the new reward model.
+update public.fata_qualifications as qualification
+set badge_awarded = true,
+    visibility_boost_active = true,
+    visibility_multiplier = 5.0,
+    boost_started_at = coalesce(
+        qualification.boost_started_at,
+        qualification.qualified_at,
+        now()
+    )
+from public.fata_challenges_config as challenge
+where challenge.id = qualification.challenge_id
+  and challenge.is_test = false
+  and qualification.fata_sub is not null;
+
+insert into public.verified_badges (user_id, type)
+select distinct qualification.user_id, 'fata'
+from public.fata_qualifications as qualification
+join public.fata_challenges_config as challenge
+  on challenge.id = qualification.challenge_id
+where challenge.is_test = false
+  and qualification.fata_sub is not null
+  and qualification.badge_awarded
+  and qualification.visibility_boost_active
+on conflict (user_id, type) do nothing;
+
 create or replace function public.award_fata_qualification(
     p_user_id uuid,
     p_challenge_id text,

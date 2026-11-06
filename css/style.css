@@ -5989,6 +5989,17 @@ html.light-mode .profile-signal-panel {
     display: inline-block;
 }
 
+.fata-verification-badge {
+    width: 22px;
+    height: 22px;
+    display: inline-block;
+    flex: 0 0 auto;
+    object-fit: contain;
+    border-radius: 5px;
+    vertical-align: middle;
+    filter: drop-shadow(0 0 5px rgba(246, 211, 62, 0.24));
+}
+
 .page-verification-badge {
     width: 18px;
     height: 18px;

@@ -23,9 +23,13 @@ Les URLs du document de proposition ne sont pas considérées comme le contrat f
 
 ## Configuration Supabase
 
-Avant de déployer la version applicative, appliquer [la migration Fata](sql/20261102_fata_contract_compliance.sql), puis [la migration de file transactionnelle](sql/20261105090000_fata_transactional_outbox.sql). La seconde conserve les déclencheurs d’activité existants et ajoute la tâche Fata dans la même transaction que la publication d’une preuve ou la validation d’un jalon. La sélection d’un ARC écrit aussi son événement et sa tâche dans la transaction de sélection. Le worker garde la file existante comme chemin de reprise et de réconciliation.
+Avant de déployer la version applicative, appliquer [la migration Fata](sql/20261102_fata_contract_compliance.sql), puis [la migration de file transactionnelle](sql/20261105090000_fata_transactional_outbox.sql), puis [la migration des récompenses et de la célébration](sql/20261105130000_fata_rewards_celebration.sql). La seconde conserve les déclencheurs d’activité existants et ajoute la tâche Fata dans la même transaction que la publication d’une preuve ou la validation d’un jalon. La sélection d’un ARC écrit aussi son événement et sa tâche dans la transaction de sélection. Le worker garde la file existante comme chemin de reprise et de réconciliation.
+
+La dernière migration permet le badge public `fata`, attribue atomiquement ce badge et une visibilité ×5 à la qualification du challenge officiel, et conserve l’état de la popup de réussite jusqu’à sa fermeture par l’utilisateur. Elle applique aussi ces récompenses aux qualifications officielles déjà importées; les challenges de test restent exclus. Après application, déployer ensemble le client et les deux serveurs (`monetization-server.js` pour Vercel, `optimized-server.js` en local). La popup est récupérée au démarrage de la session XERA1; si l’utilisateur est hors ligne, elle reste en attente. La fermeture acquitte l’annonce côté serveur. Le ×5 pondère le classement des contenus dans le feed; le nombre d’impressions réel dépend du contenu et de l’activité du feed.
 
 La ligne du challenge dans `fata_challenges_config` doit contenir les trois identifiants d’étape, `opens_at`, `close_at`, `receipt_deadline_at` et `is_active`, selon les valeurs communiquées par Fata. XERA1 refuse l’envoi si les identifiants de la base et de la configuration serveur divergent.
+
+Depuis le panneau XERA1, la connexion Fata peut démarrer sans paramètre `challengeId` dans l’URL : le serveur utilise alors `FATA_REAL_CHALLENGE_ID`, l’enregistre dans l’état OAuth, puis le renvoie au retour du callback. Les liens entrants depuis Fata peuvent toujours transmettre explicitement un identifiant de challenge.
 
 ## Worker Vercel
 

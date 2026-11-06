@@ -2332,6 +2332,11 @@ async function initializeApp() {
             window.currentUser = user;
             window.currentUserId = user.id;
             window.currentViewerId = user.id;
+            window.dispatchEvent(
+                new CustomEvent("xera:user-authenticated", {
+                    detail: { userId: user.id },
+                }),
+            );
             trackPostPublishUpsellConversion(user);
 
             const isCurrentRoutePro = isPageProRoute();
@@ -11698,8 +11703,10 @@ function buildMoodDiscoverMix(
     if (!currentUser || allItems.length < 3) {
         return [...allItems].sort(
             (left, right) =>
-                Number(isVerifiedProfessionalPagePost(right)) -
-                Number(isVerifiedProfessionalPagePost(left)),
+                (Number(isVerifiedProfessionalPagePost(right)) * 10 +
+                    Number(isFataBadgeUserId(right.content?.userId)) * 5) -
+                (Number(isVerifiedProfessionalPagePost(left)) * 10 +
+                    Number(isFataBadgeUserId(left.content?.userId)) * 5),
         );
     }
 
@@ -11721,6 +11728,7 @@ function buildMoodDiscoverMix(
             isVerifiedUserId: (userId) =>
                 isVerifiedCreatorUserId(userId) ||
                 isVerifiedStaffUserId(userId),
+            isFataUserId: isFataBadgeUserId,
             now,
             topQueries,
             viewerRole,
@@ -14194,7 +14202,12 @@ function scoreImmersiveContent(content, context) {
         roleOpportunityBoost +
         preferenceScore -
         seenPenalty;
-    const score = base + Math.random() * 0.08;
+    const fataMultiplier =
+        typeof context.isFataUserId === "function" &&
+        context.isFataUserId(content.userId)
+            ? 5
+            : 1;
+    const score = (base + Math.random() * 0.08) * fataMultiplier;
     return { score, preferenceScore };
 }
 
@@ -14219,8 +14232,15 @@ function interleaveByUser(contents) {
 }
 
 async function getPersonalizedFeed(contents) {
-    if (!currentUser || !Array.isArray(contents) || contents.length < 3)
-        return contents;
+    if (!Array.isArray(contents) || contents.length < 2) return contents;
+    if (!currentUser) {
+        return [...contents].sort(
+            (left, right) =>
+                Number(isFataBadgeUserId(right.userId)) -
+                Number(isFataBadgeUserId(left.userId)),
+        );
+    }
+    if (contents.length < 3) return contents;
     const prefs = loadImmersivePrefs();
     const followedSet = await getFollowedUserIdSet();
     const authorScoreMap = buildAuthorScoreMapFromContents();
@@ -14238,6 +14258,7 @@ async function getPersonalizedFeed(contents) {
             isVerifiedUserId: (userId) =>
                 isVerifiedCreatorUserId(userId) ||
                 isVerifiedStaffUserId(userId),
+            isFataUserId: isFataBadgeUserId,
             now,
             topQueries,
             viewerRole,

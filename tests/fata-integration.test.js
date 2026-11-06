@@ -6,6 +6,7 @@ const {
     areFataRequirementIdsConfigured,
     getConfiguredChallengeEntries,
     resolveChallengeConfig,
+    resolveChallengeConfigOrRealDefault,
     isTestChallenge,
     resolveVisibilityMultiplier,
     isRewardEligible,
@@ -79,6 +80,14 @@ describe("Fata × XERA1 Contract & Logic Unit Tests", () => {
             const realEntry = resolveChallengeConfig("xera1-real-prod");
             assert.strictEqual(realEntry.id, "xera1-real-prod");
             assert.strictEqual(realEntry.is_test, false);
+            assert.strictEqual(
+                resolveChallengeConfigOrRealDefault().id,
+                "xera1-real-prod",
+            );
+            assert.strictEqual(
+                resolveChallengeConfigOrRealDefault("xera1-test").id,
+                "xera1-test",
+            );
 
             assert.throws(() => {
                 resolveChallengeConfig("unknown-challenge-id");
