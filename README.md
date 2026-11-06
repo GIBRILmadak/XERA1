@@ -1,18 +1,18 @@
-# XΞRA (`xera-platform`)
+# XΞRA1 (`xera1-platform`)
 
-> **"Traditional social media asks you to look successful. XΞRA demands proof of progression."**
+> **"Traditional social media asks you to look successful. XΞRA1 demands proof of progression."**
 
-![XERA Platform Banner](https://raw.githubusercontent.com/placeholder/xera/main/icons/logo.png)
+![XERA1 Platform Banner](![alt text](image.png))
 
-XΞRA est une plateforme **SocialTech** conçue pour les *builders* — ingénieurs, créateurs, indépendants, étudiants et hackers qui construisent activement au lieu de chercher la dopamine des algorithmes traditionnels.
+XΞRA1 est une plateforme **SocialTech** conçue pour les *builders* — ingénieurs, créateurs, indépendants, étudiants et hackers qui construisent activement au lieu de chercher la dopamine des algorithmes traditionnels.
 
-Là où le web social classique valorise le bruit et la perfection artificielle, XΞRA récompense la **trajectoire**, la **régularité** et le **travail vérifiable**.
+Là où le web social classique valorise le bruit et la perfection artificielle, XΞRA1 récompense la **trajectoire**, la **régularité** et le **travail vérifiable**.
 
 ---
 
 ## 💡 Le Concept Central
 
-L'écosystème XΞRA repose sur trois piliers fondamentaux :
+L'écosystème XΞRA1 repose sur trois piliers fondamentaux :
 
 1. **ARCs** : Vos objectifs structurés (e.g., *Lancer un SaaS*, *Master l'ingénierie IA*, *Concevoir un PCB en génie électrique*). Chaque ARC contient un but, des étapes clés et un historique d'exécution.
 2. **Traces** : La preuve quotidienne de votre travail. Textes, métriques, extraits de code, visuels ou livrables. Pas de blabla, juste de l'exécution.
