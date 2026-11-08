@@ -464,16 +464,22 @@ async function queueEvent(
 /**
  * Process pending events and send to Fata
  */
-async function processPendingEvents() {
+async function processPendingEvents(userId = null, batchSize = OUTBOX_BATCH_SIZE) {
     logger.debug("[Fata Worker] Processing pending events...");
 
     const now = new Date().toISOString();
-    const { data: events, error } = await supabase
+    let pendingQuery = supabase
         .from("fata_pending_events")
         .select("*, fata_challenges_config(receipt_deadline_at)")
         .in("status", ["pending", "retry"])
         .or(`next_retry_at.is.null,next_retry_at.lte.${now}`)
-        .limit(OUTBOX_BATCH_SIZE);
+        .order("created_at", { ascending: true });
+    if (userId) pendingQuery = pendingQuery.eq("user_id", userId);
+    const safeBatchSize = Math.max(
+        1,
+        Math.min(OUTBOX_BATCH_SIZE, Number(batchSize) || OUTBOX_BATCH_SIZE),
+    );
+    const { data: events, error } = await pendingQuery.limit(safeBatchSize);
 
     if (error) {
         console.error("[Fata Worker] Pending events fetch error:", error);

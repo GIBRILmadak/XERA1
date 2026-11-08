@@ -17,6 +17,17 @@ function invalidateTechnicalToken() {
     tokenRequest = null;
 }
 
+function normalizeFataOccurredAt(value) {
+    const timestamp = String(value || "").trim();
+    if (
+        !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(timestamp) ||
+        !Number.isFinite(Date.parse(timestamp))
+    ) {
+        throw new Error("Fata occurredAt must be a valid RFC3339 timestamp");
+    }
+    return new Date(timestamp).toISOString();
+}
+
 async function getTechnicalToken() {
     if (cachedToken && Date.now() < tokenExpiresAt) {
         return cachedToken;
@@ -73,13 +84,7 @@ async function sendActionCompletion(payload, idempotencyKey) {
     ) {
         throw new Error("Invalid Fata action completion payload");
     }
-    if (
-        !payload.occurredAt ||
-        !String(payload.occurredAt).endsWith("Z") ||
-        !Number.isFinite(Date.parse(payload.occurredAt))
-    ) {
-        throw new Error("Fata occurredAt must be an RFC3339 UTC timestamp");
-    }
+    const occurredAt = normalizeFataOccurredAt(payload.occurredAt);
     if (!idempotencyKey || !String(idempotencyKey).trim()) {
         throw new Error("Fata Idempotency-Key is required");
     }
@@ -88,7 +93,7 @@ async function sendActionCompletion(payload, idempotencyKey) {
         subject: payload.subject,
         challengeId: payload.challengeId,
         requirementId: payload.requirementId,
-        occurredAt: payload.occurredAt,
+        occurredAt,
     };
 
     const apiBase = String(
@@ -145,5 +150,6 @@ async function sendActionCompletion(payload, idempotencyKey) {
 module.exports = {
     getTechnicalToken,
     invalidateTechnicalToken,
+    normalizeFataOccurredAt,
     sendActionCompletion,
 };

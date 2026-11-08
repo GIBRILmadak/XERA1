@@ -28,6 +28,7 @@ const {
 const {
     getTechnicalToken,
     invalidateTechnicalToken,
+    normalizeFataOccurredAt,
     sendActionCompletion,
 } = require("../server/fata-api-client");
 
@@ -106,6 +107,17 @@ test("Idempotency key generation is deterministic and sha256 stable", () => {
     assert.equal(key1, key2);
     assert.notEqual(key1, key3);
     assert.equal(key1.length, 64);
+});
+
+test("Fata API timestamps from PostgREST are normalized to UTC with Z", () => {
+    assert.equal(
+        normalizeFataOccurredAt("2026-09-24T12:00:00.123+00:00"),
+        "2026-09-24T12:00:00.123Z",
+    );
+    assert.throws(
+        () => normalizeFataOccurredAt("not-a-timestamp"),
+        /valid RFC3339 timestamp/,
+    );
 });
 
 test("Fata API client handles 401 token invalidation and single retry", async () => {

@@ -1015,11 +1015,47 @@ async function handleCreateArc(e) {
             await createArcLaunchTrace(createdArc, arcData, authUser);
             if (typeof window.FataIntegration?.selectPublishedArc === "function") {
                 try {
-                    await window.FataIntegration.selectPublishedArc(createdArc.id);
+                    const fataSelection = await window.FataIntegration.selectPublishedArc(createdArc.id);
+                    if (fataSelection?.selected) {
+                        if (fataSelection.delivery?.status === "delivered") {
+                            xeraToast(
+                                "success",
+                                "Projet confirmé par Fata",
+                                "L’étape de présentation du projet a été transmise à Fata.",
+                            );
+                        } else if (fataSelection.delivery?.status === "failed") {
+                            xeraToast(
+                                "error",
+                                "Projet associé, confirmation refusée par Fata",
+                                fataSelection.delivery.error || "Vérifiez la liaison et les conditions du challenge.",
+                            );
+                        } else {
+                            xeraToast(
+                                "info",
+                                "Projet associé au challenge Fata",
+                                "La confirmation est en file et sera retentée automatiquement si nécessaire.",
+                            );
+                        }
+                    } else if (!fataSelection?.skipped) {
+                        console.warn(
+                            "New ARC could not be associated with the Fata challenge:",
+                            fataSelection?.error,
+                        );
+                        xeraToast(
+                            "warning",
+                            "Projet créé, étape Fata à vérifier",
+                            fataSelection?.error || "L’association au challenge n’a pas abouti.",
+                        );
+                    }
                 } catch (fataSelectionError) {
                     console.warn(
                         "New ARC could not be associated with the Fata challenge:",
                         fataSelectionError,
+                    );
+                    xeraToast(
+                        "warning",
+                        "Projet créé, étape Fata à vérifier",
+                        fataSelectionError?.message || "L’association au challenge n’a pas abouti.",
                     );
                 }
             }
@@ -1751,6 +1787,15 @@ async function validateArcMilestone(arcId, contentId = null) {
                 return;
             }
             throw error;
+        }
+
+        if (
+            isOwner &&
+            typeof window.FataIntegration?.syncPendingActions === "function"
+        ) {
+            void window.FataIntegration.syncPendingActions().catch((syncError) => {
+                console.warn("Fata milestone delivery is still queued:", syncError);
+            });
         }
 
         if (typeof createNotification === "function") {

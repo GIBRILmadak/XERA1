@@ -7464,6 +7464,31 @@ app.all(["/api/cron/fata-worker", "/cron/fata-worker"], async (req, res) => {
 });
 
 // List ARC candidates and the immutable selection for the current Fata challenge.
+app.post("/api/fata/sync", async (req, res) => {
+    const auth = await authenticateRequest(req);
+    if (auth.error) {
+        return res.status(auth.error.status).json({ error: auth.error.message });
+    }
+    res.setHeader("Cache-Control", "private, no-store, max-age=0");
+
+    try {
+        await require("./fata-worker").processPendingEvents(auth.user.id, 1);
+        const { data: pendingEvents, error } = await supabase
+            .from("fata_pending_events")
+            .select("id,challenge_id,requirement_id,status,event_id,request_id,last_error,created_at,updated_at")
+            .eq("user_id", auth.user.id)
+            .order("updated_at", { ascending: false })
+            .limit(50);
+        if (error) throw error;
+        return res.json({ pendingEvents: pendingEvents || [] });
+    } catch (error) {
+        console.error("Fata queue sync error:", error);
+        return res.status(500).json({
+            error: "Impossible de synchroniser les confirmations Fata pour le moment.",
+        });
+    }
+});
+
 app.get("/api/fata/arcs", async (req, res) => {
     const auth = await authenticateRequest(req);
     if (auth.error) {
@@ -7612,7 +7637,42 @@ app.post("/api/fata/select-arc", async (req, res) => {
             throw selectionError;
         }
 
-        return res.status(200).json({ selection, arc: { id: arc.id, title: arc.title } });
+        // The selection RPC commits the ARC selection and its outbox row
+        // together. Try this user's queue immediately to meet Fata's
+        // seconds-level confirmation flow; the daily Vercel cron remains
+        // responsible for retries and recovery.
+        let delivery = null;
+        try {
+            await require("./fata-worker").processPendingEvents(auth.user.id, 1);
+            const { data: actionEvent, error: actionEventError } = await supabase
+                .from("fata_pending_events")
+                .select("status,event_id,request_id,last_error")
+                .eq("user_id", auth.user.id)
+                .eq("challenge_id", challenge.id)
+                .eq("requirement_id", challengeRow.req_arc)
+                .order("created_at", { ascending: false })
+                .limit(1)
+                .maybeSingle();
+            if (actionEventError) throw actionEventError;
+            if (actionEvent) {
+                delivery = {
+                    status: actionEvent.status,
+                    eventId: actionEvent.event_id,
+                    requestId: actionEvent.request_id,
+                    error: actionEvent.last_error,
+                };
+            }
+        } catch (deliveryError) {
+            // The durable task is already committed. A transient send or
+            // status lookup failure must not undo the saved selection.
+            console.error("Fata immediate ARC delivery failed:", deliveryError);
+        }
+
+        return res.status(200).json({
+            selection,
+            arc: { id: arc.id, title: arc.title },
+            delivery,
+        });
     } catch (error) {
         if (/Invalid Fata challengeId/i.test(error?.message || "")) {
             return res.status(400).json({ error: "Challenge Fata inconnu." });

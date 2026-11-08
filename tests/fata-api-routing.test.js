@@ -17,7 +17,7 @@ function createIntegration(location, fetchImpl, config = {}) {
         sessionStorage,
         addEventListener() {},
     };
-    const document = { addEventListener() {} };
+    const document = { addEventListener() {}, querySelector() { return null; } };
     vm.runInNewContext(source, {
         window,
         document,
@@ -220,4 +220,141 @@ test("starts the production Fata flow without a challengeId in the page URL", as
 
     assert.deepEqual(requestBody, {});
     assert.equal(location.href, "https://fata.example/authorize");
+});
+
+test("associates an ARC using the configured challenge when the page has no challengeId", async () => {
+    const storage = {};
+    const requests = [];
+    const integration = createIntegration(
+        {
+            hostname: "xera1.xyz",
+            port: "",
+            protocol: "https:",
+            origin: "https://xera1.xyz",
+            pathname: "/profile",
+            search: "",
+        },
+        async (url, options = {}) => {
+            requests.push({ url, options });
+            if (url === "/api/fata/status") {
+                return jsonResponse(true, {
+                    connected: true,
+                    challengeId: "xera1-test",
+                });
+            }
+            if (url === "/api/fata/select-arc") {
+                assert.equal(JSON.parse(options.body).challengeId, "xera1-test");
+                return jsonResponse(true, {
+                    arc: { id: "arc-1", title: "Projet test" },
+                    delivery: { status: "delivered", eventId: "evt-1" },
+                });
+            }
+            throw new Error(`Unexpected Fata request: ${url}`);
+        },
+        {
+            localStorage: {
+                getItem: () => JSON.stringify({ access_token: "xera-session-token" }),
+            },
+            sessionStorage: {
+                getItem: (key) => storage[key] ?? null,
+                setItem: (key, value) => {
+                    storage[key] = String(value);
+                },
+            },
+        },
+    );
+
+    const result = await integration.selectPublishedArc("arc-1");
+
+    assert.equal(result.selected, true);
+    assert.equal(result.delivery.status, "delivered");
+    assert.deepEqual(requests.map(({ url }) => url), [
+        "/api/fata/status",
+        "/api/fata/select-arc",
+    ]);
+    assert.equal(storage.xera1_fata_challenge_id, "xera1-test");
+});
+
+test("syncs pending action tasks immediately for an authenticated linked user", async () => {
+    const requests = [];
+    const integration = createIntegration(
+        {
+            hostname: "xera1.xyz",
+            port: "",
+            protocol: "https:",
+            origin: "https://xera1.xyz",
+            pathname: "/profile",
+            search: "",
+        },
+        async (url, options = {}) => {
+            requests.push({ url, options });
+            if (url === "/api/fata/status") {
+                return jsonResponse(true, { connected: true, celebrationPending: false });
+            }
+            if (url === "/api/fata/sync") {
+                assert.equal(options.method, "POST");
+                assert.equal(
+                    options.headers.Authorization,
+                    "Bearer xera-session-token",
+                );
+                return jsonResponse(true, { pendingEvents: [] });
+            }
+            throw new Error(`Unexpected Fata request: ${url}`);
+        },
+        {
+            localStorage: {
+                getItem: () => JSON.stringify({ access_token: "xera-session-token" }),
+            },
+        },
+    );
+
+    const result = await integration.syncPendingActions();
+
+    assert.deepEqual(result.pendingEvents, []);
+    assert.deepEqual(requests.map(({ url }) => url), [
+        "/api/fata/status",
+        "/api/fata/sync",
+    ]);
+});
+
+test("explains a permanent not_registered response to the user", async () => {
+    const errors = [];
+    const integration = createIntegration(
+        {
+            hostname: "xera1.xyz",
+            port: "",
+            protocol: "https:",
+            origin: "https://xera1.xyz",
+            pathname: "/profile",
+            search: "",
+        },
+        async (url) => {
+            if (url === "/api/fata/status") {
+                return jsonResponse(true, { connected: true, celebrationPending: false });
+            }
+            if (url === "/api/fata/sync") {
+                return jsonResponse(true, {
+                    pendingEvents: [{
+                        status: "failed",
+                        last_error: "HTTP 422: not_registered (not_registered)",
+                        updated_at: new Date().toISOString(),
+                    }],
+                });
+            }
+            throw new Error(`Unexpected Fata request: ${url}`);
+        },
+        {
+            localStorage: {
+                getItem: () => JSON.stringify({ access_token: "xera-session-token" }),
+            },
+            ToastManager: {
+                error: (title, message) => errors.push({ title, message }),
+            },
+        },
+    );
+
+    await integration.syncPendingActions();
+
+    assert.equal(errors.length, 1);
+    assert.match(errors[0].message, /n’est pas inscrit/i);
 });

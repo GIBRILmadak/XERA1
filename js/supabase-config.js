@@ -472,6 +472,14 @@ async function createContent(contentData) {
             .select()
             .single();
         if (error) throw error;
+        if (typeof window !== "undefined") {
+            const syncFata = window.FataIntegration?.syncPendingActions;
+            if (typeof syncFata === "function") {
+                void syncFata().catch((syncError) => {
+                    console.warn("Fata proof delivery is still queued:", syncError);
+                });
+            }
+        }
         return { success: true, data };
     } catch (error) {
         return { success: false, error: error.message };

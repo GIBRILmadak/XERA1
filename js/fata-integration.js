@@ -6,6 +6,9 @@
     const FATA_STORAGE_KEY_CHALLENGE = "xera1_fata_challenge_id";
     const API_PROBE_TIMEOUT_MS = 800;
     const API_STATUS_TIMEOUT_MS = 3000;
+    // Leave a small margin under the Vercel route's 60-second limit while
+    // allowing a cold OIDC discovery, token request, and one Fata delivery.
+    const API_SYNC_TIMEOUT_MS = 55000;
     // The Vercel API route has a 60-second execution limit. Leave enough time
     // for a cold start, Supabase auth lookup, and Fata's OIDC discovery call.
     const API_START_TIMEOUT_MS = 55000;
@@ -13,6 +16,7 @@
     let apiBaseError = null;
     let apiBaseErrorUntil = 0;
     let fataStatusPromise = null;
+    let fataSyncPromise = null;
     let celebrationDialog = null;
     let celebrationRestoreFocus = null;
     let celebrationClosing = false;
@@ -381,6 +385,97 @@
         return fataStatusPromise;
     }
 
+    function describeFataDeliveryFailure(lastError) {
+        const detail = String(lastError || "");
+        if (/not_registered/i.test(detail)) {
+            return "Ce compte Fata n’est pas inscrit à ce challenge. Inscrivez le compte lié, puis contactez XERA1 pour relancer cette étape.";
+        }
+        if (/outside_window/i.test(detail)) {
+            return "Fata a refusé cette action car sa date se trouve hors de la période du challenge.";
+        }
+        if (/receipt_deadline_passed/i.test(detail)) {
+            return "Fata a refusé cette action car le délai de réception du challenge est dépassé.";
+        }
+        if (/link_revoked|authorization/i.test(detail)) {
+            return "L’autorisation Fata a été retirée. Reliez de nouveau le même compte Fata pour reprendre les confirmations.";
+        }
+        if (/idempotency_conflict/i.test(detail)) {
+            return "Fata a détecté un conflit sur une confirmation déjà envoyée. Contactez le support XERA1 avec la référence de l’événement.";
+        }
+        return detail
+            ? `Fata a refusé une confirmation : ${detail}`
+            : "Fata n’a pas accepté une confirmation. Contactez le support XERA1.";
+    }
+
+    function reportFataSyncResult(events, startedAt) {
+        const recentEvents = (events || []).filter((event) => {
+            const updatedAt = Date.parse(event.updated_at || "");
+            return Number.isFinite(updatedAt) && updatedAt >= startedAt - 2000;
+        });
+        const failedEvent = recentEvents.find((event) => event.status === "failed");
+        if (failedEvent) {
+            const toast = window.ToastManager;
+            if (typeof toast?.error === "function") {
+                toast.error(
+                    "Confirmation Fata refusée",
+                    describeFataDeliveryFailure(failedEvent.last_error),
+                );
+            }
+            return;
+        }
+        const retryEvent = recentEvents.find((event) => event.status === "retry");
+        if (retryEvent) {
+            const toast = window.ToastManager;
+            if (typeof toast?.info === "function") {
+                toast.info(
+                    "Confirmation Fata en attente",
+                    "L’action reste dans la file XERA1 et sera retentée automatiquement.",
+                );
+            }
+        }
+    }
+
+    async function syncPendingActions() {
+        if (fataSyncPromise) return fataSyncPromise;
+        fataSyncPromise = (async () => {
+            const token = await getAuthToken();
+            if (!token) return { skipped: true };
+            const statusData = await checkFataStatus();
+            if (!statusData?.connected) return { skipped: true };
+
+            const startedAt = Date.now();
+            const response = await fetchApi(
+                "/api/fata/sync",
+                {
+                    method: "POST",
+                    headers: { Authorization: `Bearer ${token}` },
+                },
+                API_SYNC_TIMEOUT_MS,
+            );
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                throw new Error(
+                    result.error || `HTTP ${response.status}`,
+                );
+            }
+
+            const pendingEvents = Array.isArray(result.pendingEvents)
+                ? result.pendingEvents
+                : [];
+            reportFataSyncResult(pendingEvents, startedAt);
+            handlePanelStatus({ ...statusData, pendingEvents });
+            return { pendingEvents };
+        })()
+            .catch((error) => {
+                console.warn("[Fata queue sync error]:", error);
+                return { error };
+            })
+            .finally(() => {
+                fataSyncPromise = null;
+            });
+        return fataSyncPromise;
+    }
+
     function createCelebrationDialog() {
         if (celebrationDialog?.isConnected) return celebrationDialog;
         celebrationDialog = document.getElementById("fata-celebration-dialog");
@@ -624,21 +719,42 @@
                 celebrationDismissedKey = "";
             }
             void checkCelebrationStatus();
+            void syncPendingActions();
         };
         window.addEventListener("xera:user-authenticated", handleAuthenticated);
         window.addEventListener("online", () => {
             if (window.currentUser?.id || window.currentUserId) {
                 void checkCelebrationStatus();
+                void syncPendingActions();
             }
         });
     }
 
     async function selectPublishedArc(arcId) {
-        const challengeId = parseUrlParams().challengeId;
-        if (!challengeId || !arcId) return { selected: false, skipped: true };
+        if (!arcId) return { selected: false, skipped: true };
 
         const token = await getAuthToken();
         if (!token) return { selected: false, skipped: true };
+
+        let challengeId = parseUrlParams().challengeId;
+        if (!challengeId) {
+            // Project creation can happen without opening the Fata panel first.
+            // Resolve the configured challenge from the authenticated status
+            // endpoint so the ARC is still associated with the official flow.
+            const statusData = await checkFataStatus();
+            if (!statusData?.connected) {
+                return { selected: false, skipped: true };
+            }
+            challengeId = String(statusData.challengeId || "").trim();
+            if (challengeId) persistChallengeId(challengeId);
+        }
+        if (!challengeId) {
+            return {
+                selected: false,
+                skipped: false,
+                error: "Le challenge Fata actif est introuvable. Ouvrez le panneau Fata et réessayez.",
+            };
+        }
 
         const response = await fetchApi("/api/fata/select-arc", {
             method: "POST",
@@ -647,7 +763,7 @@
                 Authorization: `Bearer ${token}`,
             },
             body: JSON.stringify({ challengeId, arcId }),
-        });
+        }, API_SYNC_TIMEOUT_MS);
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
             return {
@@ -661,7 +777,12 @@
         if (arcNote) {
             arcNote.textContent = `✓ ${data.arc?.title || "ARC"} est associé au challenge Fata.`;
         }
-        return { selected: true, arc: data.arc, selection: data.selection };
+        return {
+            selected: true,
+            arc: data.arc,
+            selection: data.selection,
+            delivery: data.delivery || null,
+        };
     }
 
     async function initFataUI() {
@@ -761,10 +882,20 @@
                             Authorization: `Bearer ${token}`,
                         },
                         body: JSON.stringify({ challengeId, arcId: arcSelect.value }),
-                    });
+                    }, API_SYNC_TIMEOUT_MS);
                     const data = await response.json().catch(() => ({}));
                     if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
-                    if (arcNote) arcNote.textContent = `✓ ${data.arc?.title || "ARC"} est sélectionné pour ce challenge.`;
+                    if (arcNote) {
+                        if (data.delivery?.status === "delivered") {
+                            arcNote.textContent = `✓ ${data.arc?.title || "ARC"} a été transmis à Fata.`;
+                        } else if (data.delivery?.status === "failed") {
+                            arcNote.textContent = describeFataDeliveryFailure(
+                                data.delivery.error,
+                            );
+                        } else {
+                            arcNote.textContent = `✓ ${data.arc?.title || "ARC"} est sélectionné; sa confirmation reste dans la file XERA1.`;
+                        }
+                    }
                     arcSelect.disabled = true;
                     selectArcBtn.hidden = true;
                 } catch (error) {
@@ -815,7 +946,7 @@
             if (connectionNote) {
                 connectionNote.hidden = false;
                 connectionNote.textContent =
-                    "✓ Votre compte Fata est associé à XERA1. Vos preuves et jalons sont synchronisés.";
+                    "✓ Votre compte Fata est associé à XERA1. Le statut des confirmations apparaît ici.";
             }
 
             if (arcSelection) {
@@ -866,11 +997,13 @@
                 }
             }
 
-            const needsReconnect = (statusData.pendingEvents || []).some(
-                (event) => event.status === "failed" && /link_revoked|authorization/i.test(event.last_error || ""),
-            );
-            if (needsReconnect && connectionNote) {
-                connectionNote.textContent = "L’autorisation Fata a été retirée. Reliez à nouveau le même compte Fata pour reprendre les confirmations en attente.";
+            const latestFailure = (statusData.pendingEvents || [])
+                .filter((event) => event.status === "failed")
+                .sort((left, right) => Date.parse(right.updated_at || "") - Date.parse(left.updated_at || ""))[0];
+            if (latestFailure && connectionNote) {
+                connectionNote.textContent = describeFataDeliveryFailure(
+                    latestFailure.last_error,
+                );
             }
         }
 
@@ -882,6 +1015,7 @@
             // Covers pages where auth completed before this deferred or
             // navigation-loaded integration script was initialized.
             void checkCelebrationStatus();
+            void syncPendingActions();
         }
     }
 
@@ -903,6 +1037,7 @@
     window.FataIntegration = {
         startFlow: startFataOidcFlow,
         checkStatus: checkFataStatus,
+        syncPendingActions,
         checkCelebrationStatus,
         handlePanelStatus,
         refreshPanelStatus: (...args) => refreshFataPanelStatus?.(...args),
