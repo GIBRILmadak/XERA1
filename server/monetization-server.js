@@ -45,15 +45,6 @@ const {
     RETURN_REMINDER_EMAIL_WEBHOOK_TOKEN = "",
     USD_TO_CDF_RATE = "2300",
     CALLBACK_BASE_URL = "",
-    KPAY_USE_CALLBACK = "1",
-
-    KPAY_PUBLIC_KEY = process.env.KPAY_PUBLIC_KEY || "",
-    KPAY_SECRET_KEY = process.env.KPAY_SECRET_KEY || "",
-
-    KPAY_GATEWAY_MODE = process.env.KPAY_GATEWAY_MODE || "1",
-    KPAY_CHECKOUT_URL = process.env.KPAY_CHECKOUT_URL ||
-        "https://admin.kpay.site",
-    KPAY_CALLBACK_SECRET = process.env.KPAY_CALLBACK_SECRET || "",
     SUPER_ADMIN_ID = process.env.SUPER_ADMIN_ID ||
         "b0f9f893-1706-4721-899c-d26ad79afc86",
 } = process.env;
@@ -62,20 +53,14 @@ const {
 const isProduction =
     String(process.env.NODE_ENV || "").toLowerCase() === "production";
 if (isProduction) {
-    if (!KPAY_PUBLIC_KEY || KPAY_PUBLIC_KEY.includes("kpay_test")) {
-        console.error(
-            "CRITICAL: Missing or invalid KPAY_PUBLIC_KEY for production.",
-        );
+    if (!process.env.MAISHAPAY_PUBLIC_KEY) {
+        console.warn("[MaishaPay] MAISHAPAY_PUBLIC_KEY manquant pour la production.");
     }
-    if (!KPAY_SECRET_KEY || KPAY_SECRET_KEY.includes("sk_test")) {
-        console.error(
-            "CRITICAL: Missing or invalid KPAY_SECRET_KEY for production.",
-        );
+    if (!process.env.MAISHAPAY_SECRET_KEY) {
+        console.warn("[MaishaPay] MAISHAPAY_SECRET_KEY manquant pour la production.");
     }
-    if (!KPAY_CALLBACK_SECRET || KPAY_CALLBACK_SECRET === "...") {
-        console.error(
-            "CRITICAL: Missing or invalid KPAY_CALLBACK_SECRET for production.",
-        );
+    if (!process.env.MAISHAPAY_WEBHOOK_TOKEN) {
+        console.warn("[MaishaPay] MAISHAPAY_WEBHOOK_TOKEN manquant pour la production.");
     }
 }
 
@@ -312,8 +297,6 @@ const CALLBACK_ORIGIN = resolveCallbackOrigin(
     CALLBACK_BASE_URL,
     PRIMARY_ORIGIN,
 );
-const KPAY_CALLBACK_ALLOWED = parseBooleanEnv(KPAY_USE_CALLBACK, true);
-const KPAY_CALLBACK_ENABLED = KPAY_CALLBACK_ALLOWED && Boolean(CALLBACK_ORIGIN);
 const DEFAULT_SHARE_IMAGE_URL = `${PRIMARY_ORIGIN}/icons/logo-512x512.png`;
 
 function escapeHtmlText(value) {
@@ -510,26 +493,6 @@ async function handleProfileSharePage(req, res) {
     }
 }
 
-function getKPayCallbackConfig(req) {
-    if (!KPAY_CALLBACK_ALLOWED) {
-        return {
-            callbackEnabled: false,
-            callbackOrigin: "",
-        };
-    }
-
-    const requestOrigin = getRequestOrigin(req);
-    const callbackOrigin = resolveCallbackOrigin(
-        CALLBACK_BASE_URL,
-        requestOrigin || PRIMARY_ORIGIN,
-    );
-
-    return {
-        callbackEnabled: Boolean(callbackOrigin),
-        callbackOrigin,
-    };
-}
-
 function buildProfileReturnPath(userId) {
     if (!userId) return "/profile";
     return `/profile?user=${encodeURIComponent(userId)}`;
@@ -651,7 +614,7 @@ function computePremiumFeatures(plan) {
     return features;
 }
 
-const KPAY_PLANS = {
+const SUBSCRIPTION_PLANS = {
     standard: 2.99,
     medium: 7.99,
     pro: 14.99,
@@ -688,15 +651,14 @@ function isValidPlanId(value) {
     );
 }
 
-function computeKPayAmount(plan, billingCycle, currency) {
-    const monthlyUsd = KPAY_PLANS[plan];
+function computeSubscriptionAmount(plan, billingCycle, currency) {
+    const monthlyUsd = SUBSCRIPTION_PLANS[plan];
     if (!monthlyUsd) return null;
     const amountUsd =
         billingCycle === "annual" ? monthlyUsd * 12 * 0.8 : monthlyUsd;
     if (String(currency).toUpperCase() === "CDF") {
         return Math.round(amountUsd * USD_TO_CDF_RATE_VALUE);
     }
-    // KPay: on affiche les prix décimaux côté UI, mais on facture un entier.
     return Math.ceil(amountUsd);
 }
 
@@ -720,13 +682,6 @@ function computeSupportCheckoutAmount(amountUsd, currency) {
     return Math.ceil(normalizedAmount);
 }
 
-function inferKPayKeyMode(value) {
-    const key = String(value || "").toUpperCase();
-    if (key.startsWith("MP-LIVE")) return "live";
-    if (key.startsWith("MP-SB")) return "sandbox";
-    return "unknown";
-}
-
 function maskKey(value, visible = 10) {
     const key = String(value || "");
     if (!key) return "<empty>";
@@ -739,51 +694,6 @@ function addMonths(date, months) {
     const desired = result.getMonth() + months;
     result.setMonth(desired);
     return result;
-}
-
-function createSignedState(payload) {
-    if (!KPAY_CALLBACK_SECRET) return null;
-    const data = Buffer.from(JSON.stringify(payload)).toString("base64url");
-    const signature = crypto
-        .createHmac("sha256", KPAY_CALLBACK_SECRET)
-        .update(data)
-        .digest("base64url");
-    return `${data}.${signature}`;
-}
-
-function verifySignedState(state) {
-    if (!state || !KPAY_CALLBACK_SECRET) return null;
-    const [data, signature] = String(state).split(".");
-    if (!data || !signature) return null;
-    const expected = crypto
-        .createHmac("sha256", KPAY_CALLBACK_SECRET)
-        .update(data)
-        .digest("base64url");
-    const expectedHex = crypto
-        .createHmac("sha256", KPAY_CALLBACK_SECRET)
-        .update(data)
-        .digest("hex");
-    const validBase64Url =
-        signature.length === expected.length &&
-        crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
-    const validHex =
-        /^[a-f0-9]+$/i.test(signature) &&
-        signature.length === expectedHex.length &&
-        crypto.timingSafeEqual(
-            Buffer.from(signature, "hex"),
-            Buffer.from(expectedHex, "hex"),
-        );
-    if (!validBase64Url && !validHex) return null;
-    try {
-        const payload = JSON.parse(
-            Buffer.from(data, "base64url").toString("utf8"),
-        );
-        const expiresAt = Number(payload?.e ?? payload?.expires_at);
-        if (Number.isFinite(expiresAt) && Date.now() > expiresAt) return null;
-        return payload;
-    } catch (e) {
-        return null;
-    }
 }
 
 async function resolveUserId(accessToken, fallbackId) {
@@ -934,7 +844,7 @@ async function createPendingSubscriptionPayment({
     provider,
     walletId,
     returnPath,
-    callbackEnabled = KPAY_CALLBACK_ENABLED,
+    callbackEnabled = false,
     callbackOrigin = CALLBACK_ORIGIN,
     paymentProvider = "maishapay",
 }) {
@@ -996,7 +906,7 @@ async function createPendingSupportPayment({
     senderName,
     recipientName,
     returnPath,
-    callbackEnabled = KPAY_CALLBACK_ENABLED,
+    callbackEnabled = false,
     callbackOrigin = CALLBACK_ORIGIN,
     paymentProvider = "maishapay",
 }) {
@@ -1053,105 +963,6 @@ async function createPendingSupportPayment({
         metadata: data.metadata || metadata,
         createdAt: data.created_at,
     };
-}
-
-async function initiateKPayPayment(amount, externalId, description, returnUrl) {
-    const requestBody = {
-        amount,
-        externalId,
-        description,
-        returnUrl,
-        cancelUrl: returnUrl,
-        mode: "GATEWAY",
-    };
-
-    const response = await fetch(
-        "https://admin.kpay.site/api/v1/payments/init",
-        {
-            method: "POST",
-            headers: {
-                "X-API-Key": KPAY_PUBLIC_KEY,
-                "X-Secret-Key": KPAY_SECRET_KEY,
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify(requestBody),
-        },
-    );
-
-    if (!response.ok) {
-        const errorText = await response.text().catch(() => "");
-        throw new Error(
-            `KPay API error: ${response.status} ${response.statusText} ${
-                errorText ? `- ${errorText}` : ""
-            }`,
-        );
-    }
-
-    return await response.json();
-}
-
-async function storeKPayPaymentReference(pendingPayment, kpayPayment) {
-    if (!pendingPayment?.id || !kpayPayment?.id) {
-        throw new Error("Référence KPay manquante après l'initialisation.");
-    }
-    const metadata = {
-        ...(pendingPayment.metadata || {}),
-        kpay_payment_id: String(kpayPayment.id),
-        kpay_reference: kpayPayment.reference || null,
-        kpay_initialized_at: new Date().toISOString(),
-    };
-    const { error } = await supabase
-        .from("transactions")
-        .update({ metadata })
-        .eq("id", pendingPayment.id);
-    if (error) throw error;
-    pendingPayment.metadata = metadata;
-}
-
-function safeEqualHex(left, right) {
-    const a = String(left || "").trim();
-    const b = String(right || "").trim();
-    if (!a || !b || a.length !== b.length) return false;
-    return crypto.timingSafeEqual(
-        Buffer.from(a, "utf8"),
-        Buffer.from(b, "utf8"),
-    );
-}
-
-function verifyKPayGatewayReturn(params) {
-    const status = String(params?.status || "")
-        .trim()
-        .toUpperCase();
-    const reference = String(params?.reference || "").trim();
-    const externalId = String(
-        params?.externalId || params?.external_id || "",
-    ).trim();
-    const timestamp = Number(params?.ts);
-    const signature = String(params?.sig || "").trim();
-    if (!status || !reference || !externalId || !Number.isFinite(timestamp))
-        return false;
-    if (Math.abs(Date.now() - timestamp) > 10 * 60 * 1000) return false;
-    const expected = crypto
-        .createHmac("sha256", KPAY_SECRET_KEY)
-        .update(`${status}|${reference}|${externalId}|${timestamp}`)
-        .digest("hex");
-    return safeEqualHex(signature, expected);
-}
-
-async function fetchKPayPaymentStatus(paymentId) {
-    const response = await fetch(
-        `https://admin.kpay.site/api/v1/payments/${encodeURIComponent(paymentId)}`,
-        {
-            headers: {
-                "X-API-Key": KPAY_PUBLIC_KEY,
-                "X-Secret-Key": KPAY_SECRET_KEY,
-            },
-        },
-    );
-    if (!response.ok) {
-        throw new Error(`Vérification KPay impossible: ${response.statusText}`);
-    }
-    return response.json();
 }
 
 async function authenticateRequest(req) {
@@ -2728,7 +2539,7 @@ async function failPendingTransaction({
     transactionRefId,
     operatorRefId,
     reason,
-    confirmationSource = "kpay_callback",
+    confirmationSource = "maishapay",
 }) {
     if (!pendingTransactionId) return null;
 
@@ -3911,558 +3722,6 @@ function startReminderScheduler() {
     });
 }
 
-// ==================== KPAY CHECKOUT ====================
-
-async function handleKPaySubscriptionCheckout(req, res) {
-    try {
-        if (!KPAY_PUBLIC_KEY || !KPAY_SECRET_KEY) {
-            return res.status(500).send("KPay keys not configured");
-        }
-
-        const callbackConfig = getKPayCallbackConfig(req);
-
-        const {
-            plan,
-            billing_cycle: billingCycleRaw,
-            currency: currencyRaw,
-            method = "card",
-            provider,
-            wallet_id: walletId,
-            access_token: accessToken,
-            user_id: fallbackUserId,
-            return_path: rawReturnPath,
-        } = req.body || {};
-
-        const planId = String(plan || "").toLowerCase();
-        const billingCycle =
-            String(billingCycleRaw || "monthly").toLowerCase() === "annual"
-                ? "annual"
-                : "monthly";
-        const currency = String(currencyRaw || "USD").toUpperCase();
-        const allowedCurrencies = new Set(["USD", "CDF"]);
-
-        if (!KPAY_PLANS[planId]) {
-            return res.status(400).send("Plan invalide");
-        }
-        if (!allowedCurrencies.has(currency)) {
-            return res.status(400).send("Devise invalide");
-        }
-
-        const requestUser = await resolveRequestUser(
-            accessToken,
-            fallbackUserId,
-        );
-        const userId = requestUser.id;
-        if (!userId) {
-            return res.status(401).send("Utilisateur non authentifié");
-        }
-        await ensurePublicUserRecord(userId, {
-            email: requestUser.email,
-            username: requestUser.username,
-            name: requestUser.name,
-            avatarUrl: requestUser.avatarUrl,
-            accountType: requestUser.accountType,
-            accountSubtype: requestUser.accountSubtype,
-            badge: requestUser.badge,
-        });
-
-        const returnPath = sanitizeReturnPath(
-            rawReturnPath,
-            buildProfileReturnPath(userId),
-        );
-
-        const amount = computeKPayAmount(planId, billingCycle, currency);
-        if (!amount) {
-            return res.status(400).send("Montant invalide");
-        }
-
-        const pendingPayment = await createPendingSubscriptionPayment({
-            userId,
-            plan: planId,
-            billingCycle,
-            currency,
-            amount,
-            method,
-            provider,
-            walletId,
-            returnPath,
-            callbackEnabled: callbackConfig.callbackEnabled,
-            callbackOrigin: callbackConfig.callbackOrigin,
-        });
-
-        let callbackUrl = null;
-        if (callbackConfig.callbackEnabled) {
-            const statePayload = {
-                i: pendingPayment.id,
-                e: Date.now() + 2 * 60 * 60 * 1000,
-            };
-            const state = createSignedState(statePayload);
-            if (!state) {
-                return res.status(500).send("Callback secret manquant");
-            }
-            callbackUrl = `${callbackConfig.callbackOrigin}/api/kpay/callback/${encodeURIComponent(state)}`;
-        }
-
-        console.info("[KPay checkout]", {
-            gatewayMode: String(KPAY_GATEWAY_MODE),
-            publicKey: maskKey(KPAY_PUBLIC_KEY),
-            secretKey: maskKey(KPAY_SECRET_KEY),
-            publicKeyMode: inferKPayKeyMode(KPAY_PUBLIC_KEY),
-            secretKeyMode: inferKPayKeyMode(KPAY_SECRET_KEY),
-            callbackEnabled: callbackConfig.callbackEnabled,
-            callbackOrigin: callbackConfig.callbackOrigin,
-            pendingTransactionId: pendingPayment.id,
-            checkoutRefId: pendingPayment.checkoutRefId,
-            plan: planId,
-            billingCycle,
-            currency,
-            method: String(method || "card").toLowerCase(),
-        });
-
-        // 1. Initialiser le paiement via KPay
-        const kpayRes = await initiateKPayPayment(
-            amount,
-            pendingPayment.checkoutRefId,
-            `Abonnement ${planId} (${billingCycle})`,
-            callbackUrl,
-        );
-
-        await storeKPayPaymentReference(pendingPayment, kpayRes);
-
-        if (!kpayRes.gatewayUrl) {
-            throw new Error("KPay n'a pas retourné d'URL de paiement.");
-        }
-
-        // 2. Rediriger l'utilisateur vers la gateway KPay
-        setResponseHeader(res, "Location", kpayRes.gatewayUrl);
-        res.status(302).send();
-    } catch (error) {
-        console.error("KPay checkout error:", error);
-        return sendCheckoutErrorResponse(res, error, "Erreur KPay");
-    }
-}
-
-app.post(
-    ["/api/kpay/checkout", "/api/checkout-subscription"],
-    handleKPaySubscriptionCheckout,
-);
-
-async function handleKPaySupportCheckout(req, res) {
-    try {
-        if (!KPAY_PUBLIC_KEY || !KPAY_SECRET_KEY) {
-            return res.status(500).send("KPay keys not configured");
-        }
-
-        const callbackConfig = getKPayCallbackConfig(req);
-
-        const {
-            to_user_id: toUserId,
-            amount_usd: rawAmountUsd,
-            currency: currencyRaw,
-            method = "card",
-            provider,
-            wallet_id: walletId,
-            access_token: accessToken,
-            user_id: fallbackUserId,
-            description: rawDescription,
-            return_path: rawReturnPath,
-        } = req.body || {};
-
-        const requestUser = await resolveRequestUser(
-            accessToken,
-            fallbackUserId,
-        );
-        const fromUserId = requestUser.id;
-        if (!fromUserId) {
-            return res.status(401).send("Utilisateur non authentifié");
-        }
-        await ensurePublicUserRecord(fromUserId, {
-            email: requestUser.email,
-            username: requestUser.username,
-            name: requestUser.name,
-            avatarUrl: requestUser.avatarUrl,
-            accountType: requestUser.accountType,
-            accountSubtype: requestUser.accountSubtype,
-            badge: requestUser.badge,
-        });
-
-        if (!toUserId) {
-            return res.status(400).send("Destinataire manquant");
-        }
-        if (fromUserId === toUserId) {
-            return res.status(400).send("Auto-soutien interdit");
-        }
-
-        const amountUsd = roundMoney(rawAmountUsd);
-        if (
-            !Number.isFinite(amountUsd) ||
-            amountUsd < SUPPORT_MIN_USD ||
-            amountUsd > SUPPORT_MAX_USD
-        ) {
-            return res
-                .status(400)
-                .send(
-                    `Le soutien doit etre entre ${SUPPORT_MIN_USD} et ${SUPPORT_MAX_USD} USD`,
-                );
-        }
-        if (!Number.isInteger(amountUsd)) {
-            return res
-                .status(400)
-                .send("Le soutien doit etre un montant entier en USD.");
-        }
-
-        const currency = String(currencyRaw || "USD").toUpperCase();
-        if (!["USD", "CDF"].includes(currency)) {
-            return res.status(400).send("Devise invalide");
-        }
-
-        const [senderResult, recipientResult] = await Promise.all([
-            supabase
-                .from("users")
-                .select("id, name")
-                .eq("id", fromUserId)
-                .maybeSingle(),
-            supabase
-                .from("users")
-                .select(
-                    "id, name, followers_count, plan, plan_status, plan_ends_at, is_monetized",
-                )
-                .eq("id", toUserId)
-                .maybeSingle(),
-        ]);
-        if (senderResult.error) throw senderResult.error;
-        if (recipientResult.error) throw recipientResult.error;
-
-        const senderProfile = senderResult.data || null;
-        const recipientProfile = recipientResult.data || null;
-        if (!senderProfile) {
-            return res
-                .status(400)
-                .send(
-                    "Profil expediteur introuvable. Rechargez votre session.",
-                );
-        }
-        if (!recipientProfile) {
-            return res.status(404).send("Createur introuvable");
-        }
-        if (!canUserReceiveSupport(recipientProfile)) {
-            return res
-                .status(400)
-                .send("Ce createur n'est pas eligible aux soutiens.");
-        }
-
-        const checkoutAmount = computeSupportCheckoutAmount(
-            amountUsd,
-            currency,
-        );
-        if (!checkoutAmount) {
-            return res.status(400).send("Montant invalide");
-        }
-
-        const description = sanitizePayoutText(rawDescription, 160);
-        const returnPath = sanitizeReturnPath(
-            rawReturnPath,
-            buildProfileReturnPath(toUserId),
-        );
-        const pendingPayment = await createPendingSupportPayment({
-            fromUserId,
-            toUserId,
-            amountUsd,
-            checkoutAmount,
-            checkoutCurrency: currency,
-            method,
-            provider,
-            walletId,
-            description:
-                description ||
-                `Soutien pour ${recipientProfile.name || "un createur"}`,
-            senderName: senderProfile.name || "Utilisateur",
-            recipientName: recipientProfile.name || "Createur",
-            returnPath,
-            callbackEnabled: callbackConfig.callbackEnabled,
-            callbackOrigin: callbackConfig.callbackOrigin,
-        });
-
-        let callbackUrl = null;
-        if (callbackConfig.callbackEnabled) {
-            const statePayload = {
-                i: pendingPayment.id,
-                e: Date.now() + 2 * 60 * 60 * 1000,
-            };
-            const state = createSignedState(statePayload);
-            if (!state) {
-                return res.status(500).send("Callback secret manquant");
-            }
-            callbackUrl = `${callbackConfig.callbackOrigin}/api/kpay/callback/${encodeURIComponent(state)}`;
-        }
-
-        console.info("[KPay support checkout]", {
-            gatewayMode: String(KPAY_GATEWAY_MODE),
-            publicKey: maskKey(KPAY_PUBLIC_KEY),
-            secretKey: maskKey(KPAY_SECRET_KEY),
-            callbackEnabled: callbackConfig.callbackEnabled,
-            callbackOrigin: callbackConfig.callbackOrigin,
-            pendingTransactionId: pendingPayment.id,
-            checkoutRefId: pendingPayment.checkoutRefId,
-            fromUserId,
-            toUserId,
-            amountUsd,
-            checkoutAmount,
-            currency,
-            method: String(method || "card").toLowerCase(),
-        });
-
-        // 1. Initialiser le paiement via KPay
-        const kpayRes = await initiateKPayPayment(
-            checkoutAmount,
-            pendingPayment.checkoutRefId,
-            description ||
-                `Soutien pour ${recipientProfile.name || "un createur"}`,
-            callbackUrl,
-        );
-
-        await storeKPayPaymentReference(pendingPayment, kpayRes);
-
-        if (!kpayRes.gatewayUrl) {
-            throw new Error("KPay n'a pas retourné d'URL de paiement.");
-        }
-
-        // 2. Rediriger l'utilisateur vers la gateway KPay
-        setResponseHeader(res, "Location", kpayRes.gatewayUrl);
-        res.status(302).send();
-    } catch (error) {
-        console.error("KPay support checkout error:", error);
-        return sendCheckoutErrorResponse(res, error, "Erreur KPay");
-    }
-}
-
-app.post(
-    ["/api/kpay/support-checkout", "/api/checkout-support"],
-    handleKPaySupportCheckout,
-);
-
-async function handleKPayCallback(req, res) {
-    try {
-        const params = { ...req.query, ...req.body };
-        const description = params.description || "";
-        const transactionRefId =
-            params.transactionRefId || params.transaction_ref_id;
-        const operatorRefId = params.operatorRefId || params.operator_ref_id;
-        const state = params.state || req.params?.state;
-
-        const payload = verifySignedState(state);
-        if (!payload) {
-            return res.status(400).send("Callback invalide");
-        }
-        if (!verifyKPayGatewayReturn(params)) {
-            return res.status(400).send("Signature de retour KPay invalide");
-        }
-
-        const pendingTransactionId = String(
-            payload.i || payload.pending_transaction_id || "",
-        ).trim();
-        if (!pendingTransactionId) {
-            return res.status(400).send("Transaction callback manquante");
-        }
-
-        const { data: callbackTransaction, error: callbackTransactionError } =
-            await supabase
-                .from("transactions")
-                .select(
-                    "id, from_user_id, to_user_id, type, amount_gross, currency, status, description, metadata",
-                )
-                .eq("id", pendingTransactionId)
-                .maybeSingle();
-        if (callbackTransactionError) throw callbackTransactionError;
-        if (!callbackTransaction) {
-            return res.status(404).send("Transaction callback introuvable");
-        }
-
-        const callbackMetadata =
-            callbackTransaction.metadata &&
-            typeof callbackTransaction.metadata === "object"
-                ? callbackTransaction.metadata
-                : {};
-        const expectedExternalId = String(
-            callbackMetadata.checkout_ref_id || "",
-        );
-        const returnedExternalId = String(
-            params.externalId || params.external_id || "",
-        );
-        if (!expectedExternalId || returnedExternalId !== expectedExternalId) {
-            return res.status(400).send("Référence KPay non concordante");
-        }
-
-        const kpayPaymentId = callbackMetadata.kpay_payment_id;
-        if (!kpayPaymentId) {
-            return res
-                .status(409)
-                .send(
-                    "Paiement KPay en attente de vérification. Contactez le support si nécessaire.",
-                );
-        }
-        const kpayPayment = await fetchKPayPaymentStatus(kpayPaymentId);
-        const kpayStatus = String(kpayPayment?.status || "").toUpperCase();
-        const expectedAmount = Number(
-            callbackMetadata.checkout_amount ??
-                callbackTransaction.amount_gross,
-        );
-        if (
-            String(kpayPayment?.externalId || "") !== expectedExternalId ||
-            !Number.isFinite(Number(kpayPayment?.amount)) ||
-            Number(kpayPayment.amount) !== expectedAmount
-        ) {
-            return res
-                .status(400)
-                .send("Montant ou référence KPay non concordant");
-        }
-        const paymentKind = String(
-            payload.k ||
-                payload.payment_kind ||
-                callbackTransaction.type ||
-                "subscription",
-        ).toLowerCase();
-        const isSuccess = kpayStatus === "COMPLETED";
-        const isTerminalFailure = ["FAILED", "CANCELLED"].includes(kpayStatus);
-
-        if (isSuccess) {
-            if (paymentKind === "support") {
-                await confirmSupportPayment({
-                    fromUserId: callbackTransaction.from_user_id,
-                    toUserId: callbackTransaction.to_user_id,
-                    amountUsd:
-                        callbackMetadata.support_amount_usd ??
-                        callbackTransaction.amount_gross,
-                    checkoutCurrency:
-                        callbackMetadata.checkout_currency ||
-                        callbackTransaction.currency,
-                    checkoutAmount:
-                        callbackMetadata.checkout_amount ||
-                        callbackTransaction.amount_gross,
-                    method: callbackMetadata.method,
-                    provider: callbackMetadata.provider,
-                    walletId: callbackMetadata.wallet_id,
-                    description: callbackTransaction.description,
-                    pendingTransactionId: callbackTransaction.id,
-                    transactionRefId,
-                    operatorRefId,
-                    confirmationSource: "kpay_callback",
-                });
-            } else {
-                await activateSubscription({
-                    userId:
-                        callbackTransaction.to_user_id ||
-                        callbackTransaction.from_user_id,
-                    plan: callbackMetadata.plan,
-                    billingCycle: callbackMetadata.billing_cycle,
-                    currency:
-                        callbackTransaction.currency ||
-                        callbackMetadata.currency,
-                    amount: callbackTransaction.amount_gross,
-                    transactionRefId,
-                    operatorRefId,
-                    method: callbackMetadata.method,
-                    provider: callbackMetadata.provider,
-                    walletId: callbackMetadata.wallet_id,
-                    pendingTransactionId: callbackTransaction.id,
-                    confirmationSource: "kpay_callback",
-                });
-            }
-        } else if (isTerminalFailure) {
-            await failPendingTransaction({
-                pendingTransactionId: callbackTransaction.id,
-                transactionRefId,
-                operatorRefId,
-                reason:
-                    description || `Paiement KPay ${kpayStatus.toLowerCase()}`,
-                confirmationSource: "kpay_callback",
-            });
-        }
-
-        const successTitle =
-            paymentKind === "support"
-                ? "Soutien confirmé"
-                : "Paiement confirmé";
-        const successDescription =
-            paymentKind === "support"
-                ? "Le soutien a bien ete confirme et sera visible dans le dashboard du createur."
-                : "Votre abonnement est activé.";
-        const failureDescription =
-            paymentKind === "support"
-                ? "Le soutien n'a pas ete confirme. Veuillez reessayer ou changer de moyen de paiement."
-                : "Veuillez réessayer ou changer de moyen de paiement.";
-        const returnPath =
-            paymentKind === "support"
-                ? callbackMetadata.callback_return_path || "/"
-                : callbackMetadata.callback_return_path ||
-                  buildProfileReturnPath(
-                      callbackTransaction.to_user_id ||
-                          callbackTransaction.from_user_id,
-                  );
-        const normalizedReturnPath = normalizeReturnPathForBrowser(
-            returnPath,
-            "/",
-            PRIMARY_ORIGIN,
-        );
-        const returnHref = String(normalizedReturnPath || "").startsWith("http")
-            ? String(normalizedReturnPath)
-            : `${PRIMARY_ORIGIN}/${String(normalizedReturnPath || "/").replace(/^\//, "")}`;
-        const returnLabel =
-            paymentKind === "support"
-                ? "Retour a la page precedente"
-                : "Retour au profil";
-        const pendingDescription =
-            "Votre paiement est encore en cours de confirmation par KPay. Aucun avantage n'est activé tant que le statut n'est pas COMPLETED.";
-        const displayTitle = isSuccess
-            ? successTitle
-            : isTerminalFailure
-              ? "Paiement non confirmé"
-              : "Paiement en cours";
-        const displayDescription = isSuccess
-            ? description || successDescription
-            : isTerminalFailure
-              ? description || failureDescription
-              : pendingDescription;
-        const autoRedirectDelayMs = isSuccess ? 1400 : 2200;
-
-        setResponseHeader(res, "Content-Type", "text/html");
-        res.send(`
-      <!doctype html>
-      <html lang="fr">
-      <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Paiement ${isSuccess ? "réussi" : "échoué"}</title>
-        <style>
-          body { font-family: Arial, sans-serif; background: #0b0b0b; color: #fff; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
-          .card { max-width: 480px; padding: 32px; border-radius: 18px; background: #141414; border: 1px solid #2a2a2a; text-align: center; }
-          .status { font-size: 22px; margin-bottom: 12px; }
-          .desc { color: #9ca3af; margin-bottom: 20px; }
-          a { color: #fff; text-decoration: none; padding: 10px 16px; border-radius: 999px; border: 1px solid #2a2a2a; display: inline-block; }
-        </style>
-      </head>
-      <body>
-        <div class="card">
-          <div class="status">${displayTitle}</div>
-          <div class="desc">${displayDescription}</div>
-          <a href="${escapeHtmlAttr(returnHref)}">${returnLabel}</a>
-        </div>
-        <script>
-          setTimeout(function () {
-            window.location.replace(${JSON.stringify(returnHref)});
-          }, ${autoRedirectDelayMs});
-        </script>
-      </body>
-      </html>
-    `);
-    } catch (error) {
-        console.error("KPay callback error:", error);
-        res.status(500).send("Erreur callback");
-    }
-}
-
-app.all("/api/kpay/callback/:state?", handleKPayCallback);
-
 // ==================== MAISHAPAY PAYMENT MODULE ====================
 
 const paymentOrchestrator = createPaymentOrchestrator({
@@ -4471,7 +3730,7 @@ const paymentOrchestrator = createPaymentOrchestrator({
     confirmSupportPayment,
     createPendingSubscriptionPayment,
     createPendingSupportPayment,
-    computeSubscriptionAmount: computeKPayAmount,
+    computeSubscriptionAmount,
     computeSupportCheckoutAmount,
     resolveRequestUser,
     getUserProfile: async (id) => {
@@ -4490,7 +3749,7 @@ registerPaymentRoutes(app, {
     supabase,
     orchestrator: paymentOrchestrator,
     resolveRequestUser,
-    computeSubscriptionAmount: computeKPayAmount,
+    computeSubscriptionAmount,
     computeSupportCheckoutAmount,
     createPendingSubscriptionPayment,
     createPendingSupportPayment,
@@ -4773,7 +4032,7 @@ app.get("/api/admin/subscription-payments", async (req, res) => {
                 "id, from_user_id, to_user_id, amount_gross, currency, status, description, metadata, created_at, updated_at",
             )
             .eq("type", "subscription")
-            .eq("metadata->>payment_provider", "kpay")
+            .in("metadata->>payment_provider", ["maishapay", "kpay"])
             .order("created_at", { ascending: false })
             .limit(limit);
 
@@ -4849,7 +4108,7 @@ app.post("/api/admin/subscription-payments/confirm", async (req, res) => {
             )
             .eq("id", paymentId)
             .eq("type", "subscription")
-            .eq("metadata->>payment_provider", "kpay")
+            .in("metadata->>payment_provider", ["maishapay", "kpay"])
             .maybeSingle();
         if (paymentError) throw paymentError;
         if (!paymentRow) {
@@ -4937,7 +4196,7 @@ app.post("/api/admin/subscription-payments/fail", async (req, res) => {
             .select("id, status, metadata")
             .eq("id", paymentId)
             .eq("type", "subscription")
-            .eq("metadata->>payment_provider", "kpay")
+            .in("metadata->>payment_provider", ["maishapay", "kpay"])
             .maybeSingle();
         if (paymentError) throw paymentError;
         if (!paymentRow) {
@@ -5091,160 +4350,6 @@ app.get("/api/monetization/overview", async (req, res) => {
         return res
             .status(500)
             .json({ error: "Impossible de charger le portefeuille." });
-    }
-});
-
-app.post("/api/monetization/support", async (req, res) => {
-    try {
-        const authResult = await authenticateRequest(req);
-        if (authResult.error) {
-            return res
-                .status(authResult.error.status)
-                .json({ error: authResult.error.message });
-        }
-
-        const fromUserId = authResult.user.id;
-        const {
-            to_user_id: toUserId,
-            amount: rawAmount,
-            description: rawDescription,
-        } = req.body || {};
-
-        if (!toUserId) {
-            return res.status(400).json({ error: "Destinataire manquant." });
-        }
-
-        if (fromUserId === toUserId) {
-            return res
-                .status(400)
-                .json({ error: "Vous ne pouvez pas vous envoyer un soutien." });
-        }
-
-        const amount = Number.parseFloat(rawAmount);
-        if (!Number.isFinite(amount)) {
-            return res.status(400).json({ error: "Montant invalide." });
-        }
-        if (amount < SUPPORT_MIN_USD || amount > SUPPORT_MAX_USD) {
-            return res.status(400).json({
-                error: `Le montant doit etre entre ${SUPPORT_MIN_USD} et ${SUPPORT_MAX_USD} USD.`,
-            });
-        }
-
-        const [senderProfileResult, recipientProfileResult] = await Promise.all(
-            [
-                supabase
-                    .from("users")
-                    .select("id, name, avatar")
-                    .eq("id", fromUserId)
-                    .maybeSingle(),
-                supabase
-                    .from("users")
-                    .select(
-                        "id, name, avatar, followers_count, plan, plan_status, plan_ends_at, is_monetized",
-                    )
-                    .eq("id", toUserId)
-                    .maybeSingle(),
-            ],
-        );
-
-        if (senderProfileResult.error) throw senderProfileResult.error;
-        if (recipientProfileResult.error) throw recipientProfileResult.error;
-
-        const senderProfile = senderProfileResult.data || null;
-        const recipientProfile = recipientProfileResult.data || null;
-
-        if (!recipientProfile) {
-            return res.status(404).json({ error: "Createur introuvable." });
-        }
-
-        if (!canUserReceiveSupport(recipientProfile)) {
-            return res.status(400).json({
-                error: "Ce createur n'est pas eligible aux soutiens.",
-            });
-        }
-
-        const description = String(rawDescription || "")
-            .trim()
-            .slice(0, 160);
-        const breakdown = computeSupportRevenueBreakdown(amount);
-        const metadata = {
-            payment_provider: "internal_support",
-            support_kind: "direct",
-            sender_name:
-                senderProfile?.name || authResult.user.email || "Utilisateur",
-            created_via: "support_api",
-            commission_rate: SUPPORT_COMMISSION_RATE,
-            amount_net_creator: breakdown.netCreator,
-            amount_commission_xera: breakdown.commission,
-        };
-
-        const { data: transaction, error: txError } = await supabase
-            .from("transactions")
-            .insert({
-                from_user_id: fromUserId,
-                to_user_id: toUserId,
-                type: "support",
-                amount_gross: breakdown.gross,
-                amount_net_creator: breakdown.netCreator,
-                amount_commission_xera: breakdown.commission,
-                currency: "USD",
-                status: "succeeded",
-                description: description || "Soutien XERA",
-                metadata,
-            })
-            .select(
-                "id, from_user_id, to_user_id, type, amount_gross, amount_net_creator, amount_commission_xera, currency, status, description, created_at",
-            )
-            .single();
-
-        if (txError) throw txError;
-
-        const senderName =
-            senderProfile?.name ||
-            authResult.user.user_metadata?.username ||
-            "Un utilisateur";
-        const notification = await createNotificationRecord({
-            userId: toUserId,
-            type: "support",
-            message: `${senderName} vous a envoye ${formatMoneyUsd(breakdown.gross)} de soutien.`,
-            link: `/creator-dashboard`,
-            actorId: fromUserId,
-            metadata: {
-                transaction_id: transaction?.id || null,
-                amount_gross: breakdown.gross,
-                amount_net_creator: breakdown.netCreator,
-                amount_commission_xera: breakdown.commission,
-                currency: "USD",
-                sender_id: fromUserId,
-            },
-        });
-
-        if (notification) {
-            await sendPushToUser(
-                toUserId,
-                buildNotificationPushPayload(notification),
-            );
-        }
-
-        return res.json({
-            success: true,
-            transaction,
-            notification,
-            recipient: {
-                id: recipientProfile.id,
-                name: recipientProfile.name || "Createur",
-            },
-        });
-    } catch (error) {
-        console.error("Monetization support error:", error);
-        if (isMissingRelationError(error) || isMissingColumnError(error)) {
-            return res.status(503).json({
-                error: "Schema monétisation ou notifications incomplet. Exécutez sql/monetization-supabase-one-shot.sql puis sql/notifications-rls-fix.sql si nécessaire.",
-            });
-        }
-        return res
-            .status(500)
-            .json({ error: "Impossible d'envoyer le soutien." });
     }
 });
 
@@ -5776,16 +4881,9 @@ app.get("/api/health", (_req, res) => {
 });
 
 function handlePublicConfig(req, res) {
-    const callbackConfig = getKPayCallbackConfig(req);
     res.json({
         usdToCdfRate: USD_TO_CDF_RATE_VALUE,
-        kPay: {
-            callbackEnabled: callbackConfig.callbackEnabled,
-            callbackOrigin: callbackConfig.callbackEnabled
-                ? callbackConfig.callbackOrigin
-                : null,
-            gatewayMode: String(KPAY_GATEWAY_MODE),
-        },
+        paymentProvider: "maishapay",
     });
 }
 
@@ -7405,14 +6503,9 @@ if (isDirectRun) {
 
 // Démarrer le serveur (local/dev uniquement)
 if (isDirectRun) {
-    console.info("KPay configuration summary:", {
-        gatewayMode: String(KPAY_GATEWAY_MODE),
-        publicKey: maskKey(KPAY_PUBLIC_KEY),
-        secretKey: maskKey(KPAY_SECRET_KEY),
-        publicKeyMode: inferKPayKeyMode(KPAY_PUBLIC_KEY),
-        secretKeyMode: inferKPayKeyMode(KPAY_SECRET_KEY),
-        callbackEnabled: KPAY_CALLBACK_ENABLED,
-        callbackOrigin: CALLBACK_ORIGIN,
+    console.info("MaishaPay configuration summary:", {
+        provider: "maishapay",
+        gatewayMode: process.env.MAISHAPAY_GATEWAY_MODE || "0",
     });
 
     app.listen(PORT, () => {
@@ -7432,8 +6525,5 @@ module.exports = app;
 module.exports.sweepExpiredSubscriptions = sweepExpiredSubscriptions;
 module.exports.sweepReturnReminderEmails = sweepReturnReminderEmails;
 module.exports.sendScheduledReturnReminders = sendScheduledReturnReminders;
-module.exports.handleKPaySubscriptionCheckout = handleKPaySubscriptionCheckout;
-module.exports.handleKPaySupportCheckout = handleKPaySupportCheckout;
-module.exports.handleKPayCallback = handleKPayCallback;
 module.exports.handlePublicConfig = handlePublicConfig;
 module.exports.evaluateTechBadges = evaluateTechBadges;
