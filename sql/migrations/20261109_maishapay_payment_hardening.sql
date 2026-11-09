@@ -1,19 +1,15 @@
 -- ============================================================================
 -- Migration : 20261109_maishapay_payment_hardening.sql
--- Description : Durcissement du schéma des transactions et fonctions atomiques
---               pour le module prestataire MaishaPay.
+-- Description : Durcissement du schéma des transactions et fonction atomique
+--               de réclamation pour le module prestataire MaishaPay.
 -- Idempotence : Oui (IF NOT EXISTS / CREATE OR REPLACE)
--- Sécurité : Fonctions SECURITY DEFINER avec search_path = ''
+-- Sécurité : Fonction SECURITY DEFINER avec search_path = ''
 --            Accès restreint à service_role uniquement (pas d'accès public/anon/authenticated)
 -- ============================================================================
 
 -- ----------------------------------------------------------------------------
 -- 1. ÉVOLUTION DE LA TABLE TRANSACTIONS
 -- ----------------------------------------------------------------------------
-
--- Référence externe unique marchande (ex: xera_<uuid>)
-ALTER TABLE public.transactions
-    ADD COLUMN IF NOT EXISTS external_reference text;
 
 -- Identifiant de transaction attribué par le prestataire (ex: MaishaPay transactionId)
 ALTER TABLE public.transactions
@@ -23,15 +19,15 @@ ALTER TABLE public.transactions
 ALTER TABLE public.transactions
     ADD COLUMN IF NOT EXISTS confirmed_at timestamptz;
 
--- Horodatage d'application des effets métier (crédit wallet, activation abonnement, etc.)
+-- Horodatage d'application des effets métier (notifications, activation plan, etc.)
 -- Reste NULL tant que les effets n'ont pas été effectivement appliqués.
 ALTER TABLE public.transactions
     ADD COLUMN IF NOT EXISTS effects_applied_at timestamptz;
 
--- Index partiel UNIQUE pour garantir l'unicité de la référence externe marchande
-CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_external_reference
-    ON public.transactions(external_reference)
-    WHERE external_reference IS NOT NULL;
+-- Horodatage de la dernière vérification auprès de l'API prestataire (checkStatus)
+-- Utilisé pour le rate limiting (ex: max 1 check toutes les 10s par transaction).
+ALTER TABLE public.transactions
+    ADD COLUMN IF NOT EXISTS last_status_check_at timestamptz;
 
 
 -- ----------------------------------------------------------------------------
@@ -42,8 +38,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_external_reference
 --   - 'succeeded' : permis depuis 'pending' OU 'failed' (paiement tardif)
 --   - 'refunded', 'canceled' : JAMAIS modifiables
 -- Si paiement tardif (failed -> succeeded) : consigne metadata.late_success_at.
--- Renvoie (claimed boolean, transaction jsonb) via to_jsonb(v_tx) pour
--- éliminer tout risque d'ambiguïté de nommage (erreur 42702).
+-- Renvoie (claimed boolean, transaction jsonb) via to_jsonb(v_tx).
 -- ----------------------------------------------------------------------------
 
 CREATE OR REPLACE FUNCTION public.claim_transaction_result(
@@ -124,103 +119,26 @@ $$;
 
 
 -- ----------------------------------------------------------------------------
--- 3. FONCTION ATOMIQUE : credit_creator_wallet_for_support
+-- 3. PERMISSIONS DE SÉCURITÉ
 -- ----------------------------------------------------------------------------
--- Verrouille la transaction (FOR UPDATE).
--- Vérifie type = 'support', status = 'succeeded' et effects_applied_at IS NULL.
--- Fait l'upsert sur public.creator_wallets (available_balance += amount_net_creator).
--- Renseigne effects_applied_at = now().
--- Idempotent : un second appel retourne false sans rien recréditer.
--- ----------------------------------------------------------------------------
-
-CREATE OR REPLACE FUNCTION public.credit_creator_wallet_for_support(
-    p_transaction_id uuid
-)
-RETURNS boolean
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = ''
-AS $$
-DECLARE
-    v_tx public.transactions%ROWTYPE;
-BEGIN
-    -- 1. Verrouiller la transaction pour éviter tout traitement concurrent
-    SELECT * INTO v_tx
-    FROM public.transactions
-    WHERE public.transactions.id = p_transaction_id
-    FOR UPDATE;
-
-    -- Vérifier l'existence
-    IF NOT FOUND THEN
-        RAISE EXCEPTION 'credit_creator_wallet_for_support: transaction % introuvable.', p_transaction_id;
-    END IF;
-
-    -- 2. Vérifications métier
-    IF v_tx.type <> 'support' THEN
-        RAISE EXCEPTION 'credit_creator_wallet_for_support: type de transaction invalide (%). Attendu: ''support''.', v_tx.type;
-    END IF;
-
-    IF v_tx.status <> 'succeeded' THEN
-        RAISE EXCEPTION 'credit_creator_wallet_for_support: transaction non confirmée (status=%). Seules les transactions ''succeeded'' sont créditées.', v_tx.status;
-    END IF;
-
-    -- 3. Idempotence : si les effets ont déjà été appliqués, ne rien recréditer
-    IF v_tx.effects_applied_at IS NOT NULL THEN
-        RETURN false;
-    END IF;
-
-    -- 4. Upsert sur creator_wallets
-    -- Colonne réelle en base : available_balance (numeric)
-    INSERT INTO public.creator_wallets (user_id, available_balance, updated_at)
-    VALUES (v_tx.to_user_id, v_tx.amount_net_creator, now())
-    ON CONFLICT (user_id)
-    DO UPDATE SET
-        available_balance = public.creator_wallets.available_balance + EXCLUDED.available_balance,
-        updated_at = now();
-
-    -- 5. Marquer les effets comme appliqués sur la transaction
-    UPDATE public.transactions
-    SET effects_applied_at = now(),
-        updated_at = now()
-    WHERE public.transactions.id = p_transaction_id;
-
-    RETURN true;
-END;
-$$;
-
-
--- ----------------------------------------------------------------------------
--- 4. PERMISSIONS DE SÉCURITÉ
--- ----------------------------------------------------------------------------
--- Conformité avec les audits de sécurité : interdire tout appel direct
--- depuis les rôles client (anon, authenticated, PUBLIC).
--- Seul service_role (le serveur backend) est autorisé à exécuter ces fonctions.
+-- Seul service_role (le serveur backend) est autorisé à exécuter cette fonction.
 -- ----------------------------------------------------------------------------
 
 REVOKE ALL ON FUNCTION public.claim_transaction_result(uuid, text, text) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.claim_transaction_result(uuid, text, text) TO service_role;
-
-REVOKE ALL ON FUNCTION public.credit_creator_wallet_for_support(uuid) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.credit_creator_wallet_for_support(uuid) TO service_role;
 
 
 -- ============================================================================
 -- SCRIPT DE RETOUR ARRIÈRE (ROLLBACK) - À EXÉCUTER UNIQUEMENT EN CAS D'URGENCE
 -- ============================================================================
 /*
--- 1. Révoquer les permissions et supprimer les fonctions
-REVOKE EXECUTE ON FUNCTION public.credit_creator_wallet_for_support(uuid) FROM service_role;
-DROP FUNCTION IF EXISTS public.credit_creator_wallet_for_support(uuid);
-
+-- 1. Révoquer les permissions et supprimer la fonction
 REVOKE EXECUTE ON FUNCTION public.claim_transaction_result(uuid, text, text) FROM service_role;
 DROP FUNCTION IF EXISTS public.claim_transaction_result(uuid, text, text);
 
--- 2. Supprimer l'index partiel unique
-DROP INDEX IF EXISTS public.idx_transactions_external_reference;
-
--- 3. Supprimer les colonnes ajoutées à public.transactions
+-- 2. Supprimer les colonnes ajoutées à public.transactions
+ALTER TABLE public.transactions DROP COLUMN IF EXISTS last_status_check_at;
 ALTER TABLE public.transactions DROP COLUMN IF EXISTS effects_applied_at;
 ALTER TABLE public.transactions DROP COLUMN IF EXISTS confirmed_at;
 ALTER TABLE public.transactions DROP COLUMN IF EXISTS provider_transaction_id;
-ALTER TABLE public.transactions DROP COLUMN IF EXISTS external_reference;
 */
