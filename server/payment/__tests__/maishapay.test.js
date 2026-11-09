@@ -1,503 +1,626 @@
 'use strict';
-
-/**
- * server/payment/__tests__/maishapay.test.js
- *
- * Tests unitaires du module MaishaPay — provider isolé.
- *
- * RÈGLES :
- *  - Aucun appel réseau réel : fetch est entièrement simulé (mock).
- *  - Aucune clé réelle : valeurs bidon "TEST_PUB", "TEST_SEC", "TEST_TOK".
- *  - Les variables d'environnement réelles de la machine ne sont pas lues :
- *    on écrase process.env dans setupEnv() avant chaque test.
- *  - Les tests vérifient qu'aucun message d'erreur ne contient les clés.
- *
- * Framework : node:test (natif Node >= 18, aucune install npm requise).
- * Lancer avec : node --test server/payment/__tests__/maishapay.test.js
- */
+// server/payment/__tests__/maishapay.test.js
+// Tests unitaires — aucun appel réseau réel, aucune clé réelle.
+// node --test server/payment/__tests__/maishapay.test.js
 
 const { test, describe, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 
-// ─── Env bidon — AVANT tout require du module ─────────────────────────────────
-// getConfig() est lazy : on peut définir les vars ici, elles seront lues à l'appel.
+// ─── Env bidon ───────────────────────────────────────────────────────────────
+// Clés sandbox avec préfixes corrects (MP-SBPK-/MP-SBSK-), mode 0.
 
-function setupEnv(overrides = {}) {
-  process.env.MAISHAPAY_PUBLIC_KEY    = 'TEST_PUB';
-  process.env.MAISHAPAY_SECRET_KEY    = 'TEST_SEC';
+function setupEnv(ov = {}) {
+  process.env.MAISHAPAY_PUBLIC_KEY    = 'MP-SBPK-TEST';
+  process.env.MAISHAPAY_SECRET_KEY    = 'MP-SBSK-TEST';
   process.env.MAISHAPAY_GATEWAY_MODE  = '0';
   process.env.MAISHAPAY_WEBHOOK_TOKEN = 'TEST_TOK';
   process.env.MAISHAPAY_BASE_URL      = 'https://mock.maishapay.test';
   process.env.APP_BASE_URL            = 'https://xera.test';
-  Object.assign(process.env, overrides);
+  Object.assign(process.env, ov);
 }
-
 function clearEnv() {
-  delete process.env.MAISHAPAY_PUBLIC_KEY;
-  delete process.env.MAISHAPAY_SECRET_KEY;
-  delete process.env.MAISHAPAY_GATEWAY_MODE;
-  delete process.env.MAISHAPAY_WEBHOOK_TOKEN;
-  delete process.env.MAISHAPAY_BASE_URL;
-  delete process.env.APP_BASE_URL;
+  for (const k of ['MAISHAPAY_PUBLIC_KEY','MAISHAPAY_SECRET_KEY','MAISHAPAY_GATEWAY_MODE',
+                   'MAISHAPAY_WEBHOOK_TOKEN','MAISHAPAY_BASE_URL','APP_BASE_URL'])
+    delete process.env[k];
 }
 
-// Charger le module après avoir défini l'env (getConfig est lazy, pas de souci)
-setupEnv();
+setupEnv(); // getConfig() est lazy : on peut définir avant le premier appel de fonction
 const {
-  initiatePayment,
-  checkStatus,
-  parseWebhook,
-  normalizePhone,
-  mapProvider,
-  validateAmount,
-  buildReference,
+  initiatePayment, checkStatus, parseWebhook,
+  normalizePhone, mapProvider, validateAmount, buildReference,
+  formatAmount, isValidReference,
 } = require('../providers/maishapay');
 
-// ─── Helpers de mock fetch ───────────────────────────────────────────────────
+// ─── Helpers mock fetch ──────────────────────────────────────────────────────
 
-let _originalFetch;
+let _orig;
+function mockFetch(h) { _orig = globalThis.fetch; globalThis.fetch = h; }
+function restoreFetch() { if (_orig !== undefined) { globalThis.fetch = _orig; _orig = undefined; } }
 
-function mockFetch(handler) {
-  _originalFetch     = globalThis.fetch;
-  globalThis.fetch   = handler;
+function fakeRes(status, body, opts = {}) {
+  const isOk = opts.ok !== undefined ? opts.ok : (status >= 200 && status < 300);
+  return { status, ok: isOk, json: async () => body };
 }
 
-function restoreFetch() {
-  if (_originalFetch !== undefined) {
-    globalThis.fetch = _originalFetch;
-    _originalFetch   = undefined;
-  }
-}
+const VREF   = 'xera_a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+const VPHONE = '+243974000123';
 
-/** Crée une réponse fetch simulée */
-function makeFakeResponse(status, body) {
-  return {
-    status,
-    json: async () => body,
-    text: async () => JSON.stringify(body),
-    ok:   status >= 200 && status < 300,
-  };
-}
 
-// ─── SUITE : initiatePayment ──────────────────────────────────────────────────
+// ─── isValidReference ────────────────────────────────────────────────────────
 
-describe('initiatePayment', () => {
+describe('isValidReference', () => {
+  test('UUID valide → true', () => {
+    assert.equal(isValidReference('xera_a1b2c3d4-e5f6-7890-abcd-ef1234567890'), true);
+  });
+  test('sans préfixe xera_ → false', () => {
+    assert.equal(isValidReference('a1b2c3d4-e5f6-7890-abcd-ef1234567890'), false);
+  });
+  test('trop court → false', () => {
+    assert.equal(isValidReference('xera_abc'), false);
+  });
+  test('null → false', () => {
+    assert.equal(isValidReference(null), false);
+  });
+  test('nombre → false', () => {
+    assert.equal(isValidReference(42), false);
+  });
+  test('xera_ + 36 chiffres corrects → true', () => {
+    assert.equal(isValidReference('xera_12345678-1234-1234-1234-123456789012'), true);
+  });
+});
+
+// ─── formatAmount ─────────────────────────────────────────────────────────────
+
+describe('formatAmount', () => {
+  test('CDF 5000.7 → "5001" (Math.round)', () => {
+    assert.equal(formatAmount(5000.7, 'CDF'), '5001');
+  });
+  test('CDF 5000.4 → "5000"', () => {
+    assert.equal(formatAmount(5000.4, 'CDF'), '5000');
+  });
+  test('XAF 200 → "200"', () => {
+    assert.equal(formatAmount(200, 'XAF'), '200');
+  });
+  test('XOF 150 → "150"', () => {
+    assert.equal(formatAmount(150, 'XOF'), '150');
+  });
+  test('USD 10.5 → "10.50" (2 décimales)', () => {
+    assert.equal(formatAmount(10.5, 'USD'), '10.50');
+  });
+  test('EUR 1 → "1.00"', () => {
+    assert.equal(formatAmount(1, 'EUR'), '1.00');
+  });
+  test('montant string "5000" → "5000" (CDF)', () => {
+    assert.equal(formatAmount('5000', 'CDF'), '5000');
+  });
+  test('NaN → exception', () => {
+    assert.throws(() => formatAmount(NaN, 'CDF'), /montant invalide/);
+  });
+  test('Infinity → exception', () => {
+    assert.throws(() => formatAmount(Infinity, 'CDF'), /montant invalide/);
+  });
+  test('0 → exception', () => {
+    assert.throws(() => formatAmount(0, 'CDF'), /montant invalide/);
+  });
+  test('négatif → exception', () => {
+    assert.throws(() => formatAmount(-100, 'CDF'), /montant invalide/);
+  });
+  test('devise inconnue GNF → exception', () => {
+    assert.throws(() => formatAmount(500, 'GNF'), /devise non reconnue/);
+  });
+});
+
+
+// ─── initiatePayment — INVALID_INPUT (sans appel réseau) ─────────────────────
+
+describe('initiatePayment — INVALID_INPUT', () => {
+
+  beforeEach(() => setupEnv());
+  afterEach(() => clearEnv());
+
+  test('référence invalide → {ok:false, uncertain:false, code:INVALID_INPUT}', async () => {
+    const r = await initiatePayment({ reference: 'mauvaise-ref', amount: 500, currency: 'CDF', phone: VPHONE, provider: 'AIRTEL' });
+    assert.equal(r.ok, false);
+    assert.equal(r.uncertain, false);
+    assert.equal(r.code, 'INVALID_INPUT');
+    assert.match(r.message, /[Rr][ée]f[ée]rence/);
+  });
+
+  test('téléphone sans + → INVALID_INPUT', async () => {
+    const r = await initiatePayment({ reference: VREF, amount: 500, currency: 'CDF', phone: '0974000123', provider: 'AIRTEL' });
+    assert.equal(r.ok, false);
+    assert.equal(r.uncertain, false);
+    assert.equal(r.code, 'INVALID_INPUT');
+  });
+
+  test('téléphone trop court → INVALID_INPUT', async () => {
+    const r = await initiatePayment({ reference: VREF, amount: 500, currency: 'CDF', phone: '+2431234', provider: 'AIRTEL' });
+    assert.equal(r.ok, false);
+    assert.equal(r.code, 'INVALID_INPUT');
+  });
+
+  test('montant sous minimum CDF → INVALID_INPUT', async () => {
+    const r = await initiatePayment({ reference: VREF, amount: 50, currency: 'CDF', phone: VPHONE, provider: 'AIRTEL' });
+    assert.equal(r.ok, false);
+    assert.equal(r.uncertain, false);
+    assert.equal(r.code, 'INVALID_INPUT');
+  });
+
+  test('devise inconnue → INVALID_INPUT', async () => {
+    const r = await initiatePayment({ reference: VREF, amount: 500, currency: 'GNF', phone: VPHONE, provider: 'AIRTEL' });
+    assert.equal(r.ok, false);
+    assert.equal(r.code, 'INVALID_INPUT');
+  });
+
+  test('provider null → INVALID_INPUT', async () => {
+    const r = await initiatePayment({ reference: VREF, amount: 500, currency: 'CDF', phone: VPHONE, provider: null });
+    assert.equal(r.ok, false);
+    assert.equal(r.uncertain, false);
+    assert.equal(r.code, 'INVALID_INPUT');
+  });
+
+  test('provider À CONFIRMER "afrimoney" → INVALID_INPUT', async () => {
+    const r = await initiatePayment({ reference: VREF, amount: 500, currency: 'CDF', phone: VPHONE, provider: 'afrimoney' });
+    assert.equal(r.ok, false);
+    assert.equal(r.uncertain, false);
+    assert.equal(r.code, 'INVALID_INPUT');
+  });
+
+  test('provider slug XERA "airtel_money" (pas le code MaishaPay) → INVALID_INPUT', async () => {
+    const r = await initiatePayment({ reference: VREF, amount: 500, currency: 'CDF', phone: VPHONE, provider: 'airtel_money' });
+    assert.equal(r.ok, false);
+    assert.equal(r.code, 'INVALID_INPUT');
+  });
+
+  test('INVALID_INPUT ne fait aucun appel réseau', async () => {
+    let called = false;
+    mockFetch(async () => { called = true; return fakeRes(202, {}); });
+    await initiatePayment({ reference: 'BAD', amount: 500, currency: 'CDF', phone: VPHONE, provider: 'AIRTEL' });
+    assert.equal(called, false, 'fetch appelé malgré INVALID_INPUT !');
+    restoreFetch();
+  });
+});
+
+
+// ─── initiatePayment — appels réseau ─────────────────────────────────────────
+
+describe('initiatePayment — appels réseau', () => {
 
   beforeEach(() => setupEnv());
   afterEach(() => { restoreFetch(); clearEnv(); });
 
-  test('succès — HTTP 202 + PENDING → { ok: true, status: "pending", providerTransactionId }', async () => {
-    mockFetch(async () => makeFakeResponse(202, {
-      status_code:            202,
-      transactionStatus:      'PENDING',
-      transactionId:          99001,
-      originatingTransactionId: 'xera_test-uuid',
-    }));
-
-    const result = await initiatePayment({
-      reference: 'xera_test-uuid',
-      amount:    5000,
-      currency:  'CDF',
-      phone:     '+243974000123',
-      provider:  'AIRTEL',
-    });
-
-    assert.equal(result.ok, true);
-    assert.equal(result.status, 'pending');
-    assert.equal(result.providerTransactionId, 99001);
+  test('succès 202 PENDING → {ok:true, status:"pending", providerTransactionId}', async () => {
+    mockFetch(async () => fakeRes(202, { transactionStatus: 'PENDING', transactionId: 99001 }));
+    const r = await initiatePayment({ reference: VREF, amount: 5000, currency: 'CDF', phone: VPHONE, provider: 'AIRTEL' });
+    assert.equal(r.ok, true);
+    assert.equal(r.status, 'pending');
+    assert.equal(r.providerTransactionId, 99001);
+    assert.ok(!('uncertain' in r));
   });
 
-  test('HTTP 200 inattendu → { ok: false, code: "HTTP_200" }', async () => {
-    mockFetch(async () => makeFakeResponse(200, { transactionStatus: 'SUCCESS' }));
-
-    const result = await initiatePayment({
-      reference: 'xera_bad',
-      amount:    5000,
-      currency:  'CDF',
-      phone:     '+243974000456',
-      provider:  'ORANGE',
-    });
-
-    assert.equal(result.ok, false);
-    assert.equal(result.code, 'HTTP_200');
+  test('HTTP 400 (4xx) → uncertain:false (rejet déterministe)', async () => {
+    mockFetch(async () => fakeRes(400, { transactionStatus: 'REJECTED' }));
+    const r = await initiatePayment({ reference: VREF, amount: 5000, currency: 'CDF', phone: VPHONE, provider: 'AIRTEL' });
+    assert.equal(r.ok, false);
+    assert.equal(r.uncertain, false);
+    assert.equal(r.code, 'HTTP_400');
   });
 
-  test('erreur réseau → { ok: false, code: "NETWORK_ERROR" }, message sans clés', async () => {
+  test('HTTP 500 (5xx) → uncertain:true + mention checkStatus', async () => {
+    mockFetch(async () => fakeRes(500, { transactionStatus: 'ERROR' }));
+    const r = await initiatePayment({ reference: VREF, amount: 5000, currency: 'CDF', phone: VPHONE, provider: 'AIRTEL' });
+    assert.equal(r.ok, false);
+    assert.equal(r.uncertain, true);
+    assert.equal(r.code, 'HTTP_500');
+    assert.match(r.message, /checkStatus/);
+  });
+
+  test('erreur réseau → uncertain:true, NETWORK_ERROR, sans clés', async () => {
     mockFetch(async () => { throw new Error('connexion refusée'); });
-
-    const result = await initiatePayment({
-      reference: 'xera_net-error',
-      amount:    1000,
-      currency:  'CDF',
-      phone:     '+243974000789',
-      provider:  'AIRTEL',
-    });
-
-    assert.equal(result.ok, false);
-    assert.equal(result.code, 'NETWORK_ERROR');
-    // Les clés ne doivent JAMAIS apparaître dans le message d'erreur
-    assert.ok(!result.message.includes('TEST_PUB'), 'publicKey dans le message !');
-    assert.ok(!result.message.includes('TEST_SEC'), 'secretKey dans le message !');
+    const r = await initiatePayment({ reference: VREF, amount: 5000, currency: 'CDF', phone: VPHONE, provider: 'AIRTEL' });
+    assert.equal(r.ok, false);
+    assert.equal(r.uncertain, true);
+    assert.equal(r.code, 'NETWORK_ERROR');
+    assert.ok(!r.message.includes('MP-SBPK-TEST'), 'publicKey dans le message !');
+    assert.ok(!r.message.includes('MP-SBSK-TEST'), 'secretKey dans le message !');
+    assert.match(r.message, /checkStatus/);
   });
 
-  test('timeout (AbortController) → { ok: false, code: "TIMEOUT" }', async () => {
-    // Simule fetch qui lance AbortError
-    mockFetch(async (_url, options) => {
-      const err = new Error('The operation was aborted');
-      err.name  = 'AbortError';
-      throw err;
-    });
-
-    const result = await initiatePayment({
-      reference: 'xera_timeout',
-      amount:    2000,
-      currency:  'USD',
-      phone:     '+243974000321',
-      provider:  'MPESA',
-    });
-
-    assert.equal(result.ok, false);
-    assert.equal(result.code, 'TIMEOUT');
+  test('AbortError (timeout fetch) → uncertain:true, TIMEOUT', async () => {
+    mockFetch(async () => { const e = new Error('aborted'); e.name = 'AbortError'; throw e; });
+    const r = await initiatePayment({ reference: VREF, amount: 5000, currency: 'CDF', phone: VPHONE, provider: 'AIRTEL' });
+    assert.equal(r.ok, false);
+    assert.equal(r.uncertain, true);
+    assert.equal(r.code, 'TIMEOUT');
+    assert.match(r.message, /checkStatus/);
   });
 
-  test('réponse non-JSON → { ok: false, code: "INVALID_RESPONSE" }', async () => {
+  test('AbortError pendant res.json() (timeout lecture corps) → uncertain:true, TIMEOUT', async () => {
     mockFetch(async () => ({
-      status: 500,
-      json:   async () => { throw new SyntaxError('Unexpected token'); },
-      ok:     false,
+      status: 202, ok: true,
+      json: async () => { const e = new Error('body aborted'); e.name = 'AbortError'; throw e; },
     }));
-
-    const result = await initiatePayment({
-      reference: 'xera_invalid-json',
-      amount:    500,
-      currency:  'CDF',
-      phone:     '+243974000654',
-      provider:  'AIRTEL',
-    });
-
-    assert.equal(result.ok, false);
-    assert.equal(result.code, 'INVALID_RESPONSE');
-    assert.ok(!result.message.includes('TEST_PUB'));
-    assert.ok(!result.message.includes('TEST_SEC'));
+    const r = await initiatePayment({ reference: VREF, amount: 5000, currency: 'CDF', phone: VPHONE, provider: 'AIRTEL' });
+    assert.equal(r.ok, false);
+    assert.equal(r.uncertain, true);
+    assert.equal(r.code, 'TIMEOUT');
   });
 
-  test('variable env manquante → erreur claire sans valeur de clé', async () => {
-    delete process.env.MAISHAPAY_PUBLIC_KEY;
-    mockFetch(async () => makeFakeResponse(202, { transactionStatus: 'PENDING', transactionId: 1 }));
+  test('réponse non-JSON → uncertain:true, INVALID_RESPONSE', async () => {
+    mockFetch(async () => ({
+      status: 202, ok: true,
+      json: async () => { throw new SyntaxError('parse error'); },
+    }));
+    const r = await initiatePayment({ reference: VREF, amount: 5000, currency: 'CDF', phone: VPHONE, provider: 'AIRTEL' });
+    assert.equal(r.ok, false);
+    assert.equal(r.uncertain, true);
+    assert.equal(r.code, 'INVALID_RESPONSE');
+    assert.match(r.message, /checkStatus/);
+  });
 
+  test('formatAmount utilisé : CDF 1500.9 → "1501" dans le payload', async () => {
+    let body;
+    mockFetch(async (_u, opts) => {
+      body = JSON.parse(opts.body);
+      return fakeRes(202, { transactionStatus: 'PENDING', transactionId: 1 });
+    });
+    await initiatePayment({ reference: VREF, amount: 1500.9, currency: 'CDF', phone: VPHONE, provider: 'AIRTEL' });
+    assert.equal(body.order.amount, '1501');
+  });
+
+  test('formatAmount utilisé : USD 10.5 → "10.50" dans le payload', async () => {
+    let body;
+    mockFetch(async (_u, opts) => {
+      body = JSON.parse(opts.body);
+      return fakeRes(202, { transactionStatus: 'PENDING', transactionId: 2 });
+    });
+    await initiatePayment({ reference: VREF, amount: 10.5, currency: 'USD', phone: VPHONE, provider: 'AIRTEL' });
+    assert.equal(body.order.amount, '10.50');
+  });
+
+  test('callbackUrl : token encodé avec encodeURIComponent', async () => {
+    setupEnv({ MAISHAPAY_WEBHOOK_TOKEN: 'TOK+spécial&=' });
+    let body;
+    mockFetch(async (_u, opts) => {
+      body = JSON.parse(opts.body);
+      return fakeRes(202, { transactionStatus: 'PENDING', transactionId: 3 });
+    });
+    await initiatePayment({ reference: VREF, amount: 500, currency: 'CDF', phone: VPHONE, provider: 'AIRTEL' });
+    assert.ok(!body.paymentChannel.callbackUrl.includes('TOK+spécial&='), 'Token non encodé !');
+    assert.ok(body.paymentChannel.callbackUrl.includes('TOK%2Bsp%C3%A9cial%26%3D'));
+  });
+});
+
+
+// ─── getConfig — cohérence mode/clés ─────────────────────────────────────────
+
+describe('getConfig — cohérence mode/clés', () => {
+
+  afterEach(() => { restoreFetch(); clearEnv(); });
+
+  test('mode 0 + MP-SBPK-/MP-SBSK- → OK', async () => {
+    setupEnv({ MAISHAPAY_PUBLIC_KEY: 'MP-SBPK-TEST', MAISHAPAY_SECRET_KEY: 'MP-SBSK-TEST', MAISHAPAY_GATEWAY_MODE: '0' });
+    mockFetch(async () => fakeRes(202, { transactionStatus: 'PENDING', transactionId: 10 }));
+    const r = await initiatePayment({ reference: VREF, amount: 500, currency: 'CDF', phone: VPHONE, provider: 'AIRTEL' });
+    assert.equal(r.ok, true);
+  });
+
+  test('mode 1 + MP-LIVEPK-/MP-LIVESK- → OK', async () => {
+    setupEnv({ MAISHAPAY_PUBLIC_KEY: 'MP-LIVEPK-TEST', MAISHAPAY_SECRET_KEY: 'MP-LIVESK-TEST', MAISHAPAY_GATEWAY_MODE: '1' });
+    mockFetch(async () => fakeRes(202, { transactionStatus: 'PENDING', transactionId: 11 }));
+    const r = await initiatePayment({ reference: VREF, amount: 500, currency: 'CDF', phone: VPHONE, provider: 'AIRTEL' });
+    assert.equal(r.ok, true);
+  });
+
+  test('clés live avec mode 0 → erreur cohérence, valeur de clé absente du message', async () => {
+    setupEnv({ MAISHAPAY_PUBLIC_KEY: 'MP-LIVEPK-WRONG', MAISHAPAY_SECRET_KEY: 'MP-LIVESK-WRONG', MAISHAPAY_GATEWAY_MODE: '0' });
     await assert.rejects(
-      () => initiatePayment({ reference: 'x', amount: 500, currency: 'CDF', phone: '+243974000000', provider: 'AIRTEL' }),
+      () => initiatePayment({ reference: VREF, amount: 500, currency: 'CDF', phone: VPHONE, provider: 'AIRTEL' }),
       (err) => {
-        assert.ok(err.message.includes('MAISHAPAY_PUBLIC_KEY'), 'Le nom de la var manquante doit apparaître');
-        // La valeur ne doit pas apparaître (elle est absente ici, mais on vérifie par principe)
+        assert.ok(!err.message.includes('MP-LIVEPK-WRONG'), 'Valeur publicKey dans le message !');
+        assert.ok(!err.message.includes('MP-LIVESK-WRONG'), 'Valeur secretKey dans le message !');
+        assert.ok(err.message.includes('MP-SBPK-'), 'Préfixe attendu absent du message');
         return true;
       }
     );
   });
+
+  test('clés sandbox avec mode 1 → erreur cohérence', async () => {
+    setupEnv({ MAISHAPAY_PUBLIC_KEY: 'MP-SBPK-WRONG', MAISHAPAY_SECRET_KEY: 'MP-SBSK-WRONG', MAISHAPAY_GATEWAY_MODE: '1' });
+    await assert.rejects(
+      () => initiatePayment({ reference: VREF, amount: 500, currency: 'CDF', phone: VPHONE, provider: 'AIRTEL' }),
+      /MP-LIVEPK-/
+    );
+  });
+
+  test('gatewayMode "2" (invalide) → erreur claire', async () => {
+    setupEnv({ MAISHAPAY_GATEWAY_MODE: '2' });
+    await assert.rejects(
+      () => initiatePayment({ reference: VREF, amount: 500, currency: 'CDF', phone: VPHONE, provider: 'AIRTEL' }),
+      /MAISHAPAY_GATEWAY_MODE/
+    );
+  });
+
+  test('parseWebhook ne requiert PAS PUBLIC_KEY / GATEWAY_MODE', () => {
+    setupEnv();
+    delete process.env.MAISHAPAY_PUBLIC_KEY;
+    delete process.env.MAISHAPAY_SECRET_KEY;
+    delete process.env.MAISHAPAY_GATEWAY_MODE;
+    const r = parseWebhook({ originatingTransactionId: VREF }, 'TEST_TOK');
+    assert.equal(r.valid, true);
+  });
+
+  test('checkStatus ne requiert PAS WEBHOOK_TOKEN / APP_BASE_URL', async () => {
+    setupEnv();
+    delete process.env.MAISHAPAY_WEBHOOK_TOKEN;
+    delete process.env.APP_BASE_URL;
+    mockFetch(async () => fakeRes(200, { transactionStatus: 'FAILED' }));
+    const r = await checkStatus(VREF);
+    assert.equal(r.status, 'failed');
+  });
 });
 
-// ─── SUITE : checkStatus ──────────────────────────────────────────────────────
+
+// ─── checkStatus ─────────────────────────────────────────────────────────────
 
 describe('checkStatus', () => {
 
   beforeEach(() => setupEnv());
   afterEach(() => { restoreFetch(); clearEnv(); });
 
-  test('SUCCESS → { status: "succeeded" }', async () => {
-    mockFetch(async () => makeFakeResponse(200, { transactionStatus: 'SUCCESS' }));
-    const result = await checkStatus('xera_abc');
-    assert.equal(result.status, 'succeeded');
+  test('res.ok + SUCCESS → {status:"succeeded", confirmedAmount}', async () => {
+    mockFetch(async () => fakeRes(200, { transactionStatus: 'SUCCESS', order: { cost: { amount: '5000' } } }));
+    const r = await checkStatus(VREF);
+    assert.equal(r.status, 'succeeded');
+    assert.equal(r.confirmedAmount, '5000');
   });
 
-  test('FAILED → { status: "failed" }', async () => {
-    mockFetch(async () => makeFakeResponse(200, { transactionStatus: 'FAILED' }));
-    const result = await checkStatus('xera_abc');
-    assert.equal(result.status, 'failed');
+  test('HTTP 500 + SUCCESS (res.ok=false) → pending (jamais succeeded)', async () => {
+    mockFetch(async () => fakeRes(500, { transactionStatus: 'SUCCESS' }, { ok: false }));
+    const r = await checkStatus(VREF);
+    assert.equal(r.status, 'pending');
+    assert.notEqual(r.status, 'succeeded');
   });
 
-  test('PENDING → { status: "pending" }', async () => {
-    mockFetch(async () => makeFakeResponse(200, { transactionStatus: 'PENDING' }));
-    const result = await checkStatus('xera_abc');
-    assert.equal(result.status, 'pending');
+  test('FAILED → {status:"failed", confirmedAmount:null}', async () => {
+    mockFetch(async () => fakeRes(200, { transactionStatus: 'FAILED' }));
+    const r = await checkStatus(VREF);
+    assert.equal(r.status, 'failed');
+    assert.equal(r.confirmedAmount, null);
   });
 
-  test('statut inconnu "DECLINED" → { status: "pending" } (jamais succeeded)', async () => {
-    mockFetch(async () => makeFakeResponse(200, { transactionStatus: 'DECLINED' }));
-    const result = await checkStatus('xera_abc');
-    assert.equal(result.status, 'pending');
-    assert.notEqual(result.status, 'succeeded');
+  test('PENDING → pending', async () => {
+    mockFetch(async () => fakeRes(200, { transactionStatus: 'PENDING' }));
+    const r = await checkStatus(VREF);
+    assert.equal(r.status, 'pending');
   });
 
-  test('statut null → { status: "pending" } (jamais succeeded)', async () => {
-    mockFetch(async () => makeFakeResponse(200, { transactionStatus: null }));
-    const result = await checkStatus('xera_abc');
-    assert.equal(result.status, 'pending');
+  test('statut inconnu "DECLINED" → pending (jamais succeeded)', async () => {
+    mockFetch(async () => fakeRes(200, { transactionStatus: 'DECLINED' }));
+    const r = await checkStatus(VREF);
+    assert.equal(r.status, 'pending');
+    assert.notEqual(r.status, 'succeeded');
   });
 
-  test('réponse vide {} → { status: "pending" } (jamais succeeded)', async () => {
-    mockFetch(async () => makeFakeResponse(200, {}));
-    const result = await checkStatus('xera_abc');
-    assert.equal(result.status, 'pending');
+  test('réponse {} → pending', async () => {
+    mockFetch(async () => fakeRes(200, {}));
+    const r = await checkStatus(VREF);
+    assert.equal(r.status, 'pending');
   });
 
-  test('réponse non-JSON → { status: "pending" }', async () => {
-    mockFetch(async () => ({
-      status: 200,
-      json:   async () => { throw new SyntaxError('parse error'); },
-      ok:     true,
+  test('référence différente dans originatingTransactionId → pending', async () => {
+    mockFetch(async () => fakeRes(200, {
+      transactionStatus: 'SUCCESS',
+      originatingTransactionId: 'xera_00000000-0000-0000-0000-000000000000',
     }));
-    const result = await checkStatus('xera_abc');
-    assert.equal(result.status, 'pending');
+    const r = await checkStatus(VREF);
+    assert.equal(r.status, 'pending');
+    assert.notEqual(r.status, 'succeeded');
+    assert.equal(r.confirmedAmount, null);
   });
 
-  test('erreur réseau → { status: "pending" } (jamais succeeded)', async () => {
+  test('même référence dans originatingTransactionId → succeeded autorisé', async () => {
+    mockFetch(async () => fakeRes(200, {
+      transactionStatus: 'SUCCESS',
+      originatingTransactionId: VREF,
+    }));
+    const r = await checkStatus(VREF);
+    assert.equal(r.status, 'succeeded');
+  });
+
+  test('originatingTransactionId absent → ne bloque pas le check normal', async () => {
+    mockFetch(async () => fakeRes(200, { transactionStatus: 'SUCCESS' }));
+    const r = await checkStatus(VREF);
+    assert.equal(r.status, 'succeeded'); // absent = pas de divergence à signaler
+  });
+
+  test('réponse non-JSON → pending', async () => {
+    mockFetch(async () => ({
+      status: 200, ok: true,
+      json: async () => { throw new SyntaxError('parse error'); },
+    }));
+    const r = await checkStatus(VREF);
+    assert.equal(r.status, 'pending');
+    assert.equal(r.confirmedAmount, null);
+  });
+
+  test('erreur réseau → pending (jamais succeeded)', async () => {
     mockFetch(async () => { throw new Error('réseau coupé'); });
-    const result = await checkStatus('xera_abc');
-    assert.equal(result.status, 'pending');
-    assert.notEqual(result.status, 'succeeded');
+    const r = await checkStatus(VREF);
+    assert.equal(r.status, 'pending');
+    assert.notEqual(r.status, 'succeeded');
+    assert.equal(r.confirmedAmount, null);
   });
 
-  test('AbortError (timeout) → { status: "pending" }', async () => {
-    mockFetch(async () => {
-      const err = new Error('aborted');
-      err.name  = 'AbortError';
-      throw err;
-    });
-    const result = await checkStatus('xera_abc');
-    assert.equal(result.status, 'pending');
+  test('AbortError fetch → pending', async () => {
+    mockFetch(async () => { const e = new Error('aborted'); e.name = 'AbortError'; throw e; });
+    const r = await checkStatus(VREF);
+    assert.equal(r.status, 'pending');
+  });
+
+  test('AbortError pendant res.json() (timeout lecture corps) → pending', async () => {
+    mockFetch(async () => ({
+      status: 200, ok: true,
+      json: async () => { const e = new Error('body aborted'); e.name = 'AbortError'; throw e; },
+    }));
+    const r = await checkStatus(VREF);
+    assert.equal(r.status, 'pending');
+  });
+
+  test('confirmedAmount null quand order absent', async () => {
+    mockFetch(async () => fakeRes(200, { transactionStatus: 'SUCCESS' }));
+    const r = await checkStatus(VREF);
+    assert.equal(r.confirmedAmount, null);
   });
 });
 
-// ─── SUITE : parseWebhook ─────────────────────────────────────────────────────
+
+// ─── parseWebhook ─────────────────────────────────────────────────────────────
 
 describe('parseWebhook', () => {
 
   beforeEach(() => setupEnv());
   afterEach(() => clearEnv());
 
-  test('bon token + référence valide → { valid: true, reference }', () => {
-    const result = parseWebhook(
-      { originatingTransactionId: 'xera_uuid-001', transactionStatus: 'SUCCESS' },
-      'TEST_TOK'
-    );
-    assert.equal(result.valid, true);
-    assert.equal(result.reference, 'xera_uuid-001');
-    // Le statut du body NE DOIT PAS être renvoyé (non fiable, pas de HMAC)
-    assert.ok(!('status' in result), 'Le statut du body webhook ne doit pas être renvoyé');
-    assert.ok(!('transactionStatus' in result), 'transactionStatus ne doit pas être renvoyé');
+  test('bon token string → {valid:true, reference}', () => {
+    const r = parseWebhook({ originatingTransactionId: VREF }, 'TEST_TOK');
+    assert.equal(r.valid, true);
+    assert.equal(r.reference, VREF);
+    assert.ok(!('transactionStatus' in r), 'statut du body ne doit pas être renvoyé');
+    assert.ok(!('status' in r));
   });
 
-  test('mauvais token → { valid: false }', () => {
-    const result = parseWebhook(
-      { originatingTransactionId: 'xera_uuid-002' },
-      'MAUVAIS_TOKEN'
-    );
-    assert.equal(result.valid, false);
-    assert.ok(!('reference' in result));
+  test('mauvais token → {valid:false}', () => {
+    assert.equal(parseWebhook({ originatingTransactionId: VREF }, 'WRONG').valid, false);
   });
 
-  test('token vide → { valid: false }', () => {
-    const result = parseWebhook({ originatingTransactionId: 'xera_uuid-003' }, '');
-    assert.equal(result.valid, false);
+  test('queryToken tableau → {valid:false} (typeof !== string)', () => {
+    assert.equal(parseWebhook({ originatingTransactionId: VREF }, ['TEST_TOK']).valid, false);
   });
 
-  test('token null → { valid: false }', () => {
-    const result = parseWebhook({ originatingTransactionId: 'xera_uuid-004' }, null);
-    assert.equal(result.valid, false);
+  test('queryToken objet → {valid:false}', () => {
+    assert.equal(parseWebhook({ originatingTransactionId: VREF }, { token: 'TEST_TOK' }).valid, false);
   });
 
-  test('bon token mais référence absente → { valid: true, reference: null }', () => {
-    const result = parseWebhook({ transactionStatus: 'SUCCESS' }, 'TEST_TOK');
-    assert.equal(result.valid, true);
-    assert.equal(result.reference, null);
+  test('queryToken null → {valid:false}', () => {
+    assert.equal(parseWebhook({ originatingTransactionId: VREF }, null).valid, false);
   });
 
-  test('bon token mais body vide → { valid: true, reference: null }', () => {
-    const result = parseWebhook({}, 'TEST_TOK');
-    assert.equal(result.valid, true);
-    assert.equal(result.reference, null);
+  test('queryToken undefined → {valid:false}', () => {
+    assert.equal(parseWebhook({ originatingTransactionId: VREF }, undefined).valid, false);
+  });
+
+  test('queryToken nombre → {valid:false}', () => {
+    assert.equal(parseWebhook({ originatingTransactionId: VREF }, 42).valid, false);
+  });
+
+  test('queryToken vide → {valid:false}', () => {
+    assert.equal(parseWebhook({ originatingTransactionId: VREF }, '').valid, false);
+  });
+
+  test('bon token, référence absente → {valid:true, reference:null}', () => {
+    const r = parseWebhook({}, 'TEST_TOK');
+    assert.equal(r.valid, true);
+    assert.equal(r.reference, null);
+  });
+
+  test('bon token, body vide → {valid:true, reference:null}', () => {
+    const r = parseWebhook({}, 'TEST_TOK');
+    assert.equal(r.valid, true);
+    assert.equal(r.reference, null);
+  });
+
+  test('WEBHOOK_TOKEN absent → erreur claire', () => {
+    delete process.env.MAISHAPAY_WEBHOOK_TOKEN;
+    assert.throws(() => parseWebhook({}, 'TEST_TOK'), /MAISHAPAY_WEBHOOK_TOKEN/);
+  });
+
+  test('le statut du body est ignoré (non renvoyé dans le résultat)', () => {
+    const r = parseWebhook({ originatingTransactionId: VREF, transactionStatus: 'SUCCESS' }, 'TEST_TOK');
+    assert.ok(!('transactionStatus' in r));
+    assert.ok(!('status' in r));
   });
 });
 
-// ─── SUITE : normalizePhone ───────────────────────────────────────────────────
+// ─── normalizePhone ───────────────────────────────────────────────────────────
 
 describe('normalizePhone (RDC +243)', () => {
-
-  test('format "+243974123456" → "+243974123456"', () => {
-    assert.equal(normalizePhone('+243974123456'), '+243974123456');
-  });
-
-  test('format "0974123456" → "+243974123456"', () => {
-    assert.equal(normalizePhone('0974123456'), '+243974123456');
-  });
-
-  test('format "974123456" → "+243974123456"', () => {
-    assert.equal(normalizePhone('974123456'), '+243974123456');
-  });
-
-  test('format "00243974123456" → "+243974123456"', () => {
-    assert.equal(normalizePhone('00243974123456'), '+243974123456');
-  });
-
-  test('espaces et tirets → normalisé "+243974123456"', () => {
-    assert.equal(normalizePhone('+243 974-123-456'), '+243974123456');
-  });
-
-  test('trop court "97412" → null', () => {
-    assert.equal(normalizePhone('97412'), null);
-  });
-
-  test('trop long "09741234567890" → null', () => {
-    assert.equal(normalizePhone('09741234567890'), null);
-  });
-
-  test('lettres dans le numéro → null', () => {
-    assert.equal(normalizePhone('0974ABC456'), null);
-  });
-
-  test('null en entrée → null', () => {
-    assert.equal(normalizePhone(null), null);
-  });
-
-  test('chaîne vide → null', () => {
-    assert.equal(normalizePhone(''), null);
-  });
+  test('+243974123456 → +243974123456', () => { assert.equal(normalizePhone('+243974123456'), '+243974123456'); });
+  test('0974123456 → +243974123456',    () => { assert.equal(normalizePhone('0974123456'), '+243974123456'); });
+  test('974123456 → +243974123456',     () => { assert.equal(normalizePhone('974123456'), '+243974123456'); });
+  test('00243974123456 → +243974123456',() => { assert.equal(normalizePhone('00243974123456'), '+243974123456'); });
+  test('avec espaces/tirets → normalisé',() => { assert.equal(normalizePhone('+243 974-123-456'), '+243974123456'); });
+  test('trop court → null',             () => { assert.equal(normalizePhone('97412'), null); });
+  test('trop long → null',              () => { assert.equal(normalizePhone('09741234567890'), null); });
+  test('lettres → null',                () => { assert.equal(normalizePhone('0974ABC456'), null); });
+  test('null → null',                   () => { assert.equal(normalizePhone(null), null); });
+  test('chaîne vide → null',            () => { assert.equal(normalizePhone(''), null); });
 });
 
-// ─── SUITE : mapProvider ──────────────────────────────────────────────────────
+// ─── mapProvider ──────────────────────────────────────────────────────────────
 
 describe('mapProvider', () => {
-
-  test('airtel_money → "AIRTEL" (confirmé doc)', () => {
-    assert.equal(mapProvider('airtel_money'), 'AIRTEL');
-  });
-
-  test('orange_money → "ORANGE" (confirmé doc)', () => {
-    assert.equal(mapProvider('orange_money'), 'ORANGE');
-  });
-
-  test('mpesa → "MPESA" (confirmé doc)', () => {
-    assert.equal(mapProvider('mpesa'), 'MPESA');
-  });
-
-  test('mtn → "MTN" (confirmé doc)', () => {
-    assert.equal(mapProvider('mtn'), 'MTN');
-  });
-
-  test('afrimoney → null (À CONFIRMER, absent de la doc)', () => {
-    assert.equal(mapProvider('afrimoney'), null);
-  });
-
-  test('wave → null (À CONFIRMER, code exact non spécifié dans la doc)', () => {
-    assert.equal(mapProvider('wave'), null);
-  });
-
-  test('slug inconnu → null', () => {
-    assert.equal(mapProvider('some_unknown_provider'), null);
-  });
+  test('airtel_money → AIRTEL', () => { assert.equal(mapProvider('airtel_money'), 'AIRTEL'); });
+  test('orange_money → ORANGE', () => { assert.equal(mapProvider('orange_money'), 'ORANGE'); });
+  test('mpesa → MPESA',         () => { assert.equal(mapProvider('mpesa'), 'MPESA'); });
+  test('mtn → MTN',             () => { assert.equal(mapProvider('mtn'), 'MTN'); });
+  test('afrimoney → null',      () => { assert.equal(mapProvider('afrimoney'), null); });
+  test('wave → null',           () => { assert.equal(mapProvider('wave'), null); });
+  test('inconnu → null',        () => { assert.equal(mapProvider('unknown'), null); });
 });
 
-// ─── SUITE : validateAmount ───────────────────────────────────────────────────
+// ─── validateAmount ───────────────────────────────────────────────────────────
 
 describe('validateAmount', () => {
-
-  // CDF
-  test('CDF 100 → false (doit être > 100)', () => {
-    assert.equal(validateAmount(100, 'CDF'), false);
-  });
-
-  test('CDF 100.01 → true', () => {
-    assert.equal(validateAmount(100.01, 'CDF'), true);
-  });
-
-  test('CDF 5000 → true', () => {
-    assert.equal(validateAmount(5000, 'CDF'), true);
-  });
-
-  test('XAF 50 → false', () => {
-    assert.equal(validateAmount(50, 'XAF'), false);
-  });
-
-  test('XOF 200 → true', () => {
-    assert.equal(validateAmount(200, 'XOF'), true);
-  });
-
-  // USD
-  test('USD 0.5 → false (doit être > 0.5)', () => {
-    assert.equal(validateAmount(0.5, 'USD'), false);
-  });
-
-  test('USD 0.51 → true', () => {
-    assert.equal(validateAmount(0.51, 'USD'), true);
-  });
-
-  test('EUR 10 → true', () => {
-    assert.equal(validateAmount(10, 'EUR'), true);
-  });
-
-  // Cas limites
-  test('montant 0 → false', () => {
-    assert.equal(validateAmount(0, 'CDF'), false);
-  });
-
-  test('montant négatif → false', () => {
-    assert.equal(validateAmount(-500, 'CDF'), false);
-  });
-
-  test('devise inconnue → false (rejet par précaution)', () => {
-    assert.equal(validateAmount(5000, 'GNF'), false);
-  });
-
-  test('montant sous forme de string "5000" → true (CDF)', () => {
-    assert.equal(validateAmount('5000', 'CDF'), true);
-  });
+  test('CDF 100 → false',       () => { assert.equal(validateAmount(100, 'CDF'), false); });
+  test('CDF 100.01 → true',     () => { assert.equal(validateAmount(100.01, 'CDF'), true); });
+  test('CDF 5000 → true',       () => { assert.equal(validateAmount(5000, 'CDF'), true); });
+  test('XAF 50 → false',        () => { assert.equal(validateAmount(50, 'XAF'), false); });
+  test('XOF 200 → true',        () => { assert.equal(validateAmount(200, 'XOF'), true); });
+  test('USD 0.5 → false',       () => { assert.equal(validateAmount(0.5, 'USD'), false); });
+  test('USD 0.51 → true',       () => { assert.equal(validateAmount(0.51, 'USD'), true); });
+  test('EUR 10 → true',         () => { assert.equal(validateAmount(10, 'EUR'), true); });
+  test('0 → false',             () => { assert.equal(validateAmount(0, 'CDF'), false); });
+  test('négatif → false',       () => { assert.equal(validateAmount(-500, 'CDF'), false); });
+  test('devise inconnue → false',() => { assert.equal(validateAmount(5000, 'GNF'), false); });
 });
 
-// ─── SUITE : buildReference ───────────────────────────────────────────────────
+// ─── buildReference & sécurité ───────────────────────────────────────────────
 
 describe('buildReference', () => {
-
-  test('préfixe "xera_" + uuid', () => {
-    assert.equal(
-      buildReference('a1b2c3d4-e5f6-7890-abcd-ef1234567890'),
-      'xera_a1b2c3d4-e5f6-7890-abcd-ef1234567890'
-    );
+  test('préfixe xera_ + uuid', () => {
+    assert.equal(buildReference('a1b2c3d4-e5f6-7890-abcd-ef1234567890'), VREF);
   });
 });
 
-// ─── SUITE : sécurité — aucune clé dans les messages d'erreur ────────────────
-
-describe('sécurité — clés absentes des messages d\'erreur', () => {
+describe('sécurité — clés absentes des messages/objets d\'erreur', () => {
 
   beforeEach(() => setupEnv());
   afterEach(() => { restoreFetch(); clearEnv(); });
 
-  test('erreur réseau initiatePayment : message ne contient pas les clés', async () => {
+  test('erreur réseau initiatePayment : clés absentes', async () => {
     mockFetch(async () => { throw new Error('connexion impossible'); });
-
-    const result = await initiatePayment({
-      reference: 'xera_sec-test',
-      amount:    1000,
-      currency:  'CDF',
-      phone:     '+243974111111',
-      provider:  'AIRTEL',
-    });
-
-    assert.ok(!result.message.includes('TEST_PUB'), 'publicKey exposée !');
-    assert.ok(!result.message.includes('TEST_SEC'), 'secretKey exposée !');
+    const r = await initiatePayment({ reference: VREF, amount: 1000, currency: 'CDF', phone: VPHONE, provider: 'AIRTEL' });
+    assert.ok(!r.message.includes('MP-SBPK-TEST'), 'publicKey exposée !');
+    assert.ok(!r.message.includes('MP-SBSK-TEST'), 'secretKey exposée !');
   });
 
-  test('réponse non-JSON checkStatus : message ne contient pas les clés', async () => {
+  test('JSON invalide initiatePayment : clés absentes, uncertain:true', async () => {
     mockFetch(async () => ({
-      status: 500,
-      json:   async () => { throw new SyntaxError('parse error'); },
-      ok:     false,
+      status: 500, ok: false,
+      json: async () => { throw new SyntaxError('parse error'); },
     }));
+    const r = await initiatePayment({ reference: VREF, amount: 1000, currency: 'CDF', phone: VPHONE, provider: 'AIRTEL' });
+    assert.equal(r.uncertain, true);
+    assert.ok(!r.message.includes('MP-SBPK-TEST'));
+    assert.ok(!r.message.includes('MP-SBSK-TEST'));
+  });
 
-    // checkStatus loggue un warn mais ne lève pas d'erreur → vérifier via le retour
-    const result = await checkStatus('xera_sec-test-2');
-    // Le résultat doit être pending et pas succeeded
-    assert.equal(result.status, 'pending');
-    assert.notEqual(result.status, 'succeeded');
+  test('erreur réseau checkStatus : status reste pending, jamais succeeded', async () => {
+    mockFetch(async () => { throw new Error('réseau coupé'); });
+    const r = await checkStatus(VREF);
+    assert.equal(r.status, 'pending');
+    assert.notEqual(r.status, 'succeeded');
   });
 });
+
