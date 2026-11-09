@@ -27,7 +27,7 @@ const REQUEST_TIMEOUT_MS = 8_000;
 const CONFIRMED_PROVIDER_CODES = new Set(['AIRTEL', 'ORANGE', 'MPESA', 'MTN']);
 
 // Référence marchand XERA : «xera_» + UUID v4 (32 hex + 4 tirets = 36 chars).
-const REFERENCE_REGEX = /^xera_[0-9a-f-]{36}$/i;
+const REFERENCE_REGEX = /^xera_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Numéro de téléphone international minimal.
 const PHONE_REGEX = /^\+\d{8,15}$/;
@@ -364,6 +364,15 @@ async function initiatePayment({ reference, amount, currency, phone, provider })
       };
     }
 
+    // ── Cas spécifique HTTP 429 Rate Limited — uncertain:false ─────────────
+    if (res.status === 429) {
+      return {
+        ok: false, uncertain: false,
+        code:    'RATE_LIMITED',
+        message: `[MaishaPay] Limite de requêtes atteinte (HTTP 429) — ref=${reference}. Veuillez réessayer dans un instant.`,
+      };
+    }
+
     // ── Rejet explicite 4xx — déterministe, uncertain:false ─────────────────
     if (res.status >= 400 && res.status < 500) {
       return {
@@ -488,7 +497,7 @@ async function checkStatus(reference) {
 
     // ── «succeeded» UNIQUEMENT si res.ok ET raw === 'SUCCESS' ───────────────
     if (res.ok && raw === 'SUCCESS') return { status: 'succeeded', confirmedAmount };
-    if (raw === 'FAILED')           return { status: 'failed',    confirmedAmount: null };
+    if (res.ok && raw === 'FAILED')  return { status: 'failed',    confirmedAmount: null };
 
     // Toute autre valeur → pending (jamais succeeded)
     console.warn(

@@ -67,6 +67,12 @@ describe('isValidReference', () => {
   test('xera_ + 36 chiffres corrects → true', () => {
     assert.equal(isValidReference('xera_12345678-1234-1234-1234-123456789012'), true);
   });
+  test('UUID avec tirets mal placés → false', () => {
+    assert.equal(isValidReference('xera_123456781234-1234-1234-123456789012-'), false);
+  });
+  test('UUID avec caractères non hexadécimaux → false', () => {
+    assert.equal(isValidReference('xera_g1b2c3d4-e5f6-7890-abcd-ef1234567890'), false);
+  });
 });
 
 // ─── formatAmount ─────────────────────────────────────────────────────────────
@@ -196,6 +202,15 @@ describe('initiatePayment — appels réseau', () => {
     assert.equal(r.status, 'pending');
     assert.equal(r.providerTransactionId, 99001);
     assert.ok(!('uncertain' in r));
+  });
+
+  test('HTTP 429 → {ok:false, uncertain:false, code:RATE_LIMITED}', async () => {
+    mockFetch(async () => fakeRes(429, { message: 'Too Many Requests' }));
+    const r = await initiatePayment({ reference: VREF, amount: 5000, currency: 'CDF', phone: VPHONE, provider: 'AIRTEL' });
+    assert.equal(r.ok, false);
+    assert.equal(r.uncertain, false);
+    assert.equal(r.code, 'RATE_LIMITED');
+    assert.match(r.message, /réessayer dans un instant/);
   });
 
   test('HTTP 400 (4xx) → uncertain:false (rejet déterministe)', async () => {
@@ -380,6 +395,13 @@ describe('checkStatus', () => {
     const r = await checkStatus(VREF);
     assert.equal(r.status, 'pending');
     assert.notEqual(r.status, 'succeeded');
+  });
+
+  test('HTTP 500 + FAILED (res.ok=false) → pending (jamais failed sans res.ok)', async () => {
+    mockFetch(async () => fakeRes(500, { transactionStatus: 'FAILED' }, { ok: false }));
+    const r = await checkStatus(VREF);
+    assert.equal(r.status, 'pending');
+    assert.notEqual(r.status, 'failed');
   });
 
   test('FAILED → {status:"failed", confirmedAmount:null}', async () => {
