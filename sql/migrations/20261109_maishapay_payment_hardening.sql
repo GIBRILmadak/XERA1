@@ -37,11 +37,13 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_external_reference
 -- ----------------------------------------------------------------------------
 -- 2. FONCTION ATOMIQUE : claim_transaction_result
 -- ----------------------------------------------------------------------------
--- Fait un SEUL UPDATE atomique conditionné par status = 'pending'.
--- N'accepte que 'succeeded' ou 'failed'.
--- Renvoie la ligne de transaction complète + le booléen claimed.
--- claimed = true  -> cet appel a gagné la course et a changé le statut.
--- claimed = false -> la transaction avait déjà été traitée (idempotence).
+-- Fait un SEUL UPDATE atomique selon la règle de transition d'état :
+--   - 'failed'    : permis uniquement depuis 'pending'
+--   - 'succeeded' : permis depuis 'pending' OU 'failed' (paiement tardif)
+--   - 'refunded', 'canceled' : JAMAIS modifiables
+-- Si paiement tardif (failed -> succeeded) : consigne metadata.late_success_at.
+-- Renvoie (claimed boolean, transaction jsonb) via to_jsonb(v_tx) pour
+-- éliminer tout risque d'ambiguïté de nommage (erreur 42702).
 -- ----------------------------------------------------------------------------
 
 CREATE OR REPLACE FUNCTION public.claim_transaction_result(
@@ -50,24 +52,8 @@ CREATE OR REPLACE FUNCTION public.claim_transaction_result(
     p_provider_tx text DEFAULT NULL
 )
 RETURNS TABLE (
-    id uuid,
-    from_user_id uuid,
-    to_user_id uuid,
-    type text,
-    amount_gross numeric,
-    amount_net_creator numeric,
-    amount_commission_xera numeric,
-    currency text,
-    status text,
-    description text,
-    metadata jsonb,
-    created_at timestamptz,
-    updated_at timestamptz,
-    external_reference text,
-    provider_transaction_id text,
-    confirmed_at timestamptz,
-    effects_applied_at timestamptz,
-    claimed boolean
+    claimed boolean,
+    transaction jsonb
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -82,21 +68,44 @@ BEGIN
         RAISE EXCEPTION 'claim_transaction_result: nouveau statut invalide (%). Seuls ''succeeded'' ou ''failed'' sont autorisés.', p_new_status;
     END IF;
 
-    -- 2. UN SEUL UPDATE atomique conditionné par status = 'pending'
-    UPDATE public.transactions
-    SET status = p_new_status,
-        provider_transaction_id = COALESCE(p_provider_tx, provider_transaction_id),
-        confirmed_at = COALESCE(confirmed_at, now()),
-        updated_at = now()
-    WHERE public.transactions.id = p_transaction_id
-      AND public.transactions.status = 'pending'
-    RETURNING * INTO v_tx;
+    -- 2. UN SEUL UPDATE atomique conditionné par la règle de transition
+    IF p_new_status = 'failed' THEN
+        -- 'failed' permis UNIQUEMENT depuis 'pending'
+        UPDATE public.transactions
+        SET status = 'failed',
+            provider_transaction_id = COALESCE(p_provider_tx, public.transactions.provider_transaction_id),
+            confirmed_at = COALESCE(public.transactions.confirmed_at, now()),
+            updated_at = now()
+        WHERE public.transactions.id = p_transaction_id
+          AND public.transactions.status = 'pending'
+        RETURNING * INTO v_tx;
+
+    ELSIF p_new_status = 'succeeded' THEN
+        -- 'succeeded' permis depuis 'pending' OU 'failed' (paiement tardif après timeout)
+        UPDATE public.transactions
+        SET status = 'succeeded',
+            provider_transaction_id = COALESCE(p_provider_tx, public.transactions.provider_transaction_id),
+            confirmed_at = COALESCE(public.transactions.confirmed_at, now()),
+            metadata = CASE
+                WHEN public.transactions.status = 'failed' THEN
+                    jsonb_set(
+                        COALESCE(public.transactions.metadata, '{}'::jsonb),
+                        '{late_success_at}',
+                        to_jsonb(now()::text)
+                    )
+                ELSE public.transactions.metadata
+            END,
+            updated_at = now()
+        WHERE public.transactions.id = p_transaction_id
+          AND public.transactions.status IN ('pending', 'failed')
+        RETURNING * INTO v_tx;
+    END IF;
 
     -- 3. Déterminer si cet appel a effectivement changé le statut
     IF FOUND THEN
         v_claimed := true;
     ELSE
-        -- La transaction n'était plus à l'état 'pending' ou n'existe pas
+        -- La transaction n'était pas dans un état éligible ou n'existe pas
         SELECT * INTO v_tx
         FROM public.transactions
         WHERE public.transactions.id = p_transaction_id;
@@ -108,26 +117,8 @@ BEGIN
         v_claimed := false;
     END IF;
 
-    -- 4. Retourner l'enregistrement complet avec le flag claimed
-    RETURN QUERY SELECT
-        v_tx.id,
-        v_tx.from_user_id,
-        v_tx.to_user_id,
-        v_tx.type,
-        v_tx.amount_gross,
-        v_tx.amount_net_creator,
-        v_tx.amount_commission_xera,
-        v_tx.currency,
-        v_tx.status,
-        v_tx.description,
-        v_tx.metadata,
-        v_tx.created_at,
-        v_tx.updated_at,
-        v_tx.external_reference,
-        v_tx.provider_transaction_id,
-        v_tx.confirmed_at,
-        v_tx.effects_applied_at,
-        v_claimed;
+    -- 4. Retourner (claimed, transaction jsonb)
+    RETURN QUERY SELECT v_claimed, to_jsonb(v_tx);
 END;
 $$;
 
