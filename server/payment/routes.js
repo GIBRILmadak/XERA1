@@ -1,0 +1,206 @@
+'use strict';
+
+/**
+ * server/payment/routes.js
+ *
+ * Routes Express du système de paiement MaishaPay Mobile Money.
+ * Branche : feat/maishapay-provider
+ *
+ * Expose :
+ *  - POST /api/payments/initiate       : Initie un paiement Mobile Money
+ *  - POST /api/maishapay/webhook       : Réception du webhook MaishaPay
+ *  - GET  /api/payments/status/:id     : Consultation / rafraîchissement du statut
+ */
+
+const maishapayDefault = require('./providers/maishapay');
+const orchestratorDefault = require('./orchestrator');
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Enregistre les routes de paiement sur l'application Express.
+ *
+ * @param {import('express').Application} app
+ * @param {object} deps - Dépendances requises (supabase, orchestrator, resolveRequestUser, etc.)
+ */
+function registerPaymentRoutes(app, deps = {}) {
+  const orchestrator = deps.orchestrator || orchestratorDefault;
+  const maishapay = deps.maishapay || maishapayDefault;
+  const logger = deps.logger || console;
+
+  // ── 1. POST /api/payments/initiate ──────────────────────────────────────────
+  app.post('/api/payments/initiate', async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization || '';
+      const accessToken = authHeader.replace(/^Bearer\s+/i, '').trim() || req.body?.access_token;
+      const fallbackUserId = req.body?.user_id;
+
+      let userId = null;
+      if (typeof deps.resolveRequestUser === 'function') {
+        const user = await deps.resolveRequestUser(accessToken, fallbackUserId);
+        userId = user?.id || null;
+      } else {
+        userId = fallbackUserId || null;
+      }
+
+      if (!userId) {
+        return res.status(401).json({
+          ok: false,
+          code: 'UNAUTHORIZED',
+          message: 'Utilisateur non authentifié. Veuillez vous connecter.',
+        });
+      }
+
+      const {
+        type,
+        phone,
+        provider,
+        currency = 'CDF',
+        plan,
+        billing_cycle,
+        to_user_id,
+        amount_usd,
+        description,
+        sender_name,
+      } = req.body || {};
+
+      const result = await orchestrator.startPayment({
+        userId,
+        type,
+        details: {
+          phone,
+          provider,
+          currency,
+          plan,
+          billing_cycle,
+          to_user_id,
+          amount_usd,
+          description,
+          sender_name,
+          clientIp: req.headers['x-forwarded-for'] || req.socket?.remoteAddress,
+        },
+        deps,
+      });
+
+      if (result.ok) {
+        return res.status(200).json(result);
+      }
+
+      if (result.uncertain) {
+        // 202 Accepted : demande prise en compte mais statut non finalisé
+        return res.status(202).json(result);
+      }
+
+      return res.status(400).json(result);
+
+    } catch (error) {
+      logger.error('[Payment Routes] Error in /api/payments/initiate:', error.message);
+      return res.status(500).json({
+        ok: false,
+        code: 'INTERNAL_ERROR',
+        message: 'Une erreur interne est survenue lors de l’initiation du paiement.',
+      });
+    }
+  });
+
+  // ── 2. POST /api/maishapay/webhook ──────────────────────────────────────────
+  app.post('/api/maishapay/webhook', async (req, res) => {
+    try {
+      // Récupérer le jeton secret dans la query (?t= ou ?token=)
+      const queryToken = req.query?.t || req.query?.token;
+
+      const parseResult = maishapay.parseWebhook(req.body, queryToken);
+
+      if (!parseResult.valid) {
+        logger.warn('[Payment Routes] Webhook rejeté : jeton secret invalide ou absent.');
+        return res.status(401).json({ error: 'Webhook non autorisé.' });
+      }
+
+      const reference = parseResult.reference;
+
+      // Traitement inline impératif pour l'environnement Serverless (Vercel)
+      if (reference && maishapay.isValidReference(reference)) {
+        const transactionId = reference.replace(/^xera_/i, '');
+
+        try {
+          // minIntervalSeconds: 0 pour forcer la vérification immédiate via checkStatus
+          await orchestrator.touchThenFinalize({
+            transactionId,
+            minIntervalSeconds: 0,
+            deps,
+          });
+        } catch (finalizeErr) {
+          logger.error(`[Payment Routes] Erreur touchThenFinalize pour webhook ${reference}:`, finalizeErr.message);
+        }
+      }
+
+      // Toujours accuser réception auprès de MaishaPay si le webhook est valide
+      return res.status(200).json({ received: true });
+
+    } catch (error) {
+      logger.error('[Payment Routes] Exception in /api/maishapay/webhook:', error.message);
+      return res.status(500).json({ error: 'Erreur lors du traitement du webhook.' });
+    }
+  });
+
+  // ── 3. GET /api/payments/status/:id ─────────────────────────────────────────
+  app.get('/api/payments/status/:id', async (req, res) => {
+    try {
+      const transactionId = req.params.id;
+
+      if (!UUID_REGEX.test(transactionId)) {
+        return res.status(400).json({ error: 'Identifiant de transaction invalide (UUID requis).' });
+      }
+
+      const supabase = deps.supabase;
+      if (!supabase) {
+        return res.status(500).json({ error: 'Client base de données indisponible.' });
+      }
+
+      // Tenter une vérification auprès du prestataire (avec rate-limiting de 5 secondes)
+      try {
+        await orchestrator.touchThenFinalize({
+          transactionId,
+          minIntervalSeconds: 5,
+          deps,
+        });
+      } catch (touchErr) {
+        logger.warn(`[Payment Routes] Status check warning pour ${transactionId}:`, touchErr.message);
+      }
+
+      // Récupérer la transaction à jour
+      const { data: tx, error: txError } = await supabase
+        .from('transactions')
+        .select('id, type, amount_gross, currency, status, confirmed_at, effects_applied_at, metadata')
+        .eq('id', transactionId)
+        .maybeSingle();
+
+      if (txError || !tx) {
+        return res.status(404).json({ error: 'Transaction introuvable.' });
+      }
+
+      return res.status(200).json({
+        id: tx.id,
+        type: tx.type,
+        amount: tx.amount_gross,
+        currency: tx.currency,
+        status: tx.status,
+        confirmedAt: tx.confirmed_at,
+        effectsApplied: Boolean(tx.effects_applied_at),
+        message: tx.status === 'succeeded'
+          ? 'Paiement confirmé avec succès.'
+          : tx.status === 'failed'
+            ? (tx.metadata?.failure_reason || 'Le paiement a échoué ou a été rejeté.')
+            : 'En attente de confirmation.',
+      });
+
+    } catch (error) {
+      logger.error('[Payment Routes] Error in /api/payments/status/:id:', error.message);
+      return res.status(500).json({ error: 'Erreur lors de la consultation du statut.' });
+    }
+  });
+}
+
+module.exports = {
+  registerPaymentRoutes,
+};

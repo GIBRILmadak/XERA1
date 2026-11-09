@@ -20,6 +20,8 @@ const {
     rankUsersIntelligently,
     fetchUserEngagementStats,
 } = require("./recommendation-engine");
+const { registerPaymentRoutes } = require("./payment/routes");
+const { createPaymentOrchestrator } = require("./payment/orchestrator");
 
 dotenv.config();
 
@@ -934,11 +936,12 @@ async function createPendingSubscriptionPayment({
     returnPath,
     callbackEnabled = KPAY_CALLBACK_ENABLED,
     callbackOrigin = CALLBACK_ORIGIN,
+    paymentProvider = "maishapay",
 }) {
     const checkoutRefId = crypto.randomUUID();
     const nowIso = new Date().toISOString();
     const metadata = {
-        payment_provider: "kpay",
+        payment_provider: paymentProvider,
         checkout_ref_id: checkoutRefId,
         plan: String(plan || "").toLowerCase(),
         billing_cycle: String(billingCycle || "monthly").toLowerCase(),
@@ -995,12 +998,13 @@ async function createPendingSupportPayment({
     returnPath,
     callbackEnabled = KPAY_CALLBACK_ENABLED,
     callbackOrigin = CALLBACK_ORIGIN,
+    paymentProvider = "maishapay",
 }) {
     const checkoutRefId = crypto.randomUUID();
     const nowIso = new Date().toISOString();
     const breakdown = computeSupportRevenueBreakdown(amountUsd);
     const metadata = {
-        payment_provider: "kpay",
+        payment_provider: paymentProvider,
         checkout_ref_id: checkoutRefId,
         support_kind: "direct",
         sender_name: senderName || "Utilisateur",
@@ -2189,11 +2193,12 @@ async function activateSubscription({
     provider,
     walletId,
     pendingTransactionId,
-    confirmationSource = "kpay_callback",
+    confirmationSource = "maishapay",
     confirmedBy,
     note,
+    alreadyClaimed = false,
 }) {
-    const paymentId = transactionRefId ? `kpay_${transactionRefId}` : null;
+    const paymentId = transactionRefId ? `maishapay_${transactionRefId}` : null;
     const normalizedPlan = String(plan || "").toLowerCase();
     const badgeForPlan =
         normalizedPlan === "elite"
@@ -2207,7 +2212,7 @@ async function activateSubscription({
         const { data, error } = await supabase
             .from("transactions")
             .select(
-                "id, from_user_id, to_user_id, amount_gross, currency, status, metadata",
+                "id, from_user_id, to_user_id, amount_gross, currency, status, metadata, effects_applied_at",
             )
             .eq("id", pendingTransactionId)
             .maybeSingle();
@@ -2215,20 +2220,35 @@ async function activateSubscription({
         if (!data) {
             throw new Error("Paiement en attente introuvable.");
         }
-        if (String(data.status || "").toLowerCase() === "succeeded") {
-            const { data: existingUser } = await supabase
-                .from("users")
-                .select("*")
-                .eq("id", userId)
-                .maybeSingle();
-            return {
-                alreadyActivated: true,
-                user: existingUser || null,
-                transactionId: data.id,
-            };
-        }
-        if (String(data.status || "").toLowerCase() !== "pending") {
-            throw new Error("Ce paiement ne peut plus être confirmé.");
+        if (alreadyClaimed) {
+            if (data.effects_applied_at) {
+                const { data: existingUser } = await supabase
+                    .from("users")
+                    .select("*")
+                    .eq("id", userId)
+                    .maybeSingle();
+                return {
+                    alreadyActivated: true,
+                    user: existingUser || null,
+                    transactionId: data.id,
+                };
+            }
+        } else {
+            if (String(data.status || "").toLowerCase() === "succeeded") {
+                const { data: existingUser } = await supabase
+                    .from("users")
+                    .select("*")
+                    .eq("id", userId)
+                    .maybeSingle();
+                return {
+                    alreadyActivated: true,
+                    user: existingUser || null,
+                    transactionId: data.id,
+                };
+            }
+            if (String(data.status || "").toLowerCase() !== "pending") {
+                throw new Error("Ce paiement ne peut plus être confirmé.");
+            }
         }
         pendingPayment = data;
     }
@@ -2361,7 +2381,7 @@ async function activateSubscription({
         typeof pendingPayment.metadata === "object"
             ? pendingPayment.metadata
             : {}),
-        payment_provider: "kpay",
+        payment_provider: pendingPayment?.metadata?.payment_provider || "maishapay",
         payment_ref: paymentId,
         transaction_ref_id: transactionRefId || null,
         method,
@@ -2377,17 +2397,27 @@ async function activateSubscription({
 
     let transactionId = pendingTransactionId || null;
     if (pendingTransactionId) {
+        const updatePayload = alreadyClaimed
+            ? {
+                  effects_applied_at: nowIso,
+                  description: `Abonnement ${plan} (${billingCycle})`,
+                  metadata: mergedMetadata,
+                  updated_at: nowIso,
+              }
+            : {
+                  amount_gross: amount,
+                  amount_net_creator: 0,
+                  amount_commission_xera: 0,
+                  currency,
+                  status: "succeeded",
+                  effects_applied_at: nowIso,
+                  description: `Abonnement ${plan} (${billingCycle})`,
+                  metadata: mergedMetadata,
+                  updated_at: nowIso,
+              };
         const { error: updateTxError } = await supabase
             .from("transactions")
-            .update({
-                amount_gross: amount,
-                amount_net_creator: 0,
-                amount_commission_xera: 0,
-                currency,
-                status: "succeeded",
-                description: `Abonnement ${plan} (${billingCycle})`,
-                metadata: mergedMetadata,
-            })
+            .update(updatePayload)
             .eq("id", pendingTransactionId);
         if (updateTxError) throw updateTxError;
     } else {
@@ -2757,9 +2787,10 @@ async function confirmSupportPayment({
     pendingTransactionId,
     transactionRefId,
     operatorRefId,
-    confirmationSource = "kpay_callback",
+    confirmationSource = "maishapay",
+    alreadyClaimed = false,
 }) {
-    const paymentId = transactionRefId ? `kpay_${transactionRefId}` : null;
+    const paymentId = transactionRefId ? `maishapay_${transactionRefId}` : null;
     const breakdown = computeSupportRevenueBreakdown(amountUsd);
 
     let pendingPayment = null;
@@ -2767,7 +2798,7 @@ async function confirmSupportPayment({
         const { data, error } = await supabase
             .from("transactions")
             .select(
-                "id, from_user_id, to_user_id, type, amount_gross, currency, status, description, metadata",
+                "id, from_user_id, to_user_id, type, amount_gross, currency, status, description, metadata, effects_applied_at",
             )
             .eq("id", pendingTransactionId)
             .maybeSingle();
@@ -2778,14 +2809,23 @@ async function confirmSupportPayment({
         if (String(data.type || "").toLowerCase() !== "support") {
             throw new Error("Transaction de soutien invalide.");
         }
-        if (String(data.status || "").toLowerCase() === "succeeded") {
-            return {
-                alreadyConfirmed: true,
-                transactionId: data.id,
-            };
-        }
-        if (String(data.status || "").toLowerCase() !== "pending") {
-            throw new Error("Ce soutien ne peut plus être confirmé.");
+        if (alreadyClaimed) {
+            if (data.effects_applied_at) {
+                return {
+                    alreadyConfirmed: true,
+                    transactionId: data.id,
+                };
+            }
+        } else {
+            if (String(data.status || "").toLowerCase() === "succeeded") {
+                return {
+                    alreadyConfirmed: true,
+                    transactionId: data.id,
+                };
+            }
+            if (String(data.status || "").toLowerCase() !== "pending") {
+                throw new Error("Ce soutien ne peut plus être confirmé.");
+            }
         }
         pendingPayment = data;
     }
@@ -2834,7 +2874,7 @@ async function confirmSupportPayment({
         typeof pendingPayment.metadata === "object"
             ? pendingPayment.metadata
             : {}),
-        payment_provider: "kpay",
+        payment_provider: pendingPayment?.metadata?.payment_provider || "maishapay",
         payment_ref: paymentId,
         transaction_ref_id: transactionRefId || null,
         operator_ref_id: operatorRefId || null,
@@ -2871,22 +2911,35 @@ async function confirmSupportPayment({
 
     let transactionId = pendingTransactionId || null;
     if (pendingTransactionId) {
+        const updatePayload = alreadyClaimed
+            ? {
+                  effects_applied_at: nowIso,
+                  description:
+                      description ||
+                      pendingPayment?.description ||
+                      "Soutien XERA",
+                  metadata: mergedMetadata,
+                  updated_at: nowIso,
+              }
+            : {
+                  from_user_id: fromUserId,
+                  to_user_id: toUserId,
+                  amount_gross: breakdown.gross,
+                  amount_net_creator: breakdown.netCreator,
+                  amount_commission_xera: breakdown.commission,
+                  currency: "USD",
+                  status: "succeeded",
+                  effects_applied_at: nowIso,
+                  description:
+                      description ||
+                      pendingPayment?.description ||
+                      "Soutien XERA",
+                  metadata: mergedMetadata,
+                  updated_at: nowIso,
+              };
         const { error: updateError } = await supabase
             .from("transactions")
-            .update({
-                from_user_id: fromUserId,
-                to_user_id: toUserId,
-                amount_gross: breakdown.gross,
-                amount_net_creator: breakdown.netCreator,
-                amount_commission_xera: breakdown.commission,
-                currency: "USD",
-                status: "succeeded",
-                description:
-                    description ||
-                    pendingPayment?.description ||
-                    "Soutien XERA",
-                metadata: mergedMetadata,
-            })
+            .update(updatePayload)
             .eq("id", pendingTransactionId);
         if (updateError) throw updateError;
     } else {
@@ -4409,6 +4462,51 @@ async function handleKPayCallback(req, res) {
 }
 
 app.all("/api/kpay/callback/:state?", handleKPayCallback);
+
+// ==================== MAISHAPAY PAYMENT MODULE ====================
+
+const paymentOrchestrator = createPaymentOrchestrator({
+    supabase,
+    activateSubscription,
+    confirmSupportPayment,
+    createPendingSubscriptionPayment,
+    createPendingSupportPayment,
+    computeSubscriptionAmount: computeKPayAmount,
+    computeSupportCheckoutAmount,
+    resolveRequestUser,
+    getUserProfile: async (id) => {
+        const { data } = await supabase
+            .from("users")
+            .select("*")
+            .eq("id", id)
+            .maybeSingle();
+        return data;
+    },
+    canUserReceiveSupport,
+    logger: console,
+});
+
+registerPaymentRoutes(app, {
+    supabase,
+    orchestrator: paymentOrchestrator,
+    resolveRequestUser,
+    computeSubscriptionAmount: computeKPayAmount,
+    computeSupportCheckoutAmount,
+    createPendingSubscriptionPayment,
+    createPendingSupportPayment,
+    activateSubscription,
+    confirmSupportPayment,
+    getUserProfile: async (id) => {
+        const { data } = await supabase
+            .from("users")
+            .select("*")
+            .eq("id", id)
+            .maybeSingle();
+        return data;
+    },
+    canUserReceiveSupport,
+    logger: console,
+});
 
 // ==================== ADMIN: BROADCAST EMAIL ====================
 
