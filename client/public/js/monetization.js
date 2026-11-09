@@ -1341,41 +1341,40 @@ async function redirectToSupportCheckout({
             window.showToast("Initialisation du soutien sécurisé...", "info");
         }
 
-        const apiBase =
-            typeof window.resolveApiBase === "function"
-                ? window.resolveApiBase()
-                : window.location.origin;
-        const checkoutUrl = `${apiBase}/api/kpay/support-checkout`;
+        if (!window.XeraMobileMoney?.openCheckout) {
+            await new Promise((resolve) => {
+                const s = document.createElement("script");
+                s.src = "js/mobile-money-modal.js";
+                s.onload = () => resolve();
+                s.onerror = () => resolve();
+                document.head.appendChild(s);
+            });
+        }
 
-        const params = new URLSearchParams();
-        params.set("kind", "support");
-        params.set("to_user_id", creatorId);
-        params.set("amount_usd", String(normalizedAmount));
-        params.set("description", description || `Soutien pour ${creatorName || "ce créateur"}`);
-        params.set("return_path", returnPath || buildSupportReturnPath(sourceElement));
-        params.set("user_id", user.id);
-        params.set("access_token", accessToken);
-        params.set("method", "card");
-        // The support amount is selected in USD, then converted server-side
-        // to CDF for the K-Pay Mobile Money gateway.
-        params.set("currency", "CDF");
+        if (window.XeraMobileMoney?.openCheckout) {
+            window.XeraMobileMoney.openCheckout({
+                type: "support",
+                title: `Soutien à ${creatorName || "ce créateur"}`,
+                amountLabel: `$${normalizedAmount.toFixed(2)} USD`,
+                payload: {
+                    to_user_id: creatorId,
+                    amount_usd: normalizedAmount,
+                    description: description || `Soutien pour ${creatorName || "ce créateur"}`,
+                    sender_name: user.user_metadata?.name || user.email || "Utilisateur",
+                },
+                accessToken,
+                onSuccess: () => {
+                    if (typeof window.showToast === "function") {
+                        window.showToast("Soutien envoyé avec succès !", "success");
+                    }
+                },
+            });
+            supportCheckoutInProgress = false;
+            return { success: true };
+        }
 
-        // Submit a real navigation so the API's K-Pay 302 is followed directly.
-        // fetch() may otherwise fail when it follows K-Pay's cross-origin URL.
-        const form = document.createElement("form");
-        form.method = "POST";
-        form.action = checkoutUrl;
-        form.style.display = "none";
-        params.forEach((value, name) => {
-            const input = document.createElement("input");
-            input.type = "hidden";
-            input.name = name;
-            input.value = value;
-            form.appendChild(input);
-        });
-        document.body.appendChild(form);
-        form.submit();
-        return { success: true };
+        supportCheckoutInProgress = false;
+        return { success: false, error: "Module de paiement Mobile Money indisponible." };
     } catch (error) {
         supportCheckoutInProgress = false;
         console.error("[Monetization] Direct support checkout error:", error);

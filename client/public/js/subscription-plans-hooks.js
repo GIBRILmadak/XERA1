@@ -169,12 +169,9 @@
     }
 
     async function navigateToSubscriptionPayment(planId, billingCycle) {
-        if (checkoutInProgress) return;
-        checkoutInProgress = true;
         const normalizedPlanId = Data.normalizePlanId(planId);
         const normalizedBillingCycle = Data.normalizeBillingCycle(billingCycle);
 
-        // Bypass intermediate confirmation page and go directly to K-Pay checkout
         try {
             const user = await Services.auth.getSessionUser();
             const accessToken = await Services.auth.getAccessToken();
@@ -186,60 +183,40 @@
                 return;
             }
 
-            // Optional: Notify user that checkout is starting
-            if (typeof window.showToast === "function") {
-                window.showToast(
-                    "Initialisation du paiement sécurisé...",
-                    "info",
-                );
+            if (!window.XeraMobileMoney?.openCheckout) {
+                await new Promise((resolve) => {
+                    const s = document.createElement("script");
+                    s.src = "js/mobile-money-modal.js";
+                    s.onload = () => resolve();
+                    s.onerror = () => resolve();
+                    document.head.appendChild(s);
+                });
             }
 
-            const apiBase =
-                typeof window.resolveApiBase === "function"
-                    ? window.resolveApiBase()
-                    : window.location.origin;
-            const checkoutUrl = `${apiBase}/api/kpay/checkout`;
-
-            const params = new URLSearchParams();
-            params.set("kind", "subscription");
-            params.set("plan", normalizedPlanId);
-            params.set("billing_cycle", normalizedBillingCycle);
-            params.set("user_id", user.id);
-            params.set("access_token", accessToken);
-            params.set("method", "card"); // Default payment method
-            // K-Pay Mobile Money charges in the operator currency. The server
-            // converts the displayed USD plan price to CDF before initiation.
-            params.set("currency", "CDF");
-
-            let returnPath = "creator-dashboard.html";
-            if (window.XeraRouter?.buildHtmlUrl) {
-                returnPath =
-                    window.XeraRouter.buildHtmlUrl("creatorDashboard") ||
-                    returnPath;
+            if (window.XeraMobileMoney?.openCheckout) {
+                const planName = typeof Data.getPlanDisplayName === "function"
+                    ? Data.getPlanDisplayName(normalizedPlanId)
+                    : normalizedPlanId.toUpperCase();
+                window.XeraMobileMoney.openCheckout({
+                    type: "subscription",
+                    title: `Abonnement ${planName}`,
+                    amountLabel: normalizedBillingCycle === "annual" ? "Facturation annuelle (2 mois offerts)" : "Facturation mensuelle",
+                    payload: {
+                        plan: normalizedPlanId,
+                        billing_cycle: normalizedBillingCycle,
+                        user_id: user.id,
+                    },
+                    accessToken,
+                    onSuccess: () => {
+                        if (typeof window.showToast === "function") {
+                            window.showToast("Abonnement activé avec succès !", "success");
+                        }
+                    },
+                });
+                return;
             }
-            params.set("return_path", returnPath);
 
-            // A browser navigation preserves K-Pay's 302 redirect. Using fetch here
-            // can turn the cross-origin gateway redirect into a CORS failure.
-            const form = document.createElement("form");
-            form.method = "POST";
-            form.action = checkoutUrl;
-            form.style.display = "none";
-            params.forEach((value, name) => {
-                const input = document.createElement("input");
-                input.type = "hidden";
-                input.name = name;
-                input.value = value;
-                form.appendChild(input);
-            });
-            document.body.appendChild(form);
-            form.submit();
-            return;
-        } catch (error) {
-            checkoutInProgress = false;
-            console.error("[Subscription] Direct checkout error:", error);
-
-            // Final fallback: use bridge
+            // Fallback
             if (Services.subscriptions?.navigateToCheckout) {
                 await Services.subscriptions.navigateToCheckout(
                     normalizedPlanId,
@@ -248,6 +225,11 @@
                 return;
             }
 
+            if (typeof window.showToast === "function") {
+                window.showToast("Erreur lors de l'initialisation du paiement sécurisé.", "error");
+            }
+        } catch (error) {
+            console.error("[Subscription] Direct checkout error:", error);
             if (typeof window.showToast === "function") {
                 window.showToast("Erreur lors de l'initialisation du paiement sécurisé.", "error");
             }
