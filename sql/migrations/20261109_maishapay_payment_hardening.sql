@@ -119,20 +119,66 @@ $$;
 
 
 -- ----------------------------------------------------------------------------
--- 3. PERMISSIONS DE SÉCURITÉ
+-- 3. FONCTION ATOMIQUE : touch_status_check
 -- ----------------------------------------------------------------------------
--- Seul service_role (le serveur backend) est autorisé à exécuter cette fonction.
+-- Met à jour atomiquement last_status_check_at à now() si et seulement si
+-- l'intervalle minimal (en secondes) s'est écoulé depuis la dernière vérification,
+-- ou si aucune vérification n'a encore eu lieu.
+-- Renvoie true si l'UPDATE a été effectué (check autorisé), false sinon.
+-- ----------------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION public.touch_status_check(
+    p_transaction_id uuid,
+    p_min_interval_seconds int DEFAULT 10
+)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+    v_updated boolean := false;
+BEGIN
+    UPDATE public.transactions
+    SET last_status_check_at = now()
+    WHERE public.transactions.id = p_transaction_id
+      AND (
+          public.transactions.last_status_check_at IS NULL
+          OR public.transactions.last_status_check_at <= now() - (p_min_interval_seconds || ' seconds')::interval
+      );
+
+    IF FOUND THEN
+        v_updated := true;
+    ELSE
+        v_updated := false;
+    END IF;
+
+    RETURN v_updated;
+END;
+$$;
+
+
+-- ----------------------------------------------------------------------------
+-- 4. PERMISSIONS DE SÉCURITÉ
+-- ----------------------------------------------------------------------------
+-- Seul service_role (le serveur backend) est autorisé à exécuter ces fonctions.
 -- ----------------------------------------------------------------------------
 
 REVOKE ALL ON FUNCTION public.claim_transaction_result(uuid, text, text) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.claim_transaction_result(uuid, text, text) TO service_role;
+
+REVOKE ALL ON FUNCTION public.touch_status_check(uuid, int) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.touch_status_check(uuid, int) TO service_role;
 
 
 -- ============================================================================
 -- SCRIPT DE RETOUR ARRIÈRE (ROLLBACK) - À EXÉCUTER UNIQUEMENT EN CAS D'URGENCE
 -- ============================================================================
 /*
--- 1. Révoquer les permissions et supprimer la fonction
+-- 1. Révoquer les permissions et supprimer les fonctions
+REVOKE EXECUTE ON FUNCTION public.touch_status_check(uuid, int) FROM service_role;
+DROP FUNCTION IF EXISTS public.touch_status_check(uuid, int);
+
 REVOKE EXECUTE ON FUNCTION public.claim_transaction_result(uuid, text, text) FROM service_role;
 DROP FUNCTION IF EXISTS public.claim_transaction_result(uuid, text, text);
 
