@@ -5,6 +5,8 @@ const { test } = require("node:test");
 
 const source = fs.readFileSync("js/fata-integration.js", "utf8");
 const optimizedServer = fs.readFileSync("server/optimized-server.js", "utf8");
+const productionServer = fs.readFileSync("server/monetization-server.js", "utf8");
+const vercelHandler = fs.readFileSync("server/vercel-api-handler.js", "utf8");
 
 function createIntegration(location, fetchImpl, config = {}) {
     const sessionStorage = config.sessionStorage || {
@@ -163,6 +165,12 @@ test("allows arbitrary loopback ports only for local server origins", () => {
     assert.match(optimizedServer, /function isLocalDevelopmentOrigin\(origin\)/);
     assert.match(optimizedServer, /process\.env\.NODE_ENV === "production"/);
     assert.match(optimizedServer, /hasProductionOrigin/);
+});
+
+test("Vercel catch-all exposes the participant context route used by Fata forms", () => {
+    assert.match(vercelHandler, /require\("\.\/monetization-server"\)/);
+    assert.match(productionServer, /app\.post\("\/api\/fata\/participate"/);
+    assert.match(productionServer, /requirement_id,occurred_at,status,event_id/);
 });
 
 test("stores the challengeId returned by Fata in sessionStorage", async () => {
