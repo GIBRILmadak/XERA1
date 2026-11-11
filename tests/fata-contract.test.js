@@ -7,6 +7,7 @@ const {
     buildIdempotencyKey,
     isRewardEligible,
     resolveVisibilityMultiplier,
+    getArcPresentationOccurredAt,
 } = require("../server/fata-contract");
 
 test("real and test challenge IDs are recognized from environment config", () => {
@@ -84,6 +85,34 @@ test("event idempotency survives timestamp normalization and distinguishes sourc
 
     assert.equal(keyA, sameEventAfterNormalization);
     assert.notEqual(keyA, differentEvent);
+});
+
+test("selecting an older ARC uses the selection time as its Fata occurrence", () => {
+    const linkage = { created_at: "2026-09-01T00:00:00.000Z" };
+    const challenge = {
+        opens_at: "2026-09-10T00:00:00.000Z",
+        close_at: "2026-10-10T00:00:00.000Z",
+    };
+    const selection = { selected_at: "2026-09-20T12:00:00.000Z" };
+
+    assert.equal(
+        getArcPresentationOccurredAt(
+            { created_at: "2026-09-15T12:00:00.000Z" },
+            linkage,
+            selection,
+            challenge,
+        ),
+        selection.selected_at,
+    );
+    assert.equal(
+        getArcPresentationOccurredAt(
+            { created_at: "2026-09-21T12:00:00.000Z" },
+            linkage,
+            selection,
+            challenge,
+        ),
+        "2026-09-21T12:00:00.000Z",
+    );
 });
 
 test("config exposes the contract requirement IDs", () => {

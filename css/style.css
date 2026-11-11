@@ -10560,6 +10560,22 @@ html.dark-mode .first-project-feed-popup__cta {
     box-shadow: 0 32px 80px rgba(0, 0, 0, 0.26);
 }
 
+.create-card-panel.is-fata-challenge {
+    border-color: rgba(168, 85, 247, 0.42);
+    box-shadow:
+        0 32px 80px rgba(0, 0, 0, 0.26),
+        0 0 32px rgba(168, 85, 247, 0.1);
+}
+
+.create-card-panel.is-fata-challenge .form-group-desc textarea {
+    min-height: 8rem;
+}
+
+.create-card-panel.is-fata-challenge .form-group-arc label,
+.create-card-panel.is-fata-challenge .form-group-desc label {
+    color: #d8b4fe;
+}
+
 .settings-header.settings-header-inline {
     display: flex;
     align-items: flex-start;

@@ -101,6 +101,11 @@ router.post("/:tool/start", async (req, res) => {
         let storedChallengeId = requestedChallengeId || null;
 
         if (tool === "fata") {
+            if (!String(requestedChallengeId || "").trim()) {
+                return res.status(400).json({
+                    error: "Ouvrez d’abord le challenge Fata et utilisez « Continuer sur XERA1 » pour charger son contexte.",
+                });
+            }
             if (
                 !config.clientId ||
                 !config.clientSecret ||
@@ -117,14 +122,10 @@ router.post("/:tool/start", async (req, res) => {
                 });
             }
             if (
-                !String(
-                    requestedChallengeId ||
-                        process.env.FATA_REAL_CHALLENGE_ID ||
-                        "",
-                ).trim()
+                !String(requestedChallengeId || "").trim()
             ) {
                 return res.status(503).json({
-                    error: "L’identifiant du challenge Fata officiel n’est pas configuré.",
+                    error: "L’identifiant du challenge Fata n’a pas été transmis.",
                 });
             }
             try {

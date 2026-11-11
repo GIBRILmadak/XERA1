@@ -162,6 +162,63 @@
     box-shadow: 0 32px 72px rgba(0, 0, 0, 0.25);
 }
 
+.arc-create-card.is-fata-challenge {
+    border-color: rgba(168, 85, 247, 0.42);
+    box-shadow:
+        0 32px 72px rgba(0, 0, 0, 0.25),
+        0 0 32px rgba(168, 85, 247, 0.1);
+}
+
+.fata-challenge-form-banner {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    margin: 0 0 1.4rem;
+    padding: 1rem 1.1rem;
+    border: 1px solid rgba(168, 85, 247, 0.38);
+    border-radius: 16px;
+    background: linear-gradient(120deg, rgba(168, 85, 247, 0.12), rgba(59, 130, 246, 0.06));
+}
+
+.fata-challenge-form-banner strong {
+    color: var(--text-primary);
+    font-size: 0.94rem;
+}
+
+.fata-challenge-form-banner span {
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+    line-height: 1.5;
+}
+
+.fata-challenge-gate {
+    display: flex;
+    min-height: 280px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.85rem;
+    padding: 2rem;
+    text-align: center;
+}
+
+.fata-challenge-gate img {
+    width: 54px;
+    height: 54px;
+    object-fit: contain;
+}
+
+.fata-challenge-gate h2,
+.fata-challenge-gate p {
+    margin: 0;
+}
+
+.fata-challenge-gate p {
+    max-width: 38rem;
+    color: var(--text-secondary);
+    line-height: 1.55;
+}
+
 .arc-creation-header-inline {
     display: flex;
     justify-content: space-between;

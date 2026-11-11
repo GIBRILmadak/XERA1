@@ -11,6 +11,7 @@ process.env.FATA_REQ_JALON = "req_jalon";
 const {
     queueEvent,
     decideFataDeliveryStatus,
+    isEligibleActionTime,
 } = require("../server/fata-worker");
 
 function createDatabase({ error = null, existingEvent = null } = {}) {
@@ -171,4 +172,35 @@ test("Fata response handling follows the contract retry/stop matrix", () => {
         outcome: "stop",
         flag: "request",
     });
+});
+
+test("challenge proofs and milestones must occur after the selected ARC time", () => {
+    const linkage = { created_at: "2026-01-01T00:00:00.000Z" };
+    const selection = { selected_at: "2026-01-03T12:00:00.000Z" };
+    const challenge = {
+        opens_at: "2026-01-01T00:00:00.000Z",
+        close_at: "2026-01-10T00:00:00.000Z",
+    };
+
+    assert.equal(
+        isEligibleActionTime("2026-01-03T11:59:59.999Z", linkage, selection, challenge),
+        false,
+    );
+    assert.equal(
+        isEligibleActionTime("2026-01-03T12:00:00.000Z", linkage, selection, challenge),
+        true,
+    );
+    assert.equal(
+        isEligibleActionTime("2026-01-03T12:00:01.000Z", linkage, selection, challenge),
+        true,
+    );
+    assert.equal(
+        isEligibleActionTime(
+            "2026-01-03T12:00:01.000Z",
+            linkage,
+            {},
+            challenge,
+        ),
+        false,
+    );
 });

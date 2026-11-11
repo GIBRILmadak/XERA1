@@ -21163,6 +21163,42 @@ async function openCreateMenu(
         return;
     }
 
+    let fataChallengeContext = null;
+    if (!existingContent) {
+        try {
+            fataChallengeContext =
+                await window.FataIntegration?.getChallengeFormContext?.();
+        } catch (error) {
+            fataChallengeContext = {
+                requested: true,
+                connected: true,
+                error: error?.message || "Le contexte du challenge Fata n’a pas pu être chargé.",
+            };
+        }
+        if (
+            fataChallengeContext?.requested &&
+            (!fataChallengeContext.connected || fataChallengeContext.error)
+        ) {
+            const modal = document.getElementById("create-modal");
+            const container = modal?.querySelector(".create-container");
+            if (container) {
+                const message = fataChallengeContext.error
+                    ? escapeHtml(fataChallengeContext.error)
+                    : "Connectez votre compte Fata pour publier une preuve dans le challenge.";
+                container.innerHTML = `
+                    <section class="fata-challenge-gate">
+                        <img src="icons/fata.webp" alt="Fata">
+                        <h2>Challenge Fata × XERA1</h2>
+                        <p>${message}</p>
+                        <button type="button" class="btn btn-primary" onclick="${fataChallengeContext.connected ? "window.openCreateMenu(window.currentUser?.id)" : "window.FataIntegration?.openPanel()"}">${fataChallengeContext.connected ? "Réessayer" : "Connecter mon compte Fata"}</button>
+                    </section>`;
+                modal.style.display = "block";
+                modal.classList.add("active");
+            }
+            return;
+        }
+    }
+
     // Afficher le modal IMMÉDIATEMENT avec un contenu vide
     const modal = document.getElementById("create-modal");
     const container = modal.querySelector(".create-container");
@@ -21241,8 +21277,48 @@ async function openCreateMenu(
         arcs = [];
     }
 
+    const isFataChallenge = Boolean(
+        !existingContent && fataChallengeContext?.requested && fataChallengeContext.connected,
+    );
+    if (isFataChallenge) {
+        const eligibleArcs = (fataChallengeContext.arcs || [])
+            .filter((arc) => arc.eligible)
+            .map((arc) => ({ ...arc, _collabRole: "owner" }));
+        const selectedArcId = fataChallengeContext.selection?.arc_id || null;
+        if (selectedArcId) {
+            arcs = eligibleArcs.filter((arc) => String(arc.id) === String(selectedArcId));
+            if (arcs.length === 0) {
+                const modal = document.getElementById("create-modal");
+                const container = modal?.querySelector(".create-container");
+                if (container) {
+                    container.innerHTML = `
+                        <section class="fata-challenge-gate">
+                            <img src="icons/fata.webp" alt="Fata">
+                            <h2>ARC du challenge à corriger</h2>
+                            <p>L’ARC déjà associé ne remplit plus les conditions de sélection (titre, description, visibilité et trois jalons). Contactez le support XERA1 pour faire corriger l’association.</p>
+                            <button type="button" class="btn btn-ghost" onclick="closeCreateMenu()">Fermer</button>
+                        </section>`;
+                    modal.style.display = "block";
+                    modal.classList.add("active");
+                }
+                return;
+            }
+            preSelectedArcId = selectedArcId;
+        } else {
+            arcs = eligibleArcs;
+            if (!arcs.some((arc) => String(arc.id) === String(preSelectedArcId))) {
+                preSelectedArcId = arcs[0]?.id || null;
+            }
+        }
+    }
+
     // BLOCKAGE: Si l'utilisateur n'a pas d'ARC en cours, le forcer à en créer un
     if (arcs.length === 0 && !existingContent) {
+        if (isFataChallenge) {
+            closeCreateMenu();
+            if (window.openCreateModal) await window.openCreateModal();
+            return;
+        }
         if (
             confirm(
                 "Vous devez créer un projet avant de pouvoir poster une mise à jour. Voulez-vous créer votre premier projet maintenant ?",
@@ -21311,7 +21387,9 @@ async function openCreateMenu(
     const selectedArc = findArcInList(arcs, selectedArcId);
     const initialType = isEdit
         ? existingContent.type
-        : smartDefaults?.preferredType || defaultTraceType;
+        : fataChallengeContext?.connected
+          ? "image"
+          : smartDefaults?.preferredType || defaultTraceType;
     const initialState = isEdit
         ? existingContent.state
         : smartDefaults?.preferredState || "success";
@@ -21343,10 +21421,16 @@ async function openCreateMenu(
         })
         .join("");
 
-    const title = isEdit ? "Modifier l'Update" : "Nouvelle Update";
+    const title = isEdit
+        ? "Modifier l'Update"
+        : isFataChallenge
+          ? "Publier une preuve · Challenge Fata"
+          : "Nouvelle Update";
     const subtitle = isEdit
         ? `Modifier la mise à jour du jour ${nextDay}`
-        : `Update = mise à jour rapide (texte + photo optionnelle). Annonce = étape majeure partagée publiquement.`;
+        : isFataChallenge
+          ? "Publiez une preuve liée à l’ARC du challenge. Une image ou vidéo et une description sont requises."
+          : `Update = mise à jour rapide (texte + photo optionnelle). Annonce = étape majeure partagée publiquement.`;
 
     // Remove old form element to detach previous event listeners - check it's in the modal
     const oldForm = modal.querySelector("#create-form");
@@ -21356,7 +21440,7 @@ async function openCreateMenu(
     }
 
     container.innerHTML = `
-<div class="settings-section create-card-panel">
+        <div class="settings-section create-card-panel ${isFataChallenge ? "is-fata-challenge" : ""}">
             <button type="button" class="create-close" onclick="closeCreateMenu()">✕</button>
             <div class="settings-header settings-header-inline">
                 <div>
@@ -21369,16 +21453,22 @@ async function openCreateMenu(
                 </div>
             </div>
 
+            ${isFataChallenge ? `<div class="fata-challenge-form-banner" role="note">
+                <strong>Challenge Fata × XERA1 · Publication d’une preuve</strong>
+                <span>La confirmation est envoyée à Fata après la publication. Ajoutez un média et décrivez clairement le résultat obtenu sur le même ARC que celui présenté au challenge.</span>
+            </div>` : ""}
+
             <form id="create-form" class="create-form-grid">
                 ${isEdit ? `<input type="hidden" id="content-id" value="${existingContent.contentId || existingContent.id}">` : ""}
-                <div class="form-group">
+                ${isFataChallenge ? `<input type="hidden" id="fata-challenge-id" value="${escapeHtml(fataChallengeContext.challengeId)}">` : ""}
+                ${isFataChallenge ? "" : `<div class="form-group">
                     <label>Mode de publication</label>
                     <div class="mode-switch">
                         <button type="button" class="${isAnnouncementEdit ? "" : "active"}" data-mode="update">Mise à jour</button>
                         <button type="button" class="${isAnnouncementEdit ? "active" : ""}" data-mode="announcement">Annonce</button>
                     </div>
                     <p class="form-hint">Trace : mise à jour rapide (texte + photo optionnelle). Annonce : étape majeure partagée publiquement.</p>
-                </div>
+                </div>`}
                 
                 <div class="form-group form-group-day">
                     <label>Jour #</label>
@@ -21405,8 +21495,8 @@ async function openCreateMenu(
                 </div>
 
                 <div class="form-group form-group-desc">
-                    <label>Description</label>
-                    <textarea id="create-desc" class="form-input" rows="4" placeholder="Détaillez ce que vous avez fait, appris ou surmonté...">${isEdit ? existingCleanDesc : ""}</textarea>
+                    <label>${isFataChallenge ? "Description de la preuve *" : "Description"}</label>
+                    <textarea id="create-desc" class="form-input" rows="4" placeholder="${isFataChallenge ? "Quel résultat avez-vous obtenu sur ce projet ?" : "Détaillez ce que vous avez fait, appris ou surmonté..."}" ${isFataChallenge ? "required" : ""}>${isEdit ? existingCleanDesc : ""}</textarea>
                 </div>
 
                 <div class="form-group form-group-tags">
@@ -21425,14 +21515,15 @@ async function openCreateMenu(
                 </div>
 
                 <div class="form-group form-group-arc">
-                    <label>Projet (Requis)</label>
-                    <select id="create-arc" class="form-input" required>
-                        <option value="" disabled ${!selectedArcId ? "selected" : ""}>Choisir un projet...</option>
+                    <label>${isFataChallenge ? "ARC du challenge (requis)" : "Projet (Requis)"}</label>
+                    <select id="create-arc" class="form-input" required ${isFataChallenge && fataChallengeContext.selection?.arc_id ? "disabled" : ""}>
+                        <option value="" disabled ${!selectedArcId ? "selected" : ""}>${isFataChallenge ? "Choisir l’ARC qui sera présenté..." : "Choisir un projet..."}</option>
                         ${arcOptions}
                     </select>
+                    ${isFataChallenge && !fataChallengeContext.selection?.arc_id ? `<p class="form-hint">Cet ARC sera associé au challenge avant la publication de la preuve.</p>` : ""}
                 </div>
 
-                <div class="form-group">
+                ${isFataChallenge ? `<input type="hidden" id="create-type" value="${initialType}">` : `<div class="form-group">
                     <label>Type de publication</label>
                     <select id="create-type" class="form-input">
                         <option value="text" ${initialType === "text" ? "selected" : ""}>Texte</option>
@@ -21446,7 +21537,7 @@ async function openCreateMenu(
                         <button type="button" data-type="video">Vidéo</button>
                         <button type="button" data-type="live">Live</button>
                     </div>
-                </div>
+                </div>`}
 
                 <div class="form-group media-upload-group">
                     <label>Média</label>
@@ -21640,6 +21731,7 @@ async function openCreateMenu(
     };
 
     const getAllowedTypesForCurrentMode = () => {
+        if (isFataChallenge) return ["image", "video"];
         if (currentMode === "announcement") {
             return ["text", "image", "video"];
         }
@@ -22271,8 +22363,33 @@ async function openCreateMenu(
                 mediaUrls = [mediaUrl];
             }
             const selectedType = mediaTypeInput.value || typeSelect.value;
+            if (isFataChallenge && !String(descInput.value || "").trim()) {
+                alert("Pour le challenge Fata, décrivez la preuve publiée.");
+                descInput.focus();
+                return;
+            }
+            if (isFataChallenge && !mediaUrl) {
+                alert("Pour le challenge Fata, ajoutez une image ou une vidéo comme preuve.");
+                return;
+            }
             if (selectedType !== "text" && !mediaUrl) {
                 alert('Ajoutez un média ou sélectionnez "Post texte".');
+                return;
+            }
+
+            const selectedArcId =
+                currentMode === "announcement" ? null : arcSelect.value || null;
+            if (isFataChallenge && !selectedArcId) {
+                alert("Choisissez l’ARC qui sert au challenge Fata.");
+                arcSelect.focus();
+                return;
+            }
+            if (
+                isFataChallenge &&
+                fataChallengeContext.selection?.arc_id &&
+                String(fataChallengeContext.selection.arc_id) !== String(selectedArcId)
+            ) {
+                alert("Cette preuve doit être rattachée à l’ARC déjà associé au challenge Fata.");
                 return;
             }
 
@@ -22303,12 +22420,42 @@ async function openCreateMenu(
                           arcSelect?.selectedOptions?.[0]?.textContent || "",
                       ).trim();
 
-            const selectedArcId =
-                currentMode === "announcement" ? null : arcSelect.value || null;
+            if (
+                isFataChallenge &&
+                !fataChallengeContext.selection?.arc_id
+            ) {
+                btnSave.textContent = "Association à Fata…";
+                try {
+                    const selectionResult =
+                        await window.FataIntegration?.selectPublishedArc?.(
+                            selectedArcId,
+                            fataChallengeContext.challengeId,
+                        );
+                    if (!selectionResult?.selected) {
+                        throw new Error(
+                            selectionResult?.error || "L’ARC n’a pas pu être associé au challenge Fata.",
+                        );
+                    }
+                    if (selectionResult.delivery?.status === "failed") {
+                        throw new Error(
+                            selectionResult.delivery.error || "Fata a refusé la présentation de l’ARC.",
+                        );
+                    }
+                    fataChallengeContext.selection = selectionResult.selection;
+                } catch (error) {
+                    btnSave.disabled = false;
+                    btnSave.textContent = originalText;
+                    alert(error?.message || "L’ARC n’a pas pu être associé au challenge Fata.");
+                    return;
+                }
+            }
+
             const selectedArc = selectedArcId
                 ? arcs.find((a) => a.id === selectedArcId)
                 : null;
-            const finalPageIdForContent = selectedArc?.page_id || finalPageId;
+            const finalPageIdForContent = isFataChallenge
+                ? null
+                : selectedArc?.page_id || finalPageId;
 
             const selectedMediaC2PA =
                 window.__xeraLatestMediaC2PA &&
@@ -22374,6 +22521,7 @@ async function openCreateMenu(
                 metadata: contentMetadata,
             };
 
+            const publishStartedAt = Date.now();
             closeCreateMenu();
             showBackgroundPublishBanner({
                 state: "loading",
@@ -22468,13 +22616,66 @@ async function openCreateMenu(
                         }
                     }
 
+                    let publishState = "success";
+                    let publishTitle = isEdit
+                        ? "Mise a jour terminee"
+                        : "Publication terminee";
+                    let publishMessage = "Votre contenu est maintenant en ligne sur XERA.";
+                    if (isFataChallenge && !isEdit) {
+                        publishTitle = "Preuve publiée · Challenge Fata";
+                        publishMessage = "La preuve est en ligne; sa confirmation reste dans la file Fata.";
+                        try {
+                            const syncResult =
+                                await window.FataIntegration?.syncPendingActions?.();
+                            const proofEvents = (syncResult?.pendingEvents || [])
+                                .filter(
+                                    (event) =>
+                                        event.challenge_id === fataChallengeContext.challengeId &&
+                                        event.requirement_id === fataChallengeContext.requirements?.proof,
+                                )
+                                .sort(
+                                    (left, right) =>
+                                        Date.parse(right.updated_at || right.created_at || "") -
+                                        Date.parse(left.updated_at || left.created_at || ""),
+                                );
+                            const contentCreatedAt = Date.parse(
+                                result.data?.created_at || result.data?.createdAt || "",
+                            );
+                            const actionEvent =
+                                proofEvents.find(
+                                    (event) =>
+                                        Number.isFinite(contentCreatedAt) &&
+                                        Date.parse(event.occurred_at || "") === contentCreatedAt,
+                                ) || proofEvents.find((event) => {
+                                    const changedAt = Date.parse(
+                                        event.updated_at || event.created_at || "",
+                                    );
+                                    return changedAt >= publishStartedAt - 5000;
+                                });
+                            if (actionEvent?.status === "delivered" && actionEvent.event_id) {
+                                publishTitle = "Preuve confirmée par Fata";
+                                publishMessage = `Fata a reçu la première preuve (eventId ${actionEvent.event_id}).`;
+                            } else if (actionEvent?.status === "failed") {
+                                publishState = "error";
+                                publishTitle = "Preuve publiée · confirmation Fata refusée";
+                                publishMessage = window.FataIntegration?.describeDeliveryFailure?.(
+                                    actionEvent.last_error,
+                                ) || actionEvent.last_error || "Fata a refusé la confirmation.";
+                            } else if (actionEvent?.status === "retry") {
+                                publishTitle = "Preuve publiée · confirmation Fata en reprise";
+                                publishMessage = "La confirmation est conservée dans la file et sera retentée automatiquement.";
+                            } else if (actionEvent?.status === "pending") {
+                                publishTitle = "Preuve publiée · confirmation Fata en attente";
+                            }
+                        } catch (syncError) {
+                            console.warn("Fata proof delivery is still queued:", syncError);
+                        }
+                    }
+
                     showBackgroundPublishBanner({
-                        state: "success",
-                        title: isEdit
-                            ? "Mise a jour terminee"
-                            : "Publication terminee",
-                        message:
-                            "Votre contenu est maintenant en ligne sur XERA.",
+                        state: publishState,
+                        title: publishTitle,
+                        message: publishMessage,
                         autoHideMs: 3200,
                     });
                     requestAnimationFrame(async () => {

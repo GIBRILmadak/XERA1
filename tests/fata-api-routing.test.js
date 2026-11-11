@@ -191,7 +191,7 @@ test("stores the challengeId returned by Fata in sessionStorage", async () => {
     assert.equal(typeof integration.startFlow, "function");
 });
 
-test("starts the production Fata flow without a challengeId in the page URL", async () => {
+test("requires an explicit challenge context before starting Fata OIDC", async () => {
     const location = {
         hostname: "xera1.xyz",
         port: "",
@@ -201,13 +201,10 @@ test("starts the production Fata flow without a challengeId in the page URL", as
         search: "",
         href: "https://xera1.xyz/",
     };
-    let requestBody;
     const integration = createIntegration(
         location,
-        async (url, options) => {
-            assert.equal(url, "/api/auth/fata/start");
-            requestBody = JSON.parse(options.body);
-            return jsonResponse(true, { authUrl: "https://fata.example/authorize" });
+        async () => {
+            throw new Error("OIDC should not start without explicit challenge context");
         },
         {
             localStorage: {
@@ -218,11 +215,10 @@ test("starts the production Fata flow without a challengeId in the page URL", as
 
     await integration.startFlow();
 
-    assert.deepEqual(requestBody, {});
-    assert.equal(location.href, "https://fata.example/authorize");
+    assert.equal(location.href, "https://xera1.xyz/");
 });
 
-test("associates an ARC using the configured challenge when the page has no challengeId", async () => {
+test("does not associate an ARC when there is no explicit challenge context", async () => {
     const storage = {};
     const requests = [];
     const integration = createIntegration(
@@ -266,13 +262,76 @@ test("associates an ARC using the configured challenge when the page has no chal
 
     const result = await integration.selectPublishedArc("arc-1");
 
-    assert.equal(result.selected, true);
-    assert.equal(result.delivery.status, "delivered");
+    assert.equal(result.selected, false);
+    assert.equal(result.skipped, true);
+    assert.deepEqual(requests, []);
+    assert.equal(storage.xera1_fata_challenge_id, undefined);
+});
+
+test("loads a participant-specific form context and records explicit intent", async () => {
+    const storage = {};
+    const requests = [];
+    const integration = createIntegration(
+        {
+            hostname: "xera1.xyz",
+            port: "",
+            protocol: "https:",
+            origin: "https://xera1.xyz",
+            pathname: "/profile",
+            search: "?fata=success&challengeId=xera1-test",
+        },
+        async (url, options = {}) => {
+            requests.push({ url, options });
+            if (url === "/api/fata/status") {
+                return jsonResponse(true, { connected: true });
+            }
+            if (url === "/api/fata/participate") {
+                assert.equal(options.method, "POST");
+                assert.deepEqual(JSON.parse(options.body), {
+                    challengeId: "xera1-test",
+                });
+                return jsonResponse(true, {
+                    challengeId: "xera1-test",
+                    requirements: {
+                        arc: "req_arc",
+                        proof: "req_preuve",
+                        milestone: "req_jalon",
+                    },
+                });
+            }
+            if (url === "/api/fata/arcs?challengeId=xera1-test") {
+                return jsonResponse(true, {
+                    selection: null,
+                    arcs: [{ id: "arc-1", eligible: true }],
+                });
+            }
+            throw new Error(`Unexpected Fata request: ${url}`);
+        },
+        {
+            localStorage: {
+                getItem: () => JSON.stringify({ access_token: "xera-session-token" }),
+            },
+            sessionStorage: {
+                getItem: (key) => storage[key] ?? null,
+                setItem: (key, value) => {
+                    storage[key] = String(value);
+                },
+            },
+        },
+    );
+
+    const context = await integration.getChallengeFormContext();
+
+    assert.equal(context.requested, true);
+    assert.equal(context.connected, true);
+    assert.equal(context.challengeId, "xera1-test");
+    assert.equal(context.requirements.proof, "req_preuve");
+    assert.equal(context.arcs[0].eligible, true);
     assert.deepEqual(requests.map(({ url }) => url), [
         "/api/fata/status",
-        "/api/fata/select-arc",
+        "/api/fata/participate",
+        "/api/fata/arcs?challengeId=xera1-test",
     ]);
-    assert.equal(storage.xera1_fata_challenge_id, "xera1-test");
 });
 
 test("syncs pending action tasks immediately for an authenticated linked user", async () => {

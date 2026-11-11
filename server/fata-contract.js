@@ -135,14 +135,17 @@ function isArcFataEligible(arc, userId) {
 function getArcPresentationOccurredAt(arc, linkage, selection, challenge) {
     const arcCreatedAt = Date.parse(arc?.created_at || "");
     const linkedAt = Date.parse(linkage?.created_at || "");
+    const selectedAt = Date.parse(selection?.selected_at || "");
     const opensAt = Date.parse(challenge?.opens_at || "");
     const closesAt = Date.parse(challenge?.close_at || "");
     if (
         Number.isFinite(arcCreatedAt) &&
         Number.isFinite(linkedAt) &&
+        Number.isFinite(selectedAt) &&
         Number.isFinite(opensAt) &&
         Number.isFinite(closesAt) &&
         arcCreatedAt >= linkedAt &&
+        arcCreatedAt >= selectedAt &&
         arcCreatedAt >= opensAt &&
         arcCreatedAt <= closesAt
     ) {

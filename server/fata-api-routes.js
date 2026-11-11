@@ -33,7 +33,7 @@ function createFataApiRouter(supabase) {
             await require("./fata-worker").processPendingEvents(user.id, 1);
             const { data: pendingEvents, error } = await supabase
                 .from("fata_pending_events")
-                .select("id,challenge_id,requirement_id,status,event_id,request_id,last_error,created_at,updated_at")
+                .select("id,challenge_id,requirement_id,occurred_at,status,event_id,request_id,last_error,created_at,updated_at")
                 .eq("user_id", user.id)
                 .order("updated_at", { ascending: false })
                 .limit(50);
@@ -43,6 +43,118 @@ function createFataApiRouter(supabase) {
             console.error("Fata queue sync error:", error);
             return res.status(500).json({
                 error: "Impossible de synchroniser les confirmations Fata pour le moment.",
+            });
+        }
+    });
+
+    router.post("/participate", async (req, res) => {
+        const user = await authenticate(req, res);
+        if (!user) return;
+
+        const challengeId = String(req.body?.challengeId || "").trim();
+        try {
+            const {
+                resolveChallengeConfig,
+                areFataRequirementIdsConfigured,
+                challengeRequirementIdsMatch,
+                hasValidChallengeWindow,
+                getChallengeSelection,
+            } = require("./fata-contract");
+            if (!areFataRequirementIdsConfigured()) {
+                return res.status(503).json({
+                    error: "Les identifiants d’étapes Fata ne sont pas configurés.",
+                });
+            }
+            const challenge = resolveChallengeConfig(challengeId);
+            const provider = require("./oauth-configs").getConfig("fata");
+            if (!provider?.issuer) {
+                return res.status(503).json({
+                    error: "La configuration du fournisseur Fata est indisponible.",
+                });
+            }
+            const [linkageResult, challengeResult] = await Promise.all([
+                supabase
+                    .from("fata_linkages")
+                    .select("user_id,fata_iss,metadata")
+                    .eq("user_id", user.id)
+                    .eq("fata_iss", provider.issuer)
+                    .maybeSingle(),
+                supabase
+                    .from("fata_challenges_config")
+                    .select("id,is_active,opens_at,close_at,receipt_deadline_at,req_arc,req_preuve,req_jalon")
+                    .eq("id", challenge.id)
+                    .maybeSingle(),
+            ]);
+            if (linkageResult.error || challengeResult.error) {
+                throw linkageResult.error || challengeResult.error;
+            }
+            const linkage = linkageResult.data;
+            const challengeRow = challengeResult.data;
+            if (!linkage) {
+                return res.status(409).json({
+                    error: "Connectez votre compte Fata avant de participer au challenge.",
+                });
+            }
+            if (!challengeRow?.is_active) {
+                return res.status(409).json({
+                    error: "Ce challenge Fata n'est pas actif sur XERA1.",
+                });
+            }
+            if (!hasValidChallengeWindow(challengeRow)) {
+                return res.status(503).json({
+                    error: "Les dates du challenge Fata ne sont pas configurées correctement.",
+                });
+            }
+            if (!challengeRequirementIdsMatch(challenge.id, challengeRow)) {
+                return res.status(503).json({
+                    error: "La configuration des étapes Fata doit être corrigée avant de participer.",
+                });
+            }
+            const now = Date.now();
+            if (
+                (challengeRow.opens_at && now < Date.parse(challengeRow.opens_at)) ||
+                (challengeRow.close_at && now > Date.parse(challengeRow.close_at))
+            ) {
+                return res.status(409).json({
+                    error: "La période d'activité de ce challenge n'est pas ouverte.",
+                });
+            }
+            if (
+                challengeRow.receipt_deadline_at &&
+                now > Date.parse(challengeRow.receipt_deadline_at)
+            ) {
+                return res.status(409).json({
+                    error: "La date limite de réception de ce challenge est dépassée.",
+                });
+            }
+
+            const { data: intent, error: intentError } = await supabase.rpc(
+                "set_fata_challenge_participation",
+                {
+                    p_user_id: user.id,
+                    p_issuer: provider.issuer,
+                    p_challenge_id: challenge.id,
+                },
+            );
+            if (intentError) throw intentError;
+
+            return res.json({
+                challengeId: challenge.id,
+                participatingAt: intent?.participating_at || null,
+                selection: getChallengeSelection(linkage, challenge.id),
+                requirements: {
+                    arc: challengeRow.req_arc,
+                    proof: challengeRow.req_preuve,
+                    milestone: challengeRow.req_jalon,
+                },
+            });
+        } catch (error) {
+            if (/Invalid Fata challengeId/i.test(error?.message || "")) {
+                return res.status(400).json({ error: "Challenge Fata inconnu." });
+            }
+            console.error("Fata participation error:", error);
+            return res.status(500).json({
+                error: "Impossible d'enregistrer la participation au challenge Fata.",
             });
         }
     });

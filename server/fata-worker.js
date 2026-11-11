@@ -174,10 +174,11 @@ async function handleLogEntry(log) {
 function isEligibleActionTime(occurredAt, linkage, selection, config) {
     const occurredMs = Date.parse(occurredAt || "");
     const linkedMs = Date.parse(linkage.created_at || "");
+    const selectedMs = Date.parse(selection?.selected_at || "");
     const opensAt = Date.parse(config.opens_at || "");
     const closesAt = Date.parse(config.close_at || "");
-    if (![occurredMs, linkedMs, opensAt, closesAt].every(Number.isFinite)) return false;
-    if (occurredMs < linkedMs) return false;
+    if (![occurredMs, linkedMs, selectedMs, opensAt, closesAt].every(Number.isFinite)) return false;
+    if (occurredMs < linkedMs || occurredMs < selectedMs) return false;
     if (occurredMs < opensAt || occurredMs > closesAt) return false;
     return true;
 }
@@ -646,6 +647,7 @@ module.exports = {
     scheduleRetry,
     decideFataDeliveryStatus,
     reconcileSelectedArcs,
+    isEligibleActionTime,
     isTestChallenge,
     resolveChallengeConfig,
 };

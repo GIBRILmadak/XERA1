@@ -293,15 +293,24 @@ function isMissingArcMetadataColumnError(error) {
 
 // --- INITIALIZATION ---
 
-function renderArcCreationForm(arcToEdit = null) {
+function renderArcCreationForm(arcToEdit = null, fataContext = null) {
     const createContainer = document.querySelector(
         "#create-modal .create-container",
     );
     if (!createContainer) return;
 
     const isEdit = !!arcToEdit;
-    const title = isEdit ? "Modifier votre projet" : "Démarrez votre projet";
-    const btnText = isEdit ? "Mettre à jour" : "Lancer le projet";
+    const isFataChallenge = !isEdit && Boolean(fataContext?.connected);
+    const title = isEdit
+        ? "Modifier votre projet"
+        : isFataChallenge
+          ? "Présentez votre projet au challenge Fata"
+          : "Démarrez votre projet";
+    const btnText = isEdit
+        ? "Mettre à jour"
+        : isFataChallenge
+          ? "Présenter mon projet à Fata"
+          : "Lancer le projet";
     const inspiredSeed = !isEdit ? xeraGetInspiredArcSeed() : null;
     const defaultStageLevel = normalizeArcStageLevel(
         isEdit ? arcToEdit.stage_level : inspiredSeed?.stageLevel || "idee",
@@ -356,7 +365,7 @@ function renderArcCreationForm(arcToEdit = null) {
     }
 
     createContainer.innerHTML = `
-        <div class="arc-create-card">
+        <div class="arc-create-card ${isFataChallenge ? "is-fata-challenge" : ""}">
             <div class="arc-creation-header arc-creation-header-inline">
                 <div>
                     <h2>${title}</h2>
@@ -365,7 +374,13 @@ function renderArcCreationForm(arcToEdit = null) {
                 <button type="button" class="cover-action" onclick="document.getElementById('arc-cover-file').click()">Ajouter une couverture</button>
             </div>
 
-            <form id="create-arc-form" class="arc-form">
+            ${isFataChallenge ? `<div class="fata-challenge-form-banner" role="note">
+                <strong>Challenge Fata × XERA1 · Présentation de projet</strong>
+                <span>Cette présentation sera confirmée auprès de Fata. Renseignez une description et au moins trois jalons nommés; votre projet doit rester personnel et visible.</span>
+            </div>
+            <input type="hidden" name="fata_challenge_id" value="${xeraEscapeHtml(fataContext.challengeId)}">` : ""}
+
+            <form id="create-arc-form" class="arc-form" ${isFataChallenge ? `data-fata-challenge-id="${xeraEscapeHtml(fataContext.challengeId)}"` : ""}>
                 ${isEdit ? `<input type="hidden" name="arc_id" value="${arcToEdit.id}">` : ""}
 
                 <div class="form-group form-group-title">
@@ -396,14 +411,14 @@ function renderArcCreationForm(arcToEdit = null) {
                 }
 
                 <div class="form-group">
-                    <label for="arc-description">Description</label>
-                    <textarea id="arc-description" name="description" placeholder="Détails supplémentaires..." rows="5" class="form-input large-textarea">${xeraEscapeHtml(defaultDescriptionValue)}</textarea>
+                    <label for="arc-description">${isFataChallenge ? "Description du projet *" : "Description"}</label>
+                    <textarea id="arc-description" name="description" placeholder="${isFataChallenge ? "Présentez le projet, son objectif et ce que vous construisez..." : "Détails supplémentaires..."}" rows="5" class="form-input large-textarea" ${isFataChallenge ? "required" : ""}>${xeraEscapeHtml(defaultDescriptionValue)}</textarea>
                 </div>
 
                 <div class="form-group">
-                    <label for="arc-milestones">Jalons du projet</label>
-                    <textarea id="arc-milestones" name="milestones" placeholder="Un jalon par ligne\nEx. Maquette terminée\nEx. Première version fonctionnelle\nEx. Mise en ligne" rows="4" class="form-input large-textarea">${xeraEscapeHtml(defaultMilestonesValue)}</textarea>
-                    <p class="form-hint">Pour le challenge Fata, l’ARC doit avoir au moins trois jalons nommés. Les jalons restent modifiables dans votre ARC.</p>
+                    <label for="arc-milestones">${isFataChallenge ? "Jalons du challenge (3 minimum) *" : "Jalons du projet"}</label>
+                    <textarea id="arc-milestones" name="milestones" placeholder="Un jalon par ligne\nEx. Maquette terminée\nEx. Première version fonctionnelle\nEx. Mise en ligne" rows="4" class="form-input large-textarea" ${isFataChallenge ? "required" : ""}>${xeraEscapeHtml(defaultMilestonesValue)}</textarea>
+                    <p class="form-hint">${isFataChallenge ? "Fata exige au moins trois jalons avec un nom. Ils resteront modifiables dans votre projet." : "Pour le challenge Fata, l’ARC doit avoir au moins trois jalons nommés. Les jalons restent modifiables dans votre ARC."}</p>
                 </div>
 
                 <div class="form-group">
@@ -636,11 +651,60 @@ function stopHookAnimation() {
 
 // --- MODAL CONTROL ---
 
-function openCreateModal() {
-    // Ensure form is rendered (reset to create mode)
-    renderArcCreationForm();
+function renderFataChallengeGate(context) {
+    const createContainer = document.querySelector(
+        "#create-modal .create-container",
+    );
+    if (!createContainer) return;
+    const connected = Boolean(context?.connected);
+    const message = context?.error
+        ? xeraEscapeHtml(context.error)
+        : connected
+          ? "Le contexte Fata n’est pas prêt. Réessayez dans quelques instants."
+          : "Connectez votre compte Fata pour présenter ce projet dans le challenge.";
+    const buttonLabel = connected ? "Réessayer" : "Connecter mon compte Fata";
+    const buttonAction = connected
+        ? "window.openCreateModal()"
+        : "window.FataIntegration?.openPanel()";
+    createContainer.innerHTML = `
+        <section class="fata-challenge-gate">
+            <img src="icons/fata.webp" alt="Fata">
+            <h2>Challenge Fata × XERA1</h2>
+            <p>${message}</p>
+            <button type="button" class="btn btn-primary" onclick="${buttonAction}">${buttonLabel}</button>
+        </section>
+    `;
+}
 
+async function openCreateModal() {
     const modal = document.getElementById("create-modal");
+    if (modal) {
+        modal.classList.add("active");
+        const createContainer = modal.querySelector(".create-container");
+        if (createContainer) {
+            createContainer.innerHTML = '<div class="fata-challenge-gate"><p>Préparation du formulaire…</p></div>';
+        }
+    }
+
+    let fataContext = null;
+    try {
+        fataContext = await window.FataIntegration?.getChallengeFormContext?.();
+    } catch (error) {
+        fataContext = {
+            requested: true,
+            connected: true,
+            error: error?.message || "Le contexte du challenge Fata n’a pas pu être chargé.",
+        };
+    }
+
+    if (fataContext?.requested && (!fataContext.connected || fataContext.error)) {
+        renderFataChallengeGate(fataContext);
+        return;
+    }
+
+    // Ensure form is rendered (reset to create mode)
+    renderArcCreationForm(null, fataContext?.connected ? fataContext : null);
+
     if (modal) {
         modal.classList.add("active");
         startHookAnimation();
@@ -728,7 +792,7 @@ async function getArcAuthUser() {
     return null;
 }
 
-function buildArcLaunchTracePayload(arcData, authUserId, arcId) {
+function buildArcLaunchTracePayload(arcData, authUserId, arcId, options = {}) {
     const safeTitle = (arcData?.title || "").trim() || "Nouvel ARC";
     const goal = (arcData?.goal || "").trim();
     const details = (arcData?.description || "").trim();
@@ -738,7 +802,7 @@ function buildArcLaunchTracePayload(arcData, authUserId, arcId) {
     const baseDescription =
         descriptionParts.join("\n\n").trim() || "Début d'un nouveau projet.";
 
-    const hasMedia = !!arcData?.media_url;
+    const hasMedia = options.includeMedia !== false && !!arcData?.media_url;
     const mediaType = String(arcData?.media_type || "").toLowerCase();
     const contentType = hasMedia
         ? mediaType === "video"
@@ -760,9 +824,14 @@ function buildArcLaunchTracePayload(arcData, authUserId, arcId) {
     };
 }
 
-async function createArcLaunchTrace(arcRow, arcData, authUser) {
+async function createArcLaunchTrace(arcRow, arcData, authUser, options = {}) {
     if (!arcRow?.id || !authUser?.id) return null;
-    const payload = buildArcLaunchTracePayload(arcData, authUser.id, arcRow.id);
+    const payload = buildArcLaunchTracePayload(
+        arcData,
+        authUser.id,
+        arcRow.id,
+        options,
+    );
     try {
         if (typeof createContent === "function") {
             const result = await createContent(payload);
@@ -890,6 +959,9 @@ async function handleCreateArc(e) {
     const formData = new FormData(e.target);
     const arcId = formData.get("arc_id"); // If editing
     const inspiredSeed = !arcId ? xeraGetInspiredArcSeed() : null;
+    const fataChallengeId = !arcId
+        ? String(e.target.dataset.fataChallengeId || "").trim()
+        : "";
 
     // Calculate duration from dates
     const startDateVal = formData.get("start_date");
@@ -927,6 +999,27 @@ async function handleCreateArc(e) {
         media_url: formData.get("media_url") || null,
         media_type: formData.get("media_type") || null,
     };
+
+    if (fataChallengeId) {
+        if (window._pendingPageIdForArc) {
+            alert("Le challenge Fata demande un projet personnel, pas un projet de page professionnelle.");
+            btn.disabled = false;
+            btn.textContent = originalText;
+            return;
+        }
+        if (!String(arcData.description || "").trim()) {
+            alert("Pour le challenge Fata, ajoutez une description au projet.");
+            btn.disabled = false;
+            btn.textContent = originalText;
+            return;
+        }
+        if (arcData.milestones.length < 3) {
+            alert("Pour le challenge Fata, nommez au moins trois jalons.");
+            btn.disabled = false;
+            btn.textContent = originalText;
+            return;
+        }
+    }
 
     // Only set user_id and status on creation
     if (!arcId) {
@@ -1012,16 +1105,23 @@ async function handleCreateArc(e) {
         if (error) throw error;
 
         if (!arcId && createdArc && createdArc.id) {
-            await createArcLaunchTrace(createdArc, arcData, authUser);
+            await createArcLaunchTrace(createdArc, arcData, authUser, {
+                includeMedia: !fataChallengeId,
+            });
             if (typeof window.FataIntegration?.selectPublishedArc === "function") {
                 try {
-                    const fataSelection = await window.FataIntegration.selectPublishedArc(createdArc.id);
+                    const fataSelection = await window.FataIntegration.selectPublishedArc(
+                        createdArc.id,
+                        fataChallengeId || undefined,
+                    );
                     if (fataSelection?.selected) {
                         if (fataSelection.delivery?.status === "delivered") {
                             xeraToast(
                                 "success",
                                 "Projet confirmé par Fata",
-                                "L’étape de présentation du projet a été transmise à Fata.",
+                                fataSelection.delivery.eventId
+                                    ? `Fata a reçu la présentation du projet (eventId ${fataSelection.delivery.eventId}).`
+                                    : "Fata a reçu la présentation du projet.",
                             );
                         } else if (fataSelection.delivery?.status === "failed") {
                             xeraToast(
@@ -1755,6 +1855,100 @@ async function validateArcMilestone(arcId, contentId = null) {
             return;
         }
 
+        let fataChallengeContext = null;
+        if (
+            isOwner &&
+            typeof window.FataIntegration?.getChallengeFormContext === "function"
+        ) {
+            try {
+                fataChallengeContext =
+                    await window.FataIntegration.getChallengeFormContext();
+            } catch (contextError) {
+                console.warn("Fata milestone context is unavailable:", contextError);
+            }
+        }
+        const inFataChallenge = Boolean(
+            fataChallengeContext?.requested && fataChallengeContext.connected,
+        );
+        if (inFataChallenge && fataChallengeContext.error) {
+            xeraToast(
+                "error",
+                "Challenge Fata indisponible",
+                fataChallengeContext.error,
+            );
+            return;
+        }
+        if (inFataChallenge) {
+            const existingSelection = fataChallengeContext.selection;
+            if (
+                existingSelection?.arc_id &&
+                String(existingSelection.arc_id) !== String(arc.id)
+            ) {
+                xeraToast(
+                    "error",
+                    "ARC différent du challenge",
+                    "Validez un jalon sur l’ARC déjà associé à ce challenge Fata.",
+                );
+                return;
+            }
+            if (!existingSelection?.arc_id) {
+                const eligible = (fataChallengeContext.arcs || []).some(
+                    (candidate) =>
+                        candidate.eligible && String(candidate.id) === String(arc.id),
+                );
+                if (!eligible) {
+                    xeraToast(
+                        "error",
+                        "ARC non conforme",
+                        "L’ARC doit être personnel, visible, décrit et avoir au moins trois jalons nommés.",
+                    );
+                    return;
+                }
+                const selectionResult =
+                    await window.FataIntegration.selectPublishedArc(
+                        arc.id,
+                        fataChallengeContext.challengeId,
+                    );
+                if (
+                    !selectionResult?.selected ||
+                    selectionResult.delivery?.status === "failed"
+                ) {
+                    xeraToast(
+                        "error",
+                        "ARC non confirmé par Fata",
+                        selectionResult?.delivery?.error ||
+                            selectionResult?.error ||
+                            "L’ARC doit être associé avant de valider un jalon.",
+                    );
+                    return;
+                }
+                fataChallengeContext.selection = selectionResult.selection;
+            }
+            const selectedAt = Date.parse(
+                fataChallengeContext.selection?.selected_at || "",
+            );
+            const proofCreatedAt = Date.parse(content.created_at || "");
+            const hasProofMedia = Boolean(
+                String(content.media_url || "").trim() ||
+                    (Array.isArray(content.media_urls) &&
+                        content.media_urls.some((url) => String(url || "").trim())),
+            );
+            if (
+                !hasProofMedia ||
+                !String(content.description || "").trim() ||
+                !Number.isFinite(selectedAt) ||
+                !Number.isFinite(proofCreatedAt) ||
+                proofCreatedAt < selectedAt
+            ) {
+                xeraToast(
+                    "error",
+                    "Publiez une preuve après l’association",
+                    "Le jalon Fata doit utiliser une preuve avec média et description, publiée sur cet ARC après sa sélection pour le challenge.",
+                );
+                return;
+            }
+        }
+
         const comment = prompt(
             isOwner
                 ? "Décrivez le résultat obtenu pour ce jalon. Ce texte sera envoyé à Fata comme description de validation."
@@ -1775,8 +1969,20 @@ async function validateArcMilestone(arcId, contentId = null) {
             comment: comment.trim() || null,
         };
 
+        const confirmsFataMilestone = Boolean(
+            inFataChallenge &&
+                fataChallengeContext.selection?.arc_id &&
+                String(fataChallengeContext.selection.arc_id) === String(arc.id),
+        );
+
+        let validationRow = null;
         try {
-            await xeraSafeInsert("arc_milestone_validations", payload);
+            const validationResult = await xeraSafeInsert(
+                "arc_milestone_validations",
+                payload,
+                { select: "id,created_at", single: true },
+            );
+            validationRow = validationResult.data;
         } catch (error) {
             if (String(error?.code || "") === "23505") {
                 xeraToast(
@@ -1789,13 +1995,35 @@ async function validateArcMilestone(arcId, contentId = null) {
             throw error;
         }
 
+        let fataMilestoneEvent = null;
         if (
             isOwner &&
             typeof window.FataIntegration?.syncPendingActions === "function"
         ) {
-            void window.FataIntegration.syncPendingActions().catch((syncError) => {
+            try {
+                const syncResult = await window.FataIntegration.syncPendingActions();
+                if (confirmsFataMilestone) {
+                    const milestoneEvents = (syncResult?.pendingEvents || [])
+                        .filter(
+                            (event) =>
+                                event.challenge_id === fataChallengeContext.challengeId &&
+                                event.requirement_id === fataChallengeContext.requirements?.milestone,
+                        )
+                        .sort(
+                            (left, right) =>
+                                Date.parse(right.updated_at || right.created_at || "") -
+                                Date.parse(left.updated_at || left.created_at || ""),
+                        );
+                    const validationCreatedAt = Date.parse(validationRow?.created_at || "");
+                    fataMilestoneEvent = milestoneEvents.find(
+                        (event) =>
+                            Number.isFinite(validationCreatedAt) &&
+                            Date.parse(event.occurred_at || "") === validationCreatedAt,
+                    ) || milestoneEvents[0] || null;
+                }
+            } catch (syncError) {
                 console.warn("Fata milestone delivery is still queued:", syncError);
-            });
+            }
         }
 
         if (typeof createNotification === "function") {
@@ -1820,13 +2048,37 @@ async function validateArcMilestone(arcId, contentId = null) {
             contentId: contentKey,
             metadata: { hasComment: !!comment.trim() },
         });
-        xeraToast(
-            "success",
-            isOwner ? "Résultat publié" : "Jalon validé",
-            isOwner
-                ? "Votre résultat est publié sur cet ARC et peut être transmis au challenge Fata."
-                : "Votre validation renforce la preuve de progression.",
-        );
+        if (confirmsFataMilestone && fataMilestoneEvent?.status === "delivered") {
+            xeraToast(
+                "success",
+                "Jalon confirmé par Fata",
+                fataMilestoneEvent.event_id
+                    ? `Fata a reçu la validation du premier jalon (eventId ${fataMilestoneEvent.event_id}).`
+                    : "Fata a reçu la validation du premier jalon.",
+            );
+        } else if (confirmsFataMilestone && fataMilestoneEvent?.status === "failed") {
+            xeraToast(
+                "error",
+                "Jalon publié · confirmation Fata refusée",
+                window.FataIntegration?.describeDeliveryFailure?.(
+                    fataMilestoneEvent.last_error,
+                ) || fataMilestoneEvent.last_error || "Fata a refusé la confirmation.",
+            );
+        } else if (confirmsFataMilestone) {
+            xeraToast(
+                "info",
+                "Jalon publié · confirmation Fata en attente",
+                "La confirmation du jalon est conservée dans la file XERA1 et sera retentée automatiquement.",
+            );
+        } else {
+            xeraToast(
+                "success",
+                isOwner ? "Résultat publié" : "Jalon validé",
+                isOwner
+                    ? "Votre résultat est publié sur cet ARC et peut être transmis au challenge Fata."
+                    : "Votre validation renforce la preuve de progression.",
+            );
+        }
     } catch (error) {
         console.error("validateArcMilestone error:", error);
         xeraToast(

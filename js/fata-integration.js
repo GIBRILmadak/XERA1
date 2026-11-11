@@ -306,7 +306,18 @@
     async function startFataOidcFlow(overrideChallengeId) {
         const urlParams = parseUrlParams();
         const challengeId = overrideChallengeId || urlParams.challengeId;
-        if (challengeId) persistChallengeId(challengeId);
+        if (!challengeId) {
+            alert(
+                "Ouvrez d’abord le challenge Fata et utilisez « Continuer sur XERA1 » pour charger son contexte.",
+            );
+            const connectBtn = document.querySelector(".fata-connect-btn");
+            if (connectBtn) {
+                connectBtn.disabled = false;
+                connectBtn.textContent = "Connecter mon compte Fata";
+            }
+            return;
+        }
+        persistChallengeId(challengeId);
 
         try {
             const token = await getAuthToken();
@@ -383,6 +394,65 @@
                 fataStatusPromise = null;
             });
         return fataStatusPromise;
+    }
+
+    async function requestChallengeParticipation(challengeId, token) {
+        const response = await fetchApi("/api/fata/participate", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ challengeId }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            throw new Error(data.error || `HTTP ${response.status}`);
+        }
+        return data;
+    }
+
+    async function getChallengeFormContext() {
+        const challengeId = parseUrlParams().challengeId;
+        if (!challengeId) return null;
+
+        const token = await getAuthToken();
+        if (!token) {
+            return { requested: true, connected: false, challengeId };
+        }
+
+        const statusData = await checkFataStatus();
+        if (!statusData?.connected) {
+            return { requested: true, connected: false, challengeId };
+        }
+
+        try {
+            const participation = await requestChallengeParticipation(
+                challengeId,
+                token,
+            );
+            const response = await fetchApi(
+                `/api/fata/arcs?challengeId=${encodeURIComponent(challengeId)}`,
+                { headers: { Authorization: `Bearer ${token}` } },
+            );
+            const arcData = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                throw new Error(arcData.error || `HTTP ${response.status}`);
+            }
+            return {
+                ...participation,
+                ...arcData,
+                requested: true,
+                connected: true,
+            };
+        } catch (error) {
+            return {
+                requested: true,
+                connected: true,
+                challengeId,
+                error: error?.message || "Le contexte du challenge Fata est indisponible.",
+            };
+        }
     }
 
     function describeFataDeliveryFailure(lastError) {
@@ -730,29 +800,26 @@
         });
     }
 
-    async function selectPublishedArc(arcId) {
+    async function selectPublishedArc(arcId, overrideChallengeId = null) {
         if (!arcId) return { selected: false, skipped: true };
 
         const token = await getAuthToken();
         if (!token) return { selected: false, skipped: true };
 
-        let challengeId = parseUrlParams().challengeId;
+        const challengeId = String(
+            overrideChallengeId || parseUrlParams().challengeId || "",
+        ).trim();
         if (!challengeId) {
-            // Project creation can happen without opening the Fata panel first.
-            // Resolve the configured challenge from the authenticated status
-            // endpoint so the ARC is still associated with the official flow.
-            const statusData = await checkFataStatus();
-            if (!statusData?.connected) {
-                return { selected: false, skipped: true };
-            }
-            challengeId = String(statusData.challengeId || "").trim();
-            if (challengeId) persistChallengeId(challengeId);
+            return { selected: false, skipped: true };
         }
-        if (!challengeId) {
+
+        try {
+            await requestChallengeParticipation(challengeId, token);
+        } catch (error) {
             return {
                 selected: false,
-                skipped: false,
-                error: "Le challenge Fata actif est introuvable. Ouvrez le panneau Fata et réessayez.",
+                status: 409,
+                error: error?.message || "La participation au challenge Fata n’a pas pu être enregistrée.",
             };
         }
 
@@ -909,15 +976,6 @@
         async function refreshStatus() {
             const statusData = await checkFataStatus();
             handlePanelStatus(statusData);
-            const configuredChallengeId = String(
-                statusData?.challengeId || "",
-            ).trim();
-            if (
-                configuredChallengeId &&
-                !parseUrlParams().hasExplicitChallengeId
-            ) {
-                persistChallengeId(configuredChallengeId);
-            }
             if (!statusData?.connected || !statusData.linkage) {
                 if (arcSelection) arcSelection.hidden = true;
                 return;
@@ -945,8 +1003,10 @@
             }
             if (connectionNote) {
                 connectionNote.hidden = false;
-                connectionNote.textContent =
-                    "✓ Votre compte Fata est associé à XERA1. Le statut des confirmations apparaît ici.";
+                const challengeId = parseUrlParams().challengeId;
+                connectionNote.textContent = challengeId
+                    ? `✓ Contexte du challenge Fata reçu (${challengeId}). Le statut des confirmations apparaît ici.`
+                    : "✓ Votre compte Fata est associé à XERA1. Ouvrez le challenge Fata avec « Continuer sur XERA1 » pour charger son contexte.";
             }
 
             if (arcSelection) {
@@ -959,6 +1019,10 @@
                     return;
                 }
                 try {
+                    await requestChallengeParticipation(
+                        challengeId,
+                        await getAuthToken(),
+                    );
                     const response = await fetchApi(
                         `/api/fata/arcs?challengeId=${encodeURIComponent(challengeId)}`,
                         { headers: { Authorization: `Bearer ${await getAuthToken()}` } },
@@ -1037,11 +1101,22 @@
     window.FataIntegration = {
         startFlow: startFataOidcFlow,
         checkStatus: checkFataStatus,
+        getChallengeFormContext,
         syncPendingActions,
         checkCelebrationStatus,
         handlePanelStatus,
+        describeDeliveryFailure: describeFataDeliveryFailure,
         refreshPanelStatus: (...args) => refreshFataPanelStatus?.(...args),
         selectPublishedArc,
+        openPanel: () => {
+            const panel =
+                document.getElementById("fata-challenge-panel") ||
+                createFataPanel();
+            panel.classList.add("is-open");
+            panel.setAttribute("aria-hidden", "false");
+            void refreshFataPanelStatus?.();
+            return panel;
+        },
         initUI: initFataUI,
         resolveApiBaseUrl: getApiBaseUrl,
     };
