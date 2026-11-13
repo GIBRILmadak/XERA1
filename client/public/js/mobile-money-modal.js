@@ -217,7 +217,14 @@
 
     async function pollStatus(txId) {
       try {
-        const res = await fetch("/api/payments/status/" + encodeURIComponent(txId), { credentials: "same-origin" });
+        const headers = {};
+        if (options.accessToken) {
+          headers["Authorization"] = "Bearer " + options.accessToken;
+        }
+        const res = await fetch("/api/payments/status/" + encodeURIComponent(txId), {
+          headers,
+          credentials: "same-origin",
+        });
         if (!res.ok) return;
         const data = await res.json();
 

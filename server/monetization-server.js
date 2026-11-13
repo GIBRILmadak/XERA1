@@ -4826,9 +4826,39 @@ app.get("/api/cron/sweep-subscriptions", async (req, res) => {
 
     await sweepExpiredSubscriptions();
 
+    // Réconciliation automatique des paiements MaishaPay
+    let reconcileResult = null;
+    try {
+        reconcileResult = await paymentOrchestrator.reconcilePayments();
+    } catch (reconcileErr) {
+        console.error("[Cron] sweep-subscriptions reconcilePayments error:", reconcileErr.message);
+    }
+
     return res.status(200).json({
         message: "Subscription sweep initiated successfully.",
+        reconcile: reconcileResult,
     });
+});
+
+// Cron: réconciliation explicite des paiements Mobile Money (MaishaPay)
+app.get("/api/cron/reconcile-payments", async (req, res) => {
+    const auth = authorizeCronRequest(req);
+    if (!auth.ok) {
+        return res.status(auth.status || 401).json({
+            error: auth.message || "Unauthorized cron request.",
+        });
+    }
+
+    try {
+        const result = await paymentOrchestrator.reconcilePayments();
+        return res.status(200).json({
+            message: "Payments reconciled successfully.",
+            result,
+        });
+    } catch (error) {
+        console.error("[Cron] reconcile-payments error:", error);
+        return res.status(500).json({ error: error?.message || "failed" });
+    }
 });
 
 // Cron: evaluate & apply 'tech' badge based on 7-day continuous posting streak

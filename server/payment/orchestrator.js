@@ -6,29 +6,31 @@
  * Orchestrateur de paiement XERA (MaishaPay Mobile Money).
  * Branche : feat/maishapay-provider
  *
- * Toutes les fonctions acceptent un objet `deps` pour permettre une injection de
- * dépendances complète (testable sans Supabase, sans réseau, sans vraies clés).
- *
  * RÈGLES CRITIQUES :
  *  - uncertain:true => NE JAMAIS marquer la transaction failed et NE JAMAIS
  *    rappeler initiatePayment avec la même référence : seulement checkStatus.
  *  - Les clés, tokens et numéros de téléphone complets ne sont JAMAIS loggés.
  *  - Seul le suffixe (3 derniers chiffres) du numéro est conservé en base (phone_last3).
+ *  - canApply guard : deux appelants simultanés (webhook + polling) ne jouent les effets qu'une fois.
+ *  - effects_applied_at est posé APRÈS un appel réussi, jamais avant.
  */
 
+const crypto = require('crypto');
 const maishapayDefault = require('./providers/maishapay');
 
 /**
  * Finalise une transaction de manière atomique via la procédure claim_transaction_result.
- * Si le statut est 'succeeded' et que la réclamation a réussi (ou que les effets n'ont
- * pas encore été appliqués), applique les effets métier correspondants.
+ * Si le statut est 'succeeded' et que canApply est vrai, applique les effets métier.
+ *
+ * canApply = claimed || (!tx.effects_applied_at && confirmedAgeMs > 120000)
+ * → Protège contre les doubles appels simultanés (webhook + polling).
  *
  * @param {object} params
- * @param {string} params.transactionId - UUID de la transaction
- * @param {'succeeded'|'failed'} params.status - Nouveau statut cible
- * @param {string} [params.providerTxId] - ID de transaction attribué par MaishaPay
- * @param {string} [params.reason] - Motif d'échec si status === 'failed'
- * @param {object} [params.deps] - Dépendances injectées (supabase, activateSubscription, etc.)
+ * @param {string} params.transactionId
+ * @param {'succeeded'|'failed'} params.status
+ * @param {string} [params.providerTxId]
+ * @param {string} [params.reason]
+ * @param {object} [params.deps]
  * @returns {Promise<{ claimed: boolean, status: string, effectsApplied: boolean, transaction: object }>}
  */
 async function finalizePayment({
@@ -71,46 +73,60 @@ async function finalizePayment({
 
   // 2. Application des effets métier si le statut est 'succeeded'
   if (status === 'succeeded') {
-    // Si la transaction n'a pas encore eu ses effets appliqués
-    if (!tx.effects_applied_at) {
+    const confirmedAgeMs = tx.confirmed_at
+      ? Date.now() - new Date(tx.confirmed_at).getTime()
+      : 0;
+
+    // canApply : claimed atomiquement OU effets pas encore appliqués ET confirmation ancienne (>2 min)
+    const canApply = claimed || (!tx.effects_applied_at && confirmedAgeMs > 120000);
+
+    if (canApply && !tx.effects_applied_at) {
       const nowIso = new Date().toISOString();
 
       if (tx.type === 'subscription') {
-        if (typeof deps.activateSubscription === 'function') {
-          await deps.activateSubscription({
-            pendingTransactionId: tx.id,
-            userId: tx.from_user_id,
-            plan: tx.metadata?.plan,
-            billingCycle: tx.metadata?.billing_cycle,
-            currency: tx.currency,
-            amount: tx.amount_gross,
-            transactionRefId: tx.metadata?.checkout_ref_id,
-            operatorRefId: providerTxId || tx.provider_transaction_id,
-            alreadyClaimed: true,
-            confirmationSource: 'maishapay',
-          });
-          effectsApplied = true;
+        // Pour un abonnement, le bénéficiaire est to_user_id (avec repli sur from_user_id)
+        const subscriberId = tx.to_user_id || tx.from_user_id;
+        if (!subscriberId) {
+          throw new Error(`[Orchestrator] finalizePayment: aucun utilisateur trouvé pour l'abonnement ${tx.id}.`);
         }
+        if (typeof deps.activateSubscription !== 'function') {
+          throw new Error('[Orchestrator] finalizePayment: deps.activateSubscription doit être une fonction.');
+        }
+
+        await deps.activateSubscription({
+          pendingTransactionId: tx.id,
+          userId: subscriberId,
+          plan: tx.metadata?.plan,
+          billingCycle: tx.metadata?.billing_cycle,
+          currency: tx.currency,
+          amount: tx.amount_gross,
+          transactionRefId: tx.metadata?.checkout_ref_id,
+          operatorRefId: providerTxId || tx.provider_transaction_id,
+          alreadyClaimed: claimed,
+          confirmationSource: 'maishapay',
+        });
+
       } else if (tx.type === 'support') {
-        if (typeof deps.confirmSupportPayment === 'function') {
-          await deps.confirmSupportPayment({
-            pendingTransactionId: tx.id,
-            fromUserId: tx.from_user_id,
-            toUserId: tx.to_user_id,
-            amountUsd: tx.amount_gross,
-            checkoutCurrency: tx.metadata?.checkout_currency || tx.currency,
-            checkoutAmount: tx.metadata?.checkout_amount || tx.amount_gross,
-            description: tx.description,
-            transactionRefId: tx.metadata?.checkout_ref_id,
-            operatorRefId: providerTxId || tx.provider_transaction_id,
-            alreadyClaimed: true,
-            confirmationSource: 'maishapay',
-          });
-          effectsApplied = true;
+        if (typeof deps.confirmSupportPayment !== 'function') {
+          throw new Error('[Orchestrator] finalizePayment: deps.confirmSupportPayment doit être une fonction.');
         }
+
+        await deps.confirmSupportPayment({
+          pendingTransactionId: tx.id,
+          fromUserId: tx.from_user_id,
+          toUserId: tx.to_user_id,
+          amountUsd: tx.amount_gross,
+          checkoutCurrency: tx.metadata?.checkout_currency || tx.currency,
+          checkoutAmount: tx.metadata?.checkout_amount || tx.amount_gross,
+          description: tx.description,
+          transactionRefId: tx.metadata?.checkout_ref_id,
+          operatorRefId: providerTxId || tx.provider_transaction_id,
+          alreadyClaimed: claimed,
+          confirmationSource: 'maishapay',
+        });
       }
 
-      // Marquer l'horodatage d'application des effets de manière idempotente
+      // Marquer effects_applied_at APRÈS l'appel réussi, de manière idempotente
       await supabase
         .from('transactions')
         .update({
@@ -119,6 +135,8 @@ async function finalizePayment({
         })
         .eq('id', tx.id)
         .is('effects_applied_at', null);
+
+      effectsApplied = true;
     }
   } else if (status === 'failed') {
     if (claimed && reason) {
@@ -148,6 +166,13 @@ async function finalizePayment({
  * Vérifie atomiquement l'éligibilité au rate-limiting (touch_status_check),
  * puis interroge MaishaPay (checkStatus) et finalise la transaction si un résultat définitif est obtenu.
  *
+ * ORDRE CORRIGÉ :
+ *  1. Charge la transaction (SELECT)
+ *  2. Vérifie payment_provider et type (retourne not_maishapay si incompatible)
+ *  3. Vérifie statuts terminaux
+ *  4. touch_status_check (rate-limit)
+ *  5. checkStatus + finalizePayment
+ *
  * @param {object} params
  * @param {string} params.transactionId
  * @param {number} [params.minIntervalSeconds=10]
@@ -166,7 +191,64 @@ async function touchThenFinalize({
   const supabase = deps.supabase;
   const maishapay = deps.maishapay || maishapayDefault;
 
-  // 1. Rate-limiting côté base
+  // 1. Charger la transaction AVANT le touch_status_check
+  const { data: tx, error: txError } = await supabase
+    .from('transactions')
+    .select('*')
+    .eq('id', transactionId)
+    .maybeSingle();
+
+  if (txError || !tx) {
+    return {
+      checked: false,
+      error: 'Transaction introuvable',
+      transactionId,
+    };
+  }
+
+  // 2. Vérifier que c'est bien une transaction MaishaPay valide
+  const isMaishaPay = tx.metadata?.payment_provider === 'maishapay';
+  const isValidType = ['subscription', 'support'].includes(tx.type);
+  if (!isMaishaPay || !isValidType) {
+    return {
+      checked: false,
+      skipped: true,
+      reason: 'not_maishapay',
+      transactionId,
+    };
+  }
+
+  // 3. Statuts terminaux non modifiables
+  if (['refunded', 'canceled'].includes(tx.status)) {
+    return {
+      checked: false,
+      skipped: true,
+      status: tx.status,
+      reason: 'terminal_status',
+      transaction: tx,
+    };
+  }
+
+  // Si déjà 'succeeded' : s'assurer que les effets sont appliqués si manquants
+  if (tx.status === 'succeeded') {
+    if (!tx.effects_applied_at) {
+      await finalizePayment({
+        transactionId: tx.id,
+        status: 'succeeded',
+        providerTxId: tx.provider_transaction_id,
+        deps,
+      });
+    }
+    return {
+      checked: false,
+      skipped: true,
+      status: 'succeeded',
+      reason: 'already_succeeded',
+      transaction: tx,
+    };
+  }
+
+  // 4. Rate-limiting côté base via touch_status_check (APRÈS vérification du type)
   if (minIntervalSeconds > 0) {
     const { data: allowed, error: touchError } = await supabase.rpc('touch_status_check', {
       p_transaction_id: transactionId,
@@ -185,53 +267,7 @@ async function touchThenFinalize({
     }
   }
 
-  // 2. Récupérer l'état actuel de la transaction
-  const { data: tx, error: txError } = await supabase
-    .from('transactions')
-    .select('*')
-    .eq('id', transactionId)
-    .maybeSingle();
-
-  if (txError || !tx) {
-    return {
-      checked: false,
-      error: 'Transaction introuvable',
-      transactionId,
-    };
-  }
-
-  // Statuts non modifiables
-  if (['refunded', 'canceled'].includes(tx.status)) {
-    return {
-      checked: false,
-      skipped: true,
-      status: tx.status,
-      reason: 'terminal_status',
-      transaction: tx,
-    };
-  }
-
-  // Si déjà 'succeeded'
-  if (tx.status === 'succeeded') {
-    // Si les effets n'ont jamais été appliqués, on s'assure qu'ils le sont
-    if (!tx.effects_applied_at) {
-      await finalizePayment({
-        transactionId: tx.id,
-        status: 'succeeded',
-        providerTxId: tx.provider_transaction_id,
-        deps,
-      });
-    }
-    return {
-      checked: false,
-      skipped: true,
-      status: 'succeeded',
-      reason: 'already_succeeded',
-      transaction: tx,
-    };
-  }
-
-  // 3. Interroger MaishaPay
+  // 5. Interroger MaishaPay
   const reference = maishapay.buildReference(transactionId);
   let checkResult;
   try {
@@ -245,7 +281,7 @@ async function touchThenFinalize({
     };
   }
 
-  // 4. Traiter le statut retourné
+  // 6. Traiter le statut retourné
   if (checkResult.status === 'succeeded') {
     const finalized = await finalizePayment({
       transactionId,
@@ -277,7 +313,6 @@ async function touchThenFinalize({
     };
   }
 
-  // Sinon 'pending'
   return {
     checked: true,
     status: 'pending',
@@ -287,10 +322,13 @@ async function touchThenFinalize({
 
 /**
  * Démarre un paiement Mobile Money avec MaishaPay :
- *  - Valide les données
+ *  - Valide téléphone, opérateur, devise (CDF/USD uniquement)
+ *  - Anti double-clic 90s
+ *  - Rate-limit : 5 initiations/user/10min + 3/numéro/10min
  *  - Crée la transaction pending en base
+ *  - Stocke phone_hash (HMAC-SHA256) + phone_last3 uniquement
  *  - Appelle initiatePayment
- *  - Traite les réponses (ok, uncertain, explicit rejection)
+ *  - Traite les réponses (ok, uncertain, rejection explicite)
  *
  * @param {object} params
  * @param {string} params.userId
@@ -342,12 +380,132 @@ async function startPayment({
     };
   }
 
+  // 3. Validation de la devise (CDF ou USD uniquement)
   const requestedCurrency = String(details.currency || 'CDF').toUpperCase();
+  if (!['CDF', 'USD'].includes(requestedCurrency)) {
+    return {
+      ok: false,
+      uncertain: false,
+      code: 'INVALID_CURRENCY',
+      message: 'Devise non supportée. Utilisez CDF ou USD.',
+    };
+  }
+
+  // HMAC-SHA256 du numéro normalisé pour le rate-limiting par numéro
+  const webhookSecret = deps.webhookToken || process.env.MAISHAPAY_WEBHOOK_TOKEN || 'xera_phone_hash_salt';
+  const phoneHash = crypto.createHmac('sha256', webhookSecret).update(normalizedPhone).digest('hex');
+
+  const nowMs = Date.now();
+  const antiDoubleClickCutoff = new Date(nowMs - 90 * 1000).toISOString();
+  const tenMinAgo = new Date(nowMs - 10 * 60 * 1000).toISOString();
+
+  // 4. Contrôles en base AVANT de créer la transaction
+  // a) Anti double-clic (90s) — retourne la transaction existante si déjà en attente
+  if (type === 'subscription') {
+    const plan = String(details.plan || '').toLowerCase();
+    const { data: recentPendingSub } = await supabase
+      .from('transactions')
+      .select('id, metadata, created_at, status')
+      .eq('status', 'pending')
+      .eq('to_user_id', userId)
+      .eq('type', 'subscription')
+      .eq('metadata->>payment_provider', 'maishapay')
+      .eq('metadata->>plan', plan)
+      .gte('created_at', antiDoubleClickCutoff)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (recentPendingSub) {
+      const reference = maishapay.buildReference(recentPendingSub.id);
+      return {
+        ok: true,
+        deduplicated: true,
+        transactionId: recentPendingSub.id,
+        reference,
+        providerTransactionId: recentPendingSub.metadata?.provider_transaction_id || null,
+        message: 'Demande de paiement déjà envoyée. Veuillez valider le message PIN sur votre téléphone.',
+      };
+    }
+  } else if (type === 'support') {
+    const toUserId = details.to_user_id;
+    if (toUserId) {
+      const { data: recentPendingSupport } = await supabase
+        .from('transactions')
+        .select('id, metadata, created_at, status')
+        .eq('status', 'pending')
+        .eq('from_user_id', userId)
+        .eq('to_user_id', toUserId)
+        .eq('type', 'support')
+        .eq('metadata->>payment_provider', 'maishapay')
+        .gte('created_at', antiDoubleClickCutoff)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (recentPendingSupport) {
+        const reference = maishapay.buildReference(recentPendingSupport.id);
+        return {
+          ok: true,
+          deduplicated: true,
+          transactionId: recentPendingSupport.id,
+          reference,
+          providerTransactionId: recentPendingSupport.metadata?.provider_transaction_id || null,
+          message: 'Demande de paiement déjà envoyée. Veuillez valider le message PIN sur votre téléphone.',
+        };
+      }
+    }
+  }
+
+  // b) Maximum 5 initiations par utilisateur sur 10 minutes (support + subscription confondus)
+  const { count: supportUserCount } = await supabase
+    .from('transactions')
+    .select('id', { count: 'exact', head: true })
+    .eq('type', 'support')
+    .eq('from_user_id', userId)
+    .eq('metadata->>payment_provider', 'maishapay')
+    .gte('created_at', tenMinAgo);
+
+  const { count: subUserCount } = await supabase
+    .from('transactions')
+    .select('id', { count: 'exact', head: true })
+    .eq('type', 'subscription')
+    .eq('to_user_id', userId)
+    .eq('metadata->>payment_provider', 'maishapay')
+    .gte('created_at', tenMinAgo);
+
+  const totalUserAttempts = (supportUserCount || 0) + (subUserCount || 0);
+  if (totalUserAttempts >= 5) {
+    return {
+      ok: false,
+      uncertain: false,
+      code: 'TOO_MANY_ATTEMPTS',
+      message: 'Trop de tentatives de paiement. Veuillez patienter avant de réessayer.',
+    };
+  }
+
+  // c) Maximum 3 initiations par numéro sur 10 minutes, tous utilisateurs confondus
+  const { count: phoneAttempts } = await supabase
+    .from('transactions')
+    .select('id', { count: 'exact', head: true })
+    .eq('metadata->>payment_provider', 'maishapay')
+    .eq('metadata->>phone_hash', phoneHash)
+    .gte('created_at', tenMinAgo);
+
+  if ((phoneAttempts || 0) >= 3) {
+    return {
+      ok: false,
+      uncertain: false,
+      code: 'TOO_MANY_ATTEMPTS',
+      message: 'Trop de tentatives avec ce numéro de téléphone. Veuillez patienter avant de réessayer.',
+    };
+  }
+
   let checkoutAmount = null;
   let checkoutCurrency = requestedCurrency;
   let pendingTx = null;
 
-  // 3. Validation métier selon le type
+  // 5. Validation métier selon le type et création de la transaction pending
   if (type === 'subscription') {
     const plan = String(details.plan || '').toLowerCase();
     const billingCycle = String(details.billing_cycle || 'monthly').toLowerCase() === 'annual' ? 'annual' : 'monthly';
@@ -362,7 +520,7 @@ async function startPayment({
         ok: false,
         uncertain: false,
         code: 'INVALID_PLAN',
-        message: 'Plan ou montant d’abonnement invalide.',
+        message: 'Plan ou montant d\'abonnement invalide.',
       };
     }
 
@@ -392,24 +550,13 @@ async function startPayment({
       };
     }
 
-    // Vérifier l'éligibilité du créateur
     if (typeof deps.getUserProfile === 'function') {
       const recipient = await deps.getUserProfile(toUserId);
       if (!recipient) {
-        return {
-          ok: false,
-          uncertain: false,
-          code: 'RECIPIENT_NOT_FOUND',
-          message: 'Créateur destinataire introuvable.',
-        };
+        return { ok: false, uncertain: false, code: 'RECIPIENT_NOT_FOUND', message: 'Créateur destinataire introuvable.' };
       }
       if (typeof deps.canUserReceiveSupport === 'function' && !deps.canUserReceiveSupport(recipient)) {
-        return {
-          ok: false,
-          uncertain: false,
-          code: 'SUPPORT_NOT_ALLOWED',
-          message: 'Ce créateur ne peut pas recevoir de soutien actuellement.',
-        };
+        return { ok: false, uncertain: false, code: 'SUPPORT_NOT_ALLOWED', message: 'Ce créateur ne peut pas recevoir de soutien actuellement.' };
       }
     }
 
@@ -420,12 +567,7 @@ async function startPayment({
 
     checkoutAmount = deps.computeSupportCheckoutAmount(amountUsd, checkoutCurrency);
     if (!checkoutAmount) {
-      return {
-        ok: false,
-        uncertain: false,
-        code: 'INVALID_AMOUNT',
-        message: 'Montant de soutien invalide (min $1, max $1000).',
-      };
+      return { ok: false, uncertain: false, code: 'INVALID_AMOUNT', message: 'Montant de soutien invalide (min $1, max $1000).' };
     }
 
     if (typeof deps.createPendingSupportPayment !== 'function') {
@@ -449,7 +591,19 @@ async function startPayment({
   const transactionId = pendingTx.id;
   const reference = maishapay.buildReference(transactionId);
 
-  // 4. Appel initiatePayment auprès de MaishaPay
+  // Stocker metadata.phone_hash et metadata.phone_last3 juste après création
+  await supabase
+    .from('transactions')
+    .update({
+      metadata: {
+        ...(pendingTx.metadata || {}),
+        phone_hash: phoneHash,
+        phone_last3: normalizedPhone.slice(-3),
+      },
+    })
+    .eq('id', transactionId);
+
+  // 6. Appel initiatePayment auprès de MaishaPay
   let initResult;
   try {
     initResult = await maishapay.initiatePayment({
@@ -460,7 +614,6 @@ async function startPayment({
       provider: providerCode,
     });
   } catch (err) {
-    // Une exception inattendue réseau/timeout est par définition uncertain
     initResult = {
       ok: false,
       uncertain: true,
@@ -469,15 +622,15 @@ async function startPayment({
     };
   }
 
-  // 5. Gestion des réponses
+  // 7. Gestion des réponses
   if (initResult.ok === true) {
-    // Succès de l'initiation (push USSD envoyé au téléphone de l'utilisateur)
     await supabase
       .from('transactions')
       .update({
         provider_transaction_id: initResult.providerTransactionId || null,
         metadata: {
           ...(pendingTx.metadata || {}),
+          phone_hash: phoneHash,
           phone_last3: normalizedPhone.slice(-3),
           provider_transaction_id: initResult.providerTransactionId || null,
           init_status: 'ok',
@@ -496,16 +649,15 @@ async function startPayment({
 
   if (initResult.uncertain === true) {
     // RÈGLE CRITIQUE : NE JAMAIS marquer failed sur uncertain:true.
-    // Enregistrer l'état pour que checkStatus puisse résoudre la transaction.
     await supabase
       .from('transactions')
       .update({
         metadata: {
           ...(pendingTx.metadata || {}),
+          phone_hash: phoneHash,
           phone_last3: normalizedPhone.slice(-3),
           uncertain_init: true,
           uncertain_code: initResult.code,
-          uncertain_message: initResult.message,
         },
       })
       .eq('id', transactionId);
@@ -520,7 +672,7 @@ async function startPayment({
     };
   }
 
-  // ok === false et uncertain === false : Rejet explicite documenté (ex: 4xx)
+  // ok === false et uncertain === false : rejet explicite documenté (ex: 4xx non-429)
   await finalizePayment({
     transactionId,
     status: 'failed',
@@ -538,18 +690,24 @@ async function startPayment({
 }
 
 /**
- * Réconcilie les paiements en attente (destiné aux crons).
+ * Réconcilie les paiements MaishaPay en attente ou échoués (destiné aux crons).
+ *
+ * 3 catégories traitées :
+ *  (a) pending entre 2 min et 24 h
+ *  (b) failed depuis moins de 3 h (paiement tardif possible)
+ *  (c) succeeded sans effects_applied_at et confirmed_at > 2 min
+ *
+ * Déduplication par Map (un seul passage par transaction_id).
+ * Pause 700 ms entre chaque appel MaishaPay pour éviter le rate-limiting.
  *
  * @param {object} params
  * @param {number} [params.limit=20]
- * @param {number} [params.maxAgeMinutes=120]
  * @param {number} [params.minIntervalSeconds=60]
  * @param {object} [params.deps]
  * @returns {Promise<{ reconciledCount: number, results: Array }>}
  */
 async function reconcilePayments({
   limit = 20,
-  maxAgeMinutes = 120,
   minIntervalSeconds = 60,
   deps = {},
 } = {}) {
@@ -558,24 +716,65 @@ async function reconcilePayments({
     throw new Error('[Orchestrator] reconcilePayments: client supabase obligatoire.');
   }
 
-  const cutoff = new Date(Date.now() - maxAgeMinutes * 60 * 1000).toISOString();
+  const now = new Date();
+  const twoMinAgo = new Date(now - 2 * 60 * 1000).toISOString();
+  const twentyFourHAgo = new Date(now - 24 * 60 * 60 * 1000).toISOString();
+  const threeHAgo = new Date(now - 3 * 60 * 60 * 1000).toISOString();
 
-  const { data: rows, error } = await supabase
+  // (a) pending entre 2 min et 24 h
+  const { data: pendingRows, error: pendingErr } = await supabase
     .from('transactions')
-    .select('id, created_at, last_status_check_at')
+    .select('id, created_at')
     .eq('status', 'pending')
     .eq('metadata->>payment_provider', 'maishapay')
-    .gte('created_at', cutoff)
+    .gte('created_at', twentyFourHAgo)
+    .lte('created_at', twoMinAgo)
     .order('created_at', { ascending: true })
     .limit(limit);
 
-  if (error) {
-    deps.logger?.error?.(`[Orchestrator] reconcilePayments error fetching transactions: ${error.message}`);
-    throw error;
+  if (pendingErr) {
+    deps.logger?.error?.(`[Orchestrator] reconcilePayments error fetching pending: ${pendingErr.message}`);
   }
 
+  // (b) failed depuis moins de 3 h (paiement tardif)
+  const { data: failedRows, error: failedErr } = await supabase
+    .from('transactions')
+    .select('id, created_at')
+    .eq('status', 'failed')
+    .eq('metadata->>payment_provider', 'maishapay')
+    .gte('created_at', threeHAgo)
+    .order('created_at', { ascending: true })
+    .limit(limit);
+
+  if (failedErr) {
+    deps.logger?.error?.(`[Orchestrator] reconcilePayments error fetching failed: ${failedErr.message}`);
+  }
+
+  // (c) succeeded : effects_applied_at NULL et confirmed_at > 2 min
+  const { data: succRows, error: succErr } = await supabase
+    .from('transactions')
+    .select('id, confirmed_at')
+    .eq('status', 'succeeded')
+    .eq('metadata->>payment_provider', 'maishapay')
+    .is('effects_applied_at', null)
+    .lte('confirmed_at', twoMinAgo)
+    .order('confirmed_at', { ascending: true })
+    .limit(limit);
+
+  if (succErr) {
+    deps.logger?.error?.(`[Orchestrator] reconcilePayments error fetching succeeded: ${succErr.message}`);
+  }
+
+  // Déduplication par Map (preserve first occurrence)
+  const seen = new Map();
+  for (const r of [...(pendingRows || []), ...(failedRows || []), ...(succRows || [])]) {
+    if (!seen.has(r.id)) seen.set(r.id, r);
+  }
+
+  const toProcess = Array.from(seen.values()).slice(0, limit);
   const results = [];
-  for (const row of rows || []) {
+
+  for (const row of toProcess) {
     try {
       const res = await touchThenFinalize({
         transactionId: row.id,
@@ -585,6 +784,10 @@ async function reconcilePayments({
       results.push({ id: row.id, ...res });
     } catch (err) {
       results.push({ id: row.id, error: err.message });
+    }
+    // Pause entre appels pour éviter le rate-limiting MaishaPay
+    if (toProcess.indexOf(row) < toProcess.length - 1) {
+      await new Promise(r => setTimeout(r, 700));
     }
   }
 

@@ -32,15 +32,12 @@ function registerPaymentRoutes(app, deps = {}) {
   app.post('/api/payments/initiate', async (req, res) => {
     try {
       const authHeader = req.headers.authorization || '';
-      const accessToken = authHeader.replace(/^Bearer\s+/i, '').trim() || req.body?.access_token;
-      const fallbackUserId = req.body?.user_id;
+      const accessToken = authHeader.replace(/^Bearer\s+/i, '').trim();
 
       let userId = null;
       if (typeof deps.resolveRequestUser === 'function') {
-        const user = await deps.resolveRequestUser(accessToken, fallbackUserId);
+        const user = await deps.resolveRequestUser(accessToken, null);
         userId = user?.id || null;
-      } else {
-        userId = fallbackUserId || null;
       }
 
       if (!userId) {
@@ -89,6 +86,10 @@ function registerPaymentRoutes(app, deps = {}) {
       if (result.uncertain) {
         // 202 Accepted : demande prise en compte mais statut non finalisé
         return res.status(202).json(result);
+      }
+
+      if (result.code === 'TOO_MANY_ATTEMPTS') {
+        return res.status(429).json(result);
       }
 
       return res.status(400).json(result);
@@ -157,21 +158,24 @@ function registerPaymentRoutes(app, deps = {}) {
         return res.status(500).json({ error: 'Client base de données indisponible.' });
       }
 
-      // Tenter une vérification auprès du prestataire (avec rate-limiting de 5 secondes)
-      try {
-        await orchestrator.touchThenFinalize({
-          transactionId,
-          minIntervalSeconds: 5,
-          deps,
-        });
-      } catch (touchErr) {
-        logger.warn(`[Payment Routes] Status check warning pour ${transactionId}:`, touchErr.message);
+      // AUTH STRICTE
+      const authHeader = req.headers.authorization || '';
+      const accessToken = authHeader.replace(/^Bearer\s+/i, '').trim();
+
+      let requestingUserId = null;
+      if (typeof deps.resolveRequestUser === 'function') {
+        const user = await deps.resolveRequestUser(accessToken, null);
+        requestingUserId = user?.id || null;
       }
 
-      // Récupérer la transaction à jour
+      if (!requestingUserId) {
+        return res.status(401).json({ error: 'Non authentifié.' });
+      }
+
+      // 1. Charger la transaction d'abord
       const { data: tx, error: txError } = await supabase
         .from('transactions')
-        .select('id, type, amount_gross, currency, status, confirmed_at, effects_applied_at, metadata')
+        .select('id, type, from_user_id, to_user_id, amount_gross, currency, status, confirmed_at, effects_applied_at, metadata')
         .eq('id', transactionId)
         .maybeSingle();
 
@@ -179,18 +183,50 @@ function registerPaymentRoutes(app, deps = {}) {
         return res.status(404).json({ error: 'Transaction introuvable.' });
       }
 
+      // 2. Vérifier que l'utilisateur est le payeur
+      let payerUserId = null;
+      if (tx.type === 'subscription') {
+        payerUserId = tx.to_user_id || tx.from_user_id;
+      } else if (tx.type === 'support') {
+        payerUserId = tx.from_user_id;
+      }
+
+      if (!payerUserId || payerUserId !== requestingUserId) {
+        return res.status(403).json({ error: 'Accès refusé : vous n’êtes pas le payeur de cette transaction.' });
+      }
+
+      // 3. Tenter une vérification auprès du prestataire (minIntervalSeconds: 10)
+      try {
+        await orchestrator.touchThenFinalize({
+          transactionId,
+          minIntervalSeconds: 10,
+          deps,
+        });
+      } catch (touchErr) {
+        logger.warn(`[Payment Routes] Status check warning pour ${transactionId}:`, touchErr.message);
+      }
+
+      // 4. Recharger la transaction à jour
+      const { data: updatedTx } = await supabase
+        .from('transactions')
+        .select('id, type, amount_gross, currency, status, confirmed_at, effects_applied_at, metadata')
+        .eq('id', transactionId)
+        .maybeSingle();
+
+      const finalTx = updatedTx || tx;
+
       return res.status(200).json({
-        id: tx.id,
-        type: tx.type,
-        amount: tx.amount_gross,
-        currency: tx.currency,
-        status: tx.status,
-        confirmedAt: tx.confirmed_at,
-        effectsApplied: Boolean(tx.effects_applied_at),
-        message: tx.status === 'succeeded'
+        id: finalTx.id,
+        type: finalTx.type,
+        amount: finalTx.amount_gross,
+        currency: finalTx.currency,
+        status: finalTx.status,
+        confirmedAt: finalTx.confirmed_at,
+        effectsApplied: Boolean(finalTx.effects_applied_at),
+        message: finalTx.status === 'succeeded'
           ? 'Paiement confirmé avec succès.'
-          : tx.status === 'failed'
-            ? (tx.metadata?.failure_reason || 'Le paiement a échoué ou a été rejeté.')
+          : finalTx.status === 'failed'
+            ? (finalTx.metadata?.failure_reason || 'Le paiement a échoué ou a été rejeté.')
             : 'En attente de confirmation.',
       });
 
