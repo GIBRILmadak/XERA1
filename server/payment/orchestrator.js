@@ -140,7 +140,16 @@ async function finalizePayment({
     }
   } else if (status === 'failed') {
     if (claimed && reason) {
-      const currentMetadata = tx.metadata && typeof tx.metadata === 'object' ? tx.metadata : {};
+      const { data: latestRow } = await supabase
+        .from('transactions')
+        .select('metadata')
+        .eq('id', tx.id)
+        .maybeSingle();
+
+      const currentMetadata = (latestRow?.metadata && typeof latestRow.metadata === 'object')
+        ? latestRow.metadata
+        : (tx.metadata && typeof tx.metadata === 'object' ? tx.metadata : {});
+
       await supabase
         .from('transactions')
         .update({
@@ -400,17 +409,19 @@ async function startPayment({
   const tenMinAgo = new Date(nowMs - 10 * 60 * 1000).toISOString();
 
   // 4. Contrôles en base AVANT de créer la transaction
-  // a) Anti double-clic (90s) — retourne la transaction existante si déjà en attente
+  // a) Anti double-clic (90s) — réutilisé seulement si phone_hash ET montant/devise identiques
   if (type === 'subscription') {
     const plan = String(details.plan || '').toLowerCase();
     const { data: recentPendingSub } = await supabase
       .from('transactions')
-      .select('id, metadata, created_at, status')
+      .select('id, metadata, created_at, status, currency')
       .eq('status', 'pending')
       .eq('to_user_id', userId)
       .eq('type', 'subscription')
+      .eq('currency', requestedCurrency)
       .eq('metadata->>payment_provider', 'maishapay')
       .eq('metadata->>plan', plan)
+      .eq('metadata->>phone_hash', phoneHash)
       .gte('created_at', antiDoubleClickCutoff)
       .order('created_at', { ascending: false })
       .limit(1)
@@ -429,15 +440,18 @@ async function startPayment({
     }
   } else if (type === 'support') {
     const toUserId = details.to_user_id;
-    if (toUserId) {
+    const amountUsd = Number(details.amount_usd);
+    if (toUserId && Number.isFinite(amountUsd)) {
       const { data: recentPendingSupport } = await supabase
         .from('transactions')
-        .select('id, metadata, created_at, status')
+        .select('id, metadata, created_at, status, amount_gross')
         .eq('status', 'pending')
         .eq('from_user_id', userId)
         .eq('to_user_id', toUserId)
         .eq('type', 'support')
+        .eq('amount_gross', amountUsd)
         .eq('metadata->>payment_provider', 'maishapay')
+        .eq('metadata->>phone_hash', phoneHash)
         .gte('created_at', antiDoubleClickCutoff)
         .order('created_at', { ascending: false })
         .limit(1)
@@ -591,7 +605,7 @@ async function startPayment({
   const transactionId = pendingTx.id;
   const reference = maishapay.buildReference(transactionId);
 
-  // Stocker metadata.phone_hash et metadata.phone_last3 juste après création
+  // Stocker metadata.phone_hash et metadata.phone_last3 dans la MÊME mise à jour juste après création et AVANT initiatePayment
   await supabase
     .from('transactions')
     .update({
@@ -602,6 +616,21 @@ async function startPayment({
       },
     })
     .eq('id', transactionId);
+
+  // Relire metadata immédiatement depuis la base pour que toutes les mises à jour ultérieures partent de cette base
+  const { data: refreshedRow } = await supabase
+    .from('transactions')
+    .select('metadata')
+    .eq('id', transactionId)
+    .single();
+
+  const currentMetadata = (refreshedRow?.metadata && typeof refreshedRow.metadata === 'object')
+    ? refreshedRow.metadata
+    : {
+      ...(pendingTx.metadata || {}),
+      phone_hash: phoneHash,
+      phone_last3: normalizedPhone.slice(-3),
+    };
 
   // 6. Appel initiatePayment auprès de MaishaPay
   let initResult;
@@ -629,9 +658,7 @@ async function startPayment({
       .update({
         provider_transaction_id: initResult.providerTransactionId || null,
         metadata: {
-          ...(pendingTx.metadata || {}),
-          phone_hash: phoneHash,
-          phone_last3: normalizedPhone.slice(-3),
+          ...currentMetadata,
           provider_transaction_id: initResult.providerTransactionId || null,
           init_status: 'ok',
         },
@@ -653,9 +680,7 @@ async function startPayment({
       .from('transactions')
       .update({
         metadata: {
-          ...(pendingTx.metadata || {}),
-          phone_hash: phoneHash,
-          phone_last3: normalizedPhone.slice(-3),
+          ...currentMetadata,
           uncertain_init: true,
           uncertain_code: initResult.code,
         },

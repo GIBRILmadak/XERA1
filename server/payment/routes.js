@@ -21,7 +21,7 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
  * Enregistre les routes de paiement sur l'application Express.
  *
  * @param {import('express').Application} app
- * @param {object} deps - Dépendances requises (supabase, orchestrator, resolveRequestUser, etc.)
+ * @param {object} deps - Dépendances requises (supabase, orchestrator, etc.)
  */
 function registerPaymentRoutes(app, deps = {}) {
   const orchestrator = deps.orchestrator || orchestratorDefault;
@@ -32,21 +32,11 @@ function registerPaymentRoutes(app, deps = {}) {
   app.post('/api/payments/initiate', async (req, res) => {
     try {
       const authHeader = req.headers.authorization || '';
-      const accessToken = authHeader.replace(/^Bearer\s+/i, '').trim();
-
-      let userId = null;
-      if (typeof deps.resolveRequestUser === 'function') {
-        const user = await deps.resolveRequestUser(accessToken, null);
-        userId = user?.id || null;
-      }
-
-      if (!userId) {
-        return res.status(401).json({
-          ok: false,
-          code: 'UNAUTHORIZED',
-          message: 'Utilisateur non authentifié. Veuillez vous connecter.',
-        });
-      }
+      const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+      if (!token) return res.status(401).json({ ok: false, code: 'UNAUTHORIZED', message: 'Non authentifié.' });
+      const { data: authData, error: authError } = await deps.supabase.auth.getUser(token);
+      const userId = (!authError && authData?.user?.id) ? authData.user.id : null;
+      if (!userId) return res.status(401).json({ ok: false, code: 'UNAUTHORIZED', message: 'Jeton invalide.' });
 
       const {
         type,
@@ -158,19 +148,13 @@ function registerPaymentRoutes(app, deps = {}) {
         return res.status(500).json({ error: 'Client base de données indisponible.' });
       }
 
-      // AUTH STRICTE
+      // Auth stricte via getUser(token)
       const authHeader = req.headers.authorization || '';
-      const accessToken = authHeader.replace(/^Bearer\s+/i, '').trim();
-
-      let requestingUserId = null;
-      if (typeof deps.resolveRequestUser === 'function') {
-        const user = await deps.resolveRequestUser(accessToken, null);
-        requestingUserId = user?.id || null;
-      }
-
-      if (!requestingUserId) {
-        return res.status(401).json({ error: 'Non authentifié.' });
-      }
+      const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+      if (!token) return res.status(401).json({ error: 'Non authentifié.' });
+      const { data: authData, error: authError } = await supabase.auth.getUser(token);
+      const requestingUserId = (!authError && authData?.user?.id) ? authData.user.id : null;
+      if (!requestingUserId) return res.status(401).json({ error: 'Jeton invalide.' });
 
       // 1. Charger la transaction d'abord
       const { data: tx, error: txError } = await supabase
@@ -183,16 +167,10 @@ function registerPaymentRoutes(app, deps = {}) {
         return res.status(404).json({ error: 'Transaction introuvable.' });
       }
 
-      // 2. Vérifier que l'utilisateur est le payeur
-      let payerUserId = null;
-      if (tx.type === 'subscription') {
-        payerUserId = tx.to_user_id || tx.from_user_id;
-      } else if (tx.type === 'support') {
-        payerUserId = tx.from_user_id;
-      }
-
+      // 2. Vérifier que l'utilisateur est le payeur (support: from_user_id, subscription: to_user_id)
+      const payerUserId = tx.type === 'subscription' ? tx.to_user_id : tx.from_user_id;
       if (!payerUserId || payerUserId !== requestingUserId) {
-        return res.status(403).json({ error: 'Accès refusé : vous n’êtes pas le payeur de cette transaction.' });
+        return res.status(404).json({ error: 'Transaction introuvable.' });
       }
 
       // 3. Tenter une vérification auprès du prestataire (minIntervalSeconds: 10)

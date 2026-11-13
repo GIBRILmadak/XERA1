@@ -2,6 +2,7 @@
 
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
+const crypto = require('crypto');
 
 const {
   finalizePayment,
@@ -18,10 +19,10 @@ const { registerPaymentRoutes } = require('../routes');
  * createMockSupabase
  *
  * Gère :
+ *  - auth.getUser(token)
  *  - rpc('touch_status_check') / rpc('claim_transaction_result')
  *  - from('transactions').select().eq().maybeSingle() / single()
  *  - from('transactions').select(..., { count:'exact', head:true }).eq(...).gte(...)
- *    → renvoie { count: 0 } par défaut (surchargeable via mock._countOverride)
  */
 function createMockSupabase(initialState = {}) {
   const transactions = new Map(Object.entries(initialState.transactions || {}));
@@ -35,6 +36,8 @@ function createMockSupabase(initialState = {}) {
       if (col === 'id' && tx.id !== val) return false;
       if (col === 'status' && tx.status !== val) return false;
       if (col === 'type' && tx.type !== val) return false;
+      if (col === 'currency' && tx.currency !== val) return false;
+      if (col === 'amount_gross' && Number(tx.amount_gross) !== Number(val)) return false;
       if (col === 'from_user_id' && tx.from_user_id !== val) return false;
       if (col === 'to_user_id' && tx.to_user_id !== val) return false;
       if (col === 'metadata->>payment_provider' && tx.metadata?.payment_provider !== val) return false;
@@ -88,6 +91,22 @@ function createMockSupabase(initialState = {}) {
   const mock = {
     _state: { transactions, rpcCalls, updateCalls },
     _countOverride: null,
+    auth: {
+      getUser: async (token) => {
+        if (!token || token === 'BAD_TOKEN') {
+          return { data: { user: null }, error: new Error('Invalid token') };
+        }
+        return {
+          data: {
+            user: {
+              id: initialState.mockUserId || 'user-auth-1',
+              email: 'auth@test.com',
+            },
+          },
+          error: null,
+        };
+      },
+    },
     rpc: async (fnName, params) => {
       rpcCalls.push({ fnName, params });
       if (fnName === 'touch_status_check') {
@@ -124,7 +143,12 @@ function createMockSupabase(initialState = {}) {
             eq: (_col, val) => {
               updateCalls.push({ id: val, fields });
               const tx = transactions.get(val);
-              if (tx) Object.assign(tx, fields);
+              if (tx) {
+                if (fields.metadata) {
+                  tx.metadata = { ...(tx.metadata || {}), ...fields.metadata };
+                }
+                Object.assign(tx, fields);
+              }
               return {
                 is: () => Promise.resolve({ error: null }),
                 then: (resolve) => resolve({ error: null }),
@@ -198,7 +222,6 @@ describe('finalizePayment', () => {
     assert.equal(activated, true);
   });
 
-  // Test A1 : subscription avec from_user_id=null mais to_user_id valide
   it('[A1] subscription from_user_id=null, to_user_id valide → utilise to_user_id', async () => {
     let capturedSubscriberId;
     const txId = '00000000-0000-0000-0000-000000000001b';
@@ -234,7 +257,6 @@ describe('finalizePayment', () => {
     assert.equal(capturedSubscriberId, 'user-to-1', 'Doit utiliser to_user_id, pas from_user_id');
   });
 
-  // Test A2 : deux appels simultanés → effets appliqués une seule fois
   it('[A2] deux appels simultanés → effets appliqués une seule fois (canApply guard)', async () => {
     let activatedCount = 0;
     const txId = '00000000-0000-0000-0000-000000000001c';
@@ -254,7 +276,6 @@ describe('finalizePayment', () => {
       },
     });
 
-    // Premier claim réussit, second échoue (claimed=false)
     let claimCallCount = 0;
     supabase.rpc = async (fnName, params) => {
       supabase._state.rpcCalls.push({ fnName, params });
@@ -352,6 +373,33 @@ describe('finalizePayment', () => {
     assert.equal(res.claimed, true);
     assert.equal(res.effectsApplied, true);
     assert.equal(confirmed, true);
+  });
+
+  it('[P3-F] phone_hash conservé dans metadata en cas d\'échec (finalizePayment status=failed)', async () => {
+    const txId = '00000000-0000-0000-0000-000000000004';
+    const testHash = 'abcdef0123456789';
+    const supabase = createMockSupabase({
+      transactions: {
+        [txId]: {
+          id: txId,
+          type: 'subscription',
+          status: 'pending',
+          metadata: { payment_provider: 'maishapay', phone_hash: testHash, phone_last3: '789' },
+        },
+      },
+    });
+
+    await finalizePayment({
+      transactionId: txId,
+      status: 'failed',
+      reason: 'Paiement rejeté',
+      deps: { supabase },
+    });
+
+    const tx = supabase._state.transactions.get(txId);
+    assert.equal(tx.status, 'failed');
+    assert.equal(tx.metadata.phone_hash, testHash, 'phone_hash doit être préservé après finalizePayment failed');
+    assert.equal(tx.metadata.failure_reason, 'Paiement rejeté');
   });
 });
 
@@ -460,7 +508,6 @@ describe('touchThenFinalize', () => {
     assert.equal(checkCalled, false);
   });
 
-  // Test A3 : transaction non-maishapay → not_maishapay
   it('[A3] transaction non-maishapay → { skipped: true, reason: not_maishapay }', async () => {
     const txId = '00000000-0000-0000-0000-000000000013';
     let checkCalled = false;
@@ -500,6 +547,7 @@ describe('startPayment', () => {
   function makeMinimalDeps(supabase, overrides = {}) {
     return {
       supabase,
+      webhookToken: 'test-webhook-token',
       maishapay: {
         normalizePhone: (p) => p,
         mapProvider: () => 'AIRTEL',
@@ -507,12 +555,24 @@ describe('startPayment', () => {
         initiatePayment: async () => ({ ok: true, providerTransactionId: 'MP-XYZ' }),
       },
       computeSubscriptionAmount: () => 8500,
+      computeSupportCheckoutAmount: () => 28000,
       createPendingSubscriptionPayment: async () => ({
         id: '00000000-0000-0000-0000-000000000099',
         metadata: { payment_provider: 'maishapay' },
         type: 'subscription',
         to_user_id: 'user-1',
         from_user_id: 'user-1',
+        currency: 'CDF',
+        status: 'pending',
+      }),
+      createPendingSupportPayment: async ({ fromUserId, toUserId, amountUsd }) => ({
+        id: '00000000-0000-0000-0000-000000000098',
+        metadata: { payment_provider: 'maishapay' },
+        type: 'support',
+        from_user_id: fromUserId,
+        to_user_id: toUserId,
+        amount_gross: amountUsd,
+        currency: 'USD',
         status: 'pending',
       }),
       ...overrides,
@@ -557,7 +617,6 @@ describe('startPayment', () => {
     assert.equal(res.code, 'UNSUPPORTED_PROVIDER');
   });
 
-  // Test B1 : devise invalide → INVALID_CURRENCY
   it('[B1] devise invalide (EUR) → INVALID_CURRENCY', async () => {
     const supabase = createMockSupabase();
     const res = await startPayment({
@@ -577,9 +636,12 @@ describe('startPayment', () => {
     assert.equal(res.code, 'INVALID_CURRENCY');
   });
 
-  // Test B2 : anti-doublon pending <90s → renvoie transaction existante
-  it('[B2] anti-doublon pending <90s → transaction dédupliquée, pas d\'appel initiatePayment', async () => {
+  it('[B2] anti-doublon pending <90s → transaction dédupliquée si phone_hash et montant/plan identiques', async () => {
     const existingId = '00000000-0000-0000-0000-000000000050';
+    const phone = '+243812345678';
+    const webhookToken = 'test-webhook-token';
+    const phoneHash = crypto.createHmac('sha256', webhookToken).update(phone).digest('hex');
+
     const supabase = createMockSupabase({
       transactions: {
         [existingId]: {
@@ -588,10 +650,12 @@ describe('startPayment', () => {
           status: 'pending',
           to_user_id: 'user-1',
           from_user_id: 'user-1',
+          currency: 'CDF',
           created_at: new Date(Date.now() - 30000).toISOString(),
           metadata: {
             payment_provider: 'maishapay',
             plan: 'standard',
+            phone_hash: phoneHash,
             provider_transaction_id: 'MP-EXISTING',
           },
         },
@@ -602,8 +666,9 @@ describe('startPayment', () => {
     const res = await startPayment({
       userId: 'user-1',
       type: 'subscription',
-      details: { phone: '+243812345678', provider: 'airtel_money', plan: 'standard' },
+      details: { phone, provider: 'airtel_money', plan: 'standard', currency: 'CDF' },
       deps: makeMinimalDeps(supabase, {
+        webhookToken,
         maishapay: {
           normalizePhone: (p) => p,
           mapProvider: () => 'AIRTEL',
@@ -619,7 +684,137 @@ describe('startPayment', () => {
     assert.equal(initiateCalled, false, 'initiatePayment ne doit pas être appelé');
   });
 
-  // Test B3 : > 5 tentatives user/10min → TOO_MANY_ATTEMPTS
+  it('[P5-1] correction de numéro dans les 90 s => nouvelle transaction', async () => {
+    const existingId = '00000000-0000-0000-0000-000000000051';
+    const oldPhone = '+243812345678';
+    const newPhone = '+243999999999';
+    const webhookToken = 'test-webhook-token';
+    const oldPhoneHash = crypto.createHmac('sha256', webhookToken).update(oldPhone).digest('hex');
+
+    const supabase = createMockSupabase({
+      transactions: {
+        [existingId]: {
+          id: existingId,
+          type: 'subscription',
+          status: 'pending',
+          to_user_id: 'user-1',
+          currency: 'CDF',
+          created_at: new Date(Date.now() - 30000).toISOString(),
+          metadata: {
+            payment_provider: 'maishapay',
+            plan: 'standard',
+            phone_hash: oldPhoneHash,
+          },
+        },
+      },
+    });
+
+    let initiateCalled = false;
+    const res = await startPayment({
+      userId: 'user-1',
+      type: 'subscription',
+      details: { phone: newPhone, provider: 'airtel_money', plan: 'standard', currency: 'CDF' },
+      deps: makeMinimalDeps(supabase, {
+        webhookToken,
+        maishapay: {
+          normalizePhone: (p) => p,
+          mapProvider: () => 'AIRTEL',
+          buildReference: (id) => `xera_${id}`,
+          initiatePayment: async () => { initiateCalled = true; return { ok: true, providerTransactionId: 'MP-NEW' }; },
+        },
+      }),
+    });
+
+    assert.equal(res.ok, true);
+    assert.notEqual(res.transactionId, existingId, 'Doit créer une nouvelle transaction car le numéro a changé');
+    assert.equal(initiateCalled, true);
+  });
+
+  it('[P5-2] montant différent (support) dans les 90 s => nouvelle transaction', async () => {
+    const existingId = '00000000-0000-0000-0000-000000000052';
+    const phone = '+243812345678';
+    const webhookToken = 'test-webhook-token';
+    const phoneHash = crypto.createHmac('sha256', webhookToken).update(phone).digest('hex');
+
+    const supabase = createMockSupabase({
+      transactions: {
+        [existingId]: {
+          id: existingId,
+          type: 'support',
+          status: 'pending',
+          from_user_id: 'user-1',
+          to_user_id: 'creator-99',
+          amount_gross: 10,
+          created_at: new Date(Date.now() - 30000).toISOString(),
+          metadata: {
+            payment_provider: 'maishapay',
+            phone_hash: phoneHash,
+          },
+        },
+      },
+    });
+
+    let initiateCalled = false;
+    const res = await startPayment({
+      userId: 'user-1',
+      type: 'support',
+      details: {
+        phone,
+        provider: 'airtel_money',
+        to_user_id: 'creator-99',
+        amount_usd: 25, // montant différent de 10
+      },
+      deps: makeMinimalDeps(supabase, {
+        webhookToken,
+        maishapay: {
+          normalizePhone: (p) => p,
+          mapProvider: () => 'AIRTEL',
+          buildReference: (id) => `xera_${id}`,
+          initiatePayment: async () => { initiateCalled = true; return { ok: true, providerTransactionId: 'MP-SUPPORT' }; },
+        },
+      }),
+    });
+
+    assert.equal(res.ok, true);
+    assert.notEqual(res.transactionId, existingId, 'Doit créer une nouvelle transaction car le montant est différent');
+    assert.equal(initiateCalled, true);
+  });
+
+  it('[P5-3] devise/plan différent (subscription) dans les 90 s => nouvelle transaction', async () => {
+    const existingId = '00000000-0000-0000-0000-000000000053';
+    const phone = '+243812345678';
+    const webhookToken = 'test-webhook-token';
+    const phoneHash = crypto.createHmac('sha256', webhookToken).update(phone).digest('hex');
+
+    const supabase = createMockSupabase({
+      transactions: {
+        [existingId]: {
+          id: existingId,
+          type: 'subscription',
+          status: 'pending',
+          to_user_id: 'user-1',
+          currency: 'CDF',
+          created_at: new Date(Date.now() - 30000).toISOString(),
+          metadata: {
+            payment_provider: 'maishapay',
+            plan: 'standard',
+            phone_hash: phoneHash,
+          },
+        },
+      },
+    });
+
+    const res = await startPayment({
+      userId: 'user-1',
+      type: 'subscription',
+      details: { phone, provider: 'airtel_money', plan: 'standard', currency: 'USD' }, // devise différente
+      deps: makeMinimalDeps(supabase, { webhookToken }),
+    });
+
+    assert.equal(res.ok, true);
+    assert.notEqual(res.transactionId, existingId, 'Doit créer une nouvelle transaction car la devise est différente');
+  });
+
   it('[B3] >= 5 tentatives user/10min → TOO_MANY_ATTEMPTS', async () => {
     const supabase = createMockSupabase();
     supabase._countOverride = (idx) => idx === 0 ? 5 : 0;
@@ -636,7 +831,6 @@ describe('startPayment', () => {
     assert.equal(res.uncertain, false);
   });
 
-  // Test B4 : > 3 tentatives par numéro/10min → TOO_MANY_ATTEMPTS
   it('[B4] >= 3 tentatives par numéro/10min → TOO_MANY_ATTEMPTS', async () => {
     const supabase = createMockSupabase();
     supabase._countOverride = (idx) => idx === 2 ? 3 : 0;
@@ -696,8 +890,12 @@ describe('startPayment', () => {
     assert.equal(claimCalls.length, 0);
   });
 
-  it('succès : phone_last3 stocké, numéro complet absent', async () => {
+  it('[P5-4] phone_hash et phone_last3 conservés dans metadata après succès d\'initiation', async () => {
     const txId = '00000000-0000-0000-0000-000000000021';
+    const webhookToken = 'test-token';
+    const phone = '+243812345678';
+    const expectedHash = crypto.createHmac('sha256', webhookToken).update(phone).digest('hex');
+
     const supabase = createMockSupabase({
       transactions: {
         [txId]: {
@@ -714,8 +912,9 @@ describe('startPayment', () => {
     const res = await startPayment({
       userId: 'user-1',
       type: 'subscription',
-      details: { phone: '+243812345678', provider: 'airtel_money', plan: 'standard' },
+      details: { phone, provider: 'airtel_money', plan: 'standard' },
       deps: makeMinimalDeps(supabase, {
+        webhookToken,
         createPendingSubscriptionPayment: async () => ({
           id: txId,
           metadata: { payment_provider: 'maishapay' },
@@ -729,12 +928,66 @@ describe('startPayment', () => {
 
     assert.equal(res.ok, true);
     assert.equal(res.transactionId, txId);
-    assert.equal(res.providerTransactionId, 'MP-XYZ');
 
-    const update = supabase._state.updateCalls.find(u => u.id === txId);
-    assert.ok(update, 'Un update doit avoir été émis');
-    assert.equal(update.fields.metadata.phone_last3, '678');
-    assert.equal(update.fields.metadata.phone, undefined);
+    // Vérifier l'état final en base
+    const storedTx = supabase._state.transactions.get(txId);
+    assert.ok(storedTx.metadata.phone_hash, 'phone_hash doit être présent');
+    assert.equal(storedTx.metadata.phone_hash, expectedHash);
+    assert.equal(storedTx.metadata.phone_last3, '678');
+    assert.equal(storedTx.metadata.init_status, 'ok');
+    assert.equal(storedTx.metadata.phone, undefined, 'Numéro complet ne doit jamais être présent');
+  });
+
+  it('[P5-5] phone_hash et phone_last3 conservés dans metadata après initiation uncertain', async () => {
+    const txId = '00000000-0000-0000-0000-000000000022';
+    const webhookToken = 'test-token';
+    const phone = '+243812345678';
+    const expectedHash = crypto.createHmac('sha256', webhookToken).update(phone).digest('hex');
+
+    const supabase = createMockSupabase({
+      transactions: {
+        [txId]: {
+          id: txId,
+          type: 'subscription',
+          to_user_id: 'user-1',
+          from_user_id: 'user-1',
+          status: 'pending',
+          metadata: { payment_provider: 'maishapay' },
+        },
+      },
+    });
+
+    const res = await startPayment({
+      userId: 'user-1',
+      type: 'subscription',
+      details: { phone, provider: 'airtel_money', plan: 'standard' },
+      deps: makeMinimalDeps(supabase, {
+        webhookToken,
+        maishapay: {
+          normalizePhone: (p) => p,
+          mapProvider: () => 'AIRTEL',
+          buildReference: (id) => `xera_${id}`,
+          initiatePayment: async () => ({ ok: false, uncertain: true, code: 'TIMEOUT', message: 'Délai dépassé' }),
+        },
+        createPendingSubscriptionPayment: async () => ({
+          id: txId,
+          metadata: { payment_provider: 'maishapay' },
+          type: 'subscription',
+          to_user_id: 'user-1',
+          from_user_id: 'user-1',
+          status: 'pending',
+        }),
+      }),
+    });
+
+    assert.equal(res.ok, false);
+    assert.equal(res.uncertain, true);
+
+    const storedTx = supabase._state.transactions.get(txId);
+    assert.ok(storedTx.metadata.phone_hash, 'phone_hash doit être conservé');
+    assert.equal(storedTx.metadata.phone_hash, expectedHash);
+    assert.equal(storedTx.metadata.phone_last3, '678');
+    assert.equal(storedTx.metadata.uncertain_init, true);
   });
 });
 
@@ -817,14 +1070,133 @@ describe('registerPaymentRoutes', () => {
     };
   }
 
-  it('POST /api/payments/initiate rejette un appel non authentifié (401)', async () => {
+  it('[P5-6] POST /api/payments/initiate : jeton absent => 401', async () => {
     const app = createMockApp();
-    registerPaymentRoutes(app, {
-      resolveRequestUser: async () => null,
-    });
+    const supabase = createMockSupabase();
+    registerPaymentRoutes(app, { supabase });
 
     const res = await app._dispatch('POST', '/api/payments/initiate', { headers: {}, body: {} });
     assert.equal(res.status, 401);
+  });
+
+  it('[P5-7] POST /api/payments/initiate : jeton invalide => 401', async () => {
+    const app = createMockApp();
+    const supabase = createMockSupabase();
+    registerPaymentRoutes(app, { supabase });
+
+    const res = await app._dispatch('POST', '/api/payments/initiate', {
+      headers: { authorization: 'Bearer BAD_TOKEN' },
+      body: {},
+    });
+    assert.equal(res.status, 401);
+  });
+
+  it('[P5-8] POST /api/payments/initiate : user_id du corps ignoré, identifiant pris du jeton', async () => {
+    const app = createMockApp();
+    const supabase = createMockSupabase({ mockUserId: 'legit-user-42' });
+    let passedUserId = null;
+
+    registerPaymentRoutes(app, {
+      supabase,
+      orchestrator: {
+        startPayment: async ({ userId }) => {
+          passedUserId = userId;
+          return { ok: true, transactionId: 'tx-1' };
+        },
+      },
+    });
+
+    const res = await app._dispatch('POST', '/api/payments/initiate', {
+      headers: { authorization: 'Bearer VALID_TOKEN' },
+      body: { user_id: 'attacker-injected-id', type: 'subscription' },
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(passedUserId, 'legit-user-42', 'userId doit provenir du jeton décodé, jamais du body');
+    assert.notEqual(passedUserId, 'attacker-injected-id');
+  });
+
+  it('[P5-9] GET /api/payments/status/:id : jeton absent => 401', async () => {
+    const app = createMockApp();
+    const supabase = createMockSupabase();
+    registerPaymentRoutes(app, { supabase });
+
+    const res = await app._dispatch('GET', '/api/payments/status/00000000-0000-0000-0000-000000000001', {
+      headers: {},
+    });
+    assert.equal(res.status, 401);
+  });
+
+  it('[P5-10] GET /api/payments/status/:id : non-payeur => 404', async () => {
+    const app = createMockApp();
+    const txId = '00000000-0000-0000-0000-000000000088';
+    const supabase = createMockSupabase({
+      mockUserId: 'other-user',
+      transactions: {
+        [txId]: {
+          id: txId,
+          type: 'subscription',
+          to_user_id: 'real-payer', // payeur différent de 'other-user'
+          status: 'pending',
+        },
+      },
+    });
+
+    let touchCalled = false;
+    registerPaymentRoutes(app, {
+      supabase,
+      orchestrator: {
+        touchThenFinalize: async () => { touchCalled = true; },
+      },
+    });
+
+    const res = await app._dispatch('GET', `/api/payments/status/${txId}`, {
+      headers: { authorization: 'Bearer VALID_TOKEN' },
+    });
+
+    assert.equal(res.status, 404, 'Doit renvoyer 404 si l\'utilisateur n\'est pas le payeur');
+    assert.equal(touchCalled, false, 'Ne doit pas appeler touchThenFinalize si non-payeur');
+  });
+
+  it('[P5-11] GET /api/payments/status/:id : payeur authentifié => 200 et touchThenFinalize appelé', async () => {
+    const app = createMockApp();
+    const txId = '00000000-0000-0000-0000-000000000089';
+    const supabase = createMockSupabase({
+      mockUserId: 'real-payer',
+      transactions: {
+        [txId]: {
+          id: txId,
+          type: 'subscription',
+          to_user_id: 'real-payer',
+          amount_gross: 2.99,
+          currency: 'USD',
+          status: 'succeeded',
+          confirmed_at: '2026-11-13T10:00:00Z',
+          effects_applied_at: '2026-11-13T10:01:00Z',
+        },
+      },
+    });
+
+    let touchCalled = false;
+    registerPaymentRoutes(app, {
+      supabase,
+      orchestrator: {
+        touchThenFinalize: async ({ transactionId, minIntervalSeconds }) => {
+          assert.equal(transactionId, txId);
+          assert.equal(minIntervalSeconds, 10);
+          touchCalled = true;
+        },
+      },
+    });
+
+    const res = await app._dispatch('GET', `/api/payments/status/${txId}`, {
+      headers: { authorization: 'Bearer VALID_TOKEN' },
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(touchCalled, true);
+    assert.equal(res.body.status, 'succeeded');
+    assert.equal(res.body.effectsApplied, true);
   });
 
   it('POST /api/maishapay/webhook rejette un jeton invalide (401)', async () => {
