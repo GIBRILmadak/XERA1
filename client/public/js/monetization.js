@@ -110,7 +110,7 @@ const PLANS = {
     },
 };
 
-// Règles de paiement (KPay uniquement)
+// Règles de paiement (Mobile Money)
 const PAYMENT_RULES = {
     commissionRate: 0.2,
     minTipAmount: 1.0,
@@ -1101,7 +1101,7 @@ async function getCreatorVideoPayouts(creatorId, options = {}) {
 }
 
 /* ========================================
-   PAIEMENTS (KPay UNIQUEMENT)
+   PAIEMENTS (Mobile Money)
    ======================================== */
 
 function resolveMonetizationApiBase() {
@@ -1142,67 +1142,18 @@ async function getMonetizationAccessToken() {
     return session.access_token;
 }
 
-// Créer une session de paiement pour un soutien
+// Créer une session de paiement pour un soutien (délègue au flux Mobile Money)
 async function createSupportPaymentSession(
     fromUserId,
     toUserId,
     amount,
     description = "",
 ) {
-    try {
-        if (!fromUserId || !toUserId) {
-            return {
-                success: false,
-                error: "Utilisateur source ou destination manquant.",
-            };
-        }
-
-        const apiBase = resolveMonetizationApiBase();
-        if (!apiBase) {
-            return { success: false, error: "Adresse API introuvable." };
-        }
-
-        const accessToken = await getMonetizationAccessToken();
-        const response = await fetch(`${apiBase}/api/monetization/support`, {
-            method: "POST",
-            headers: {
-                Authorization: `Bearer ${accessToken}`,
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                to_user_id: toUserId,
-                amount,
-                description,
-            }),
-        });
-
-        let payload = {};
-        try {
-            payload = await response.json();
-        } catch (error) {
-            payload = {};
-        }
-
-        if (!response.ok) {
-            return {
-                success: false,
-                error: payload?.error || "Impossible d'envoyer le soutien.",
-            };
-        }
-
-        return {
-            success: true,
-            data: payload,
-        };
-    } catch (error) {
-        console.error("Erreur createSupportPaymentSession:", error);
-        return {
-            success: false,
-            error:
-                error?.message ||
-                "Impossible de contacter le serveur de soutien.",
-        };
-    }
+    return redirectToSupportCheckout({
+        creatorId: toUserId,
+        amount,
+        description,
+    });
 }
 
 const PAYMENT_RETURN_VIEW_PARAM = "payment_return_view";

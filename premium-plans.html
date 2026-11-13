@@ -252,7 +252,7 @@
                             Comment fonctionne l'abonnement ?
                         </h4>
                         <p style="color: var(--text-secondary)">
-                            Une fois votre paiement validé via KPay, l'onglet
+                            Une fois votre paiement validé via Mobile Money, l'onglet
                             "Explorer" de votre Page Pro se déverrouillera
                             instantanément pour toute la durée de votre
                             abonnement.
@@ -280,6 +280,7 @@
 
         <script src="js/router.js"></script>
         <script src="js/supabase-config.js"></script>
+        <script src="js/mobile-money-modal.js"></script>
         <script>
             let eliteCheckoutInProgress = false;
 
@@ -307,33 +308,33 @@
                     return;
                 }
 
-                const apiBase =
-                    typeof window.resolveApiBase === "function"
-                        ? window.resolveApiBase()
-                        : window.location.origin;
-                const form = document.createElement("form");
-                form.method = "POST";
-                form.action = `${apiBase}/api/kpay/checkout`;
-                form.style.display = "none";
+                if (!window.XeraMobileMoney?.openCheckout) {
+                    await new Promise((resolve) => {
+                        const s = document.createElement("script");
+                        s.src = "js/mobile-money-modal.js";
+                        s.onload = () => resolve();
+                        s.onerror = () => resolve();
+                        document.head.appendChild(s);
+                    });
+                }
 
-                const fields = {
-                    plan: "elite",
-                    billing_cycle: cycle === "annual" ? "annual" : "monthly",
-                    currency: "CDF",
-                    method: "card",
-                    user_id: user.id,
-                    access_token: session.access_token,
-                    return_path: "creator-dashboard.html",
-                };
-                Object.entries(fields).forEach(([name, value]) => {
-                    const input = document.createElement("input");
-                    input.type = "hidden";
-                    input.name = name;
-                    input.value = value;
-                    form.appendChild(input);
-                });
-                document.body.appendChild(form);
-                form.submit();
+                if (window.XeraMobileMoney?.openCheckout) {
+                    window.XeraMobileMoney.openCheckout({
+                        type: "subscription",
+                        title: "Abonnement Elite (" + (cycle === "annual" ? "Annuel" : "Mensuel") + ")",
+                        amount: cycle === "annual" ? 99 : 9.99,
+                        currency: "USD",
+                        accessToken: session.access_token,
+                        payload: {
+                            plan: "elite",
+                            billing_cycle: cycle === "annual" ? "annual" : "monthly",
+                        },
+                        onSuccess: () => {
+                            window.location.href = "creator-dashboard.html";
+                        },
+                    });
+                    eliteCheckoutInProgress = false;
+                }
             }
         </script>
         <script src="js/ui-motion.js" defer></script>

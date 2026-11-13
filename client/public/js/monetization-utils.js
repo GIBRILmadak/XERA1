@@ -307,7 +307,7 @@ function generateMonetizationProgress(user) {
                 : Math.min((user.followers_count || 0) / 1000 * 100, 100)
         },
         {
-            name: 'Compte KPay',
+            name: 'Compte Mobile Money',
             met: user.is_monetized === true || (user.plan_status === 'active' && activeByDate),
             icon: 'fa-credit-card',
             description: 'Compte de paiement vérifié'

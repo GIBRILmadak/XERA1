@@ -6200,9 +6200,9 @@ function getSuperAdminPanelHtml() {
             <div class="verification-admin-block" style="margin-top: 1.5rem;">
                 <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem; flex-wrap:wrap;">
                     <div>
-                        <h4 style="margin:0;">Paiements abonnements KPay</h4>
+                        <h4 style="margin:0;">Paiements abonnements Mobile Money</h4>
                         <p style="color: var(--text-secondary); font-size: 0.9rem; margin:0.35rem 0 0;">
-                            Confirme ici un paiement recu sur KPay pour activer exactement le palier achete.
+                            Confirme ici un paiement recu sur Mobile Money pour activer exactement le palier achete.
                         </p>
                     </div>
                     <button class="btn-verify" type="button" onclick="fetchAdminSubscriptionPayments()">
@@ -6618,7 +6618,7 @@ function renderAdminSubscriptionPaymentsList(items) {
                     </div>
 
                     <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:0.6rem;">
-                        <input type="text" id="admin-sub-payment-ref-${safeId}" class="form-input" placeholder="Référence KPay (recommandée)" value="${transactionRef}">
+                        <input type="text" id="admin-sub-payment-ref-${safeId}" class="form-input" placeholder="Référence paiement (recommandée)" value="${transactionRef}">
                         <input type="text" id="admin-sub-payment-operator-${safeId}" class="form-input" placeholder="Référence opérateur (optionnelle)">
                         <input type="text" id="admin-sub-payment-note-${safeId}" class="form-input" placeholder="Note admin (optionnelle)">
                     </div>
