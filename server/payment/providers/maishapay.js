@@ -52,8 +52,22 @@ const PHONE_REGEX = /^\+\d{8,15}$/;
  * @param {...string} requiredKeys - Noms des vars d'env requises par l'appelant
  * @returns {object} cfg
  */
+function normalizeBaseUrl(raw) {
+  let url = (raw || DEFAULT_BASE_URL).trim().replace(/\/+$/, '');
+  if (!url.endsWith('/api')) {
+    url += '/api';
+  }
+  return url;
+}
+
 function getConfig(...requiredKeys) {
   for (const key of requiredKeys) {
+    if (key === 'MAISHAPAY_GATEWAY_MODE' && !process.env.MAISHAPAY_GATEWAY_MODE && process.env.MAISHAPAY_MODE) {
+      continue;
+    }
+    if (key === 'MAISHAPAY_WEBHOOK_TOKEN' && !process.env.MAISHAPAY_WEBHOOK_TOKEN && process.env.MAISHAPAY_WEBHOOK_SECRET) {
+      continue;
+    }
     if (!process.env[key]) {
       throw new Error(
         `[MaishaPay] Variable d'environnement obligatoire manquante : ${key}. ` +
@@ -62,13 +76,17 @@ function getConfig(...requiredKeys) {
     }
   }
 
+  const rawMode = process.env.MAISHAPAY_GATEWAY_MODE ?? process.env.MAISHAPAY_MODE;
+  const gatewayMode = rawMode === 'live' ? '1' : rawMode === 'sandbox' ? '0' : String(rawMode || '').trim();
+  const webhookToken = process.env.MAISHAPAY_WEBHOOK_TOKEN || process.env.MAISHAPAY_WEBHOOK_SECRET;
+
   const cfg = {
     publicKey:    process.env.MAISHAPAY_PUBLIC_KEY,
     secretKey:    process.env.MAISHAPAY_SECRET_KEY,
-    gatewayMode:  process.env.MAISHAPAY_GATEWAY_MODE,
-    webhookToken: process.env.MAISHAPAY_WEBHOOK_TOKEN,
-    baseUrl:      process.env.MAISHAPAY_BASE_URL || DEFAULT_BASE_URL,
-    appBaseUrl:   process.env.APP_BASE_URL,
+    gatewayMode,
+    webhookToken,
+    baseUrl:      normalizeBaseUrl(process.env.MAISHAPAY_BASE_URL),
+    appBaseUrl:   (process.env.APP_BASE_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://xera1.xyz')).replace(/\/+$/, ''),
   };
 
   if (requiredKeys.includes('MAISHAPAY_GATEWAY_MODE')) {
@@ -375,10 +393,14 @@ async function initiatePayment({ reference, amount, currency, phone, provider })
 
     // ── Rejet explicite 4xx — déterministe, uncertain:false ─────────────────
     if (res.status >= 400 && res.status < 500) {
+      let rawMsg = data?.transactionStatus || data?.message;
+      if (!rawMsg && data?.errors && typeof data.errors === 'object') {
+        rawMsg = Object.entries(data.errors).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(',') : v}`).join('; ');
+      }
       return {
         ok: false, uncertain: false,
         code:    `HTTP_${res.status}`,
-        message: `[MaishaPay] Rejet API : «${truncate(data?.transactionStatus ?? data?.message ?? 'inconnu')}» ` +
+        message: `[MaishaPay] Rejet API : «${truncate(rawMsg || 'inconnu')}» ` +
                  `(HTTP ${res.status}) — ref=${reference}.`,
       };
     }
