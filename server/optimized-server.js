@@ -182,8 +182,8 @@ function requireValidSession(req, res, next) {
     next();
 }
 
-// Servir les fichiers statiques (React build)
-app.use(express.static(path.join(__dirname, '..', 'client', 'dist'), {
+// Servir les fichiers statiques (root)
+app.use(express.static(path.join(__dirname, '..'), {
     maxAge: CACHE_DURATION * 1000,
     etag: true,
     lastModified: true,
@@ -1034,8 +1034,8 @@ app.use((req, res) => {
         });
     }
     
-    // Pour les routes HTML, servir index.html (SPA) depuis le build React
-    res.sendFile(path.join(__dirname, '..', 'client', 'dist', 'index.html'));
+    // Pour les routes HTML, servir index.html depuis la racine
+    res.sendFile(path.join(__dirname, '..', 'index.html'));
 });
 
 // Démarrage du serveur
