@@ -233,22 +233,7 @@
     }
 
     function toHtmlUrl(target, options = {}) {
-        const base = options.base || window.location.href;
-
-        try {
-            const url = new URL(target, base);
-            if (!isSameOrigin(url)) {
-                return url.toString();
-            }
-
-            url.pathname = mapCleanPathToHtml(url.pathname);
-            const relative =
-                url.pathname + (url.search || "") + (url.hash || "");
-
-            return relative || "/index.html";
-        } catch (error) {
-            return target;
-        }
+        return toCleanUrl(target, options);
     }
 
     function buildUrl(routeName, options = {}) {

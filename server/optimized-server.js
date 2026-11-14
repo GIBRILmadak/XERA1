@@ -182,45 +182,31 @@ function requireValidSession(req, res, next) {
     next();
 }
 
-// Servir les fichiers statiques avec cache optimisé
-app.use(
-    express.static(path.join(__dirname, ".."), {
-        maxAge: CACHE_DURATION * 1000,
-        etag: true,
-        lastModified: true,
-        setHeaders: (res, filePath) => {
-            const ext = path.extname(filePath);
-
-            // Headers spécifiques par type de fichier
-            if (ext === ".html") {
-                res.setHeader(
-                    "Cache-Control",
-                    `public, max-age=${HTML_CACHE_DURATION}`,
-                );
-            } else if (ext === ".js" || ext === ".css") {
-                res.setHeader(
-                    "Cache-Control",
-                    `public, max-age=${CACHE_DURATION}, immutable`,
-                );
-            } else if (/\.(png|jpg|jpeg|gif|webp|svg|ico)$/i.test(ext)) {
-                res.setHeader(
-                    "Cache-Control",
-                    `public, max-age=${CACHE_DURATION}, immutable`,
-                );
-            } else if (ext === ".json") {
-                res.setHeader(
-                    "Cache-Control",
-                    `public, max-age=${HTML_CACHE_DURATION}`,
-                );
-            }
-
-            // Security headers
-            res.setHeader("X-Content-Type-Options", "nosniff");
-            res.setHeader("X-Frame-Options", "DENY");
-            res.setHeader("X-XSS-Protection", "1; mode=block");
-        },
-    }),
-);
+// Servir les fichiers statiques (React build)
+app.use(express.static(path.join(__dirname, '..', 'client', 'dist'), {
+    maxAge: CACHE_DURATION * 1000,
+    etag: true,
+    lastModified: true,
+    setHeaders: (res, filePath) => {
+        const ext = path.extname(filePath);
+        
+        // Headers spécifiques par type de fichier
+        if (ext === '.html') {
+            res.setHeader('Cache-Control', `public, max-age=${HTML_CACHE_DURATION}`);
+        } else if (ext === '.js' || ext === '.css') {
+            res.setHeader('Cache-Control', `public, max-age=${CACHE_DURATION}, immutable`);
+        } else if (/\.(png|jpg|jpeg|gif|webp|svg|ico)$/i.test(ext)) {
+            res.setHeader('Cache-Control', `public, max-age=${CACHE_DURATION}, immutable`);
+        } else if (ext === '.json') {
+            res.setHeader('Cache-Control', `public, max-age=${HTML_CACHE_DURATION}`);
+        }
+        
+        // Security headers
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.setHeader('X-Frame-Options', 'DENY');
+        res.setHeader('X-XSS-Protection', '1; mode=block');
+    }
+}));
 
 // Compression pour les réponses
 app.use((req, res, next) => {
@@ -1047,9 +1033,9 @@ app.use((req, res) => {
             error: "Endpoint not implemented",
         });
     }
-
-    // Pour les routes HTML, servir index.html (SPA)
-    res.sendFile(path.join(__dirname, "..", "index.html"));
+    
+    // Pour les routes HTML, servir index.html (SPA) depuis le build React
+    res.sendFile(path.join(__dirname, '..', 'client', 'dist', 'index.html'));
 });
 
 // Démarrage du serveur

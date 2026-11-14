@@ -124,7 +124,9 @@ module.exports = async (req, res) => {
     }
 
     try {
-        const filePath = path.join(process.cwd(), "profile.html");
+        const distPath = path.join(process.cwd(), "client", "dist", "index.html");
+        const rootPath = path.join(process.cwd(), "profile.html");
+        const filePath = fs.existsSync(distPath) ? distPath : rootPath;
         let html = fs.readFileSync(filePath, "utf8");
 
         const injectMeta = (html, property, content, isName = false) => {
@@ -175,7 +177,9 @@ module.exports = async (req, res) => {
         res.setHeader("Cache-Control", "s-maxage=60, stale-while-revalidate");
         return res.status(200).send(html);
     } catch (error) {
-        const fallbackPath = path.join(process.cwd(), "profile.html");
+        const distPath = path.join(process.cwd(), "client", "dist", "index.html");
+        const rootPath = path.join(process.cwd(), "profile.html");
+        const fallbackPath = fs.existsSync(distPath) ? distPath : rootPath;
         return res.status(200).send(fs.readFileSync(fallbackPath, "utf8"));
     }
 };

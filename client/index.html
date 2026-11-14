@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>XERA | Tracez votre progression</title>
+    <meta name="description" content="XERA - Plateforme de suivi de progression transparente sans dopamine sociale" />
+    <meta name="theme-color" content="#050505" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+
+    <!-- Favicon & PWA -->
+    <link rel="icon" type="image/png" href="/icons/logo-192x192.png" />
+    <link rel="shortcut icon" href="/icons/logo-192x192.png" />
+    <link rel="apple-touch-icon" href="/icons/logo-192x192.png" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="preload" as="image" href="/icons/logo-192x192.png" />
+    <link rel="preload" as="image" href="/icons/logo-512x512.png" />
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="XERA | Découvrez les trajectoires" />
+    <meta property="og:description" content="XERA - Plateforme de suivi de progression transparente sans dopamine sociale" />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="XERA | Découvrez les trajectoires" />
+    <meta name="twitter:description" content="XERA - Plateforme de suivi de progression transparente" />
+
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet" />
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" crossorigin="anonymous" />
+
+    <!-- Tailwind CSS (required for XERA layout utility classes) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Language detection (runs before React hydrates) -->
+    <script>
+      (function() {
+        try {
+          const stored = localStorage.getItem('rize_lang');
+          if (stored) document.documentElement.setAttribute('lang', stored.startsWith('fr') ? 'fr' : 'en');
+        } catch(e) {}
+      })();
+    </script>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+
+    <!-- Legacy JS — loaded after React mount so DOM IDs exist -->
+    <script src="/js/router.js" defer></script>
+    <script src="/js/supabase-config.js" defer></script>
+    <script src="/js/monetization-utils.js" defer></script>
+    <script src="/js/i18n.js" defer></script>
+    <script src="/js/analytics.js" defer></script>
+    <script src="/js/ux-enhancements.js" defer></script>
+    <script src="/js/search.js" defer></script>
+    <script src="/js/notifications.js" defer></script>
+    <script src="/js/messages.js" defer></script>
+    <script src="/js/file-upload.js" defer></script>
+    <script src="/js/arcs.js" defer></script>
+    <script src="/js/professional-pages.js" defer></script>
+    <script src="/js/app-supabase.js" defer></script>
+    <script src="/js/xera-platform-bridge.js" defer></script>
+    <script src="/js/session-manager.js" defer></script>
+    <script src="/js/ui-motion.js" defer></script>
+    <script src="/js/pwa-install.js" defer></script>
+  </body>
+</html>
+

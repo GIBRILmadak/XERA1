@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://xera1.xyz/sitemap.xml

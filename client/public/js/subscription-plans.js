@@ -800,7 +800,7 @@
                                 className: "hero-card-foot",
                             },
                             e("i", { className: "fas fa-lock" }),
-                            " Paiement via KPay",
+                            " Paiement Mobile Money",
                         ),
                     ),
                 ),
@@ -1147,11 +1147,7 @@
                             e("i", {
                                 className: "fas fa-info-circle",
                             }),
-                            e(
-                                "span",
-                                null,
-                                "Vous serez redirigé vers KPay pour finaliser le paiement sécurisé.",
-                            ),
+                            " Validation sécurisée par code PIN Mobile Money (Airtel, Orange, M-Pesa).",
                         ),
                         e(
                             "button",

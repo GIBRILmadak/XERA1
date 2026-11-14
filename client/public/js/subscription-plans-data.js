@@ -227,7 +227,7 @@
         Object.freeze({
             id: "payouts",
             question: "Comment sont payés les revenus ?",
-            answer: "Les revenus sont versés via KPay. Vous devez avoir un compte KPay vérifié (KYC) pour recevoir les paiements de soutiens.",
+            answer: "Les revenus sont versés par Mobile Money (Airtel Money, Orange Money, M-Pesa). Les revenus des soutiens sont disponibles immédiatement, tandis que les revenus vidéo sont calculés et payés mensuellement.",
         }),
         Object.freeze({
             id: "followers-threshold",

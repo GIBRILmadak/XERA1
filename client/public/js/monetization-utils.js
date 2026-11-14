@@ -297,7 +297,7 @@ function generateMonetizationProgress(user) {
             description: "Plan Medium ou Pro requis",
         },
         {
-            name: "Compte KPay",
+            name: "Compte Mobile Money",
             met:
                 user.is_monetized === true ||
                 (user.plan_status === "active" && activeByDate),

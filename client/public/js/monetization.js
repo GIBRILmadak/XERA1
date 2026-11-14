@@ -102,7 +102,7 @@ const PLANS = {
     },
 };
 
-// Règles de paiement (KPay uniquement)
+// Règles de paiement (Mobile Money)
 const PAYMENT_RULES = {
     commissionRate: 0.25,
     minTipAmount: 1.0,
@@ -899,9 +899,211 @@ async function calculateCreatorRevenue(creatorId) {
         return { success: false, error: error.message };
     }
 }
+/* ========================================
+   FONCTIONS SUPABASE - VIDÉOS ET VUES
+   ======================================== */
+
+// Enregistrer une vue vidéo (appelé par le système de tracking)
+async function recordVideoView(videoId, creatorId, videoDuration) {
+    try {
+        const today = new Date().toISOString().split("T")[0];
+        const normalizedDuration = normalizeVideoDurationSeconds(videoDuration);
+        const isEligible = isEligibleVideoDuration(normalizedDuration);
+
+        // Vérifier si une entrée existe déjà pour aujourd'hui
+        const { data: existing, error: checkError } = await supabase
+            .from("video_views")
+            .select("*")
+            .eq("video_id", videoId)
+            .eq("period_date", today)
+            .single();
+
+        if (checkError && checkError.code !== "PGRST116") {
+            console.error("Erreur vérification vue:", checkError);
+        }
+
+        if (existing) {
+            const existingDuration = normalizeVideoDurationSeconds(
+                existing.video_duration,
+            );
+            const nextDuration = Math.max(existingDuration, normalizedDuration);
+
+            // Incrémenter le compteur
+            const { data, error } = await supabase
+                .from("video_views")
+                .update({
+                    view_count: existing.view_count + 1,
+                    eligible: isEligibleVideoDuration(nextDuration),
+                    video_duration: nextDuration || null,
+                    period_month: today.substring(0, 7) + "-01",
+                    updated_at: new Date().toISOString(),
+                })
+                .eq("id", existing.id)
+                .select()
+                .single();
+
+            if (error) {
+                console.error("Erreur mise à jour vue:", error);
+                return { success: false, error: error.message };
+            }
+
+            return { success: true, data: data };
+        } else {
+            // Créer une nouvelle entrée
+            const { data, error } = await supabase
+                .from("video_views")
+                .insert({
+                    video_id: videoId,
+                    creator_id: creatorId,
+                    view_count: 1,
+                    eligible: isEligible,
+                    video_duration: normalizedDuration || null,
+                    period_date: today,
+                    period_month: today.substring(0, 7) + "-01",
+                })
+                .select()
+                .single();
+
+            if (error) {
+                console.error("Erreur création vue:", error);
+                return { success: false, error: error.message };
+            }
+
+            return { success: true, data: data };
+        }
+    } catch (error) {
+        console.error("Exception enregistrement vue:", error);
+        return { success: false, error: error.message };
+    }
+}
+
+// Récupérer les statistiques vidéo d'un créateur
+async function getCreatorVideoStats(creatorId, period = "month") {
+    try {
+        // On se base sur les contenus vidéo réels de l'utilisateur (table content)
+        // car les vues ne sont pas encore enregistrées dans video_views.
+        const now = new Date();
+        let startDate = null;
+        switch (period) {
+            case "day":
+                startDate = new Date(
+                    now.getFullYear(),
+                    now.getMonth(),
+                    now.getDate(),
+                );
+                break;
+            case "week":
+                startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                break;
+            case "month":
+                startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+                break;
+            default:
+                startDate = null;
+        }
+
+        let query = supabase
+            .from("content")
+            .select("id, views, created_at, type")
+            .eq("user_id", creatorId)
+            .eq("type", "video");
+
+        if (startDate) {
+            query = query.gte("created_at", startDate.toISOString());
+        }
+
+        const { data, error } = await query;
+        if (error) {
+            if (!isTransientMonetizationNetworkError(error)) {
+                console.error("Erreur stats vidéo:", error);
+            }
+            return {
+                success: false,
+                error: normalizeMonetizationQueryError(error),
+            };
+        }
+
+        const stats = {
+            totalViews: 0,
+            totalEligibleViews: 0,
+            videoCount: 0,
+            estimatedRevenue: 0,
+        };
+
+        if (Array.isArray(data) && data.length > 0) {
+            data.forEach((row) => {
+                const views = Number(row.views || 0);
+                stats.totalViews += views;
+                stats.totalEligibleViews += views; // faute de durée, on considère toutes les vues éligibles
+            });
+            stats.videoCount = data.length;
+        }
+
+        stats.estimatedRevenue =
+            (stats.totalEligibleViews / 1000) *
+            PLANS.PRO.rpmRate *
+            (1 - PAYMENT_RULES.commissionRate);
+
+        return { success: true, data: stats };
+    } catch (error) {
+        if (!isTransientMonetizationNetworkError(error)) {
+            console.error("Exception stats vidéo:", error);
+        }
+        return {
+            success: false,
+            error: normalizeMonetizationQueryError(error),
+        };
+    }
+}
 
 /* ========================================
-   PAIEMENTS (KPay UNIQUEMENT)
+   FONCTIONS SUPABASE - PAYOUTS VIDÉO
+   ======================================== */
+
+// Récupérer les payouts vidéo d'un créateur
+async function getCreatorVideoPayouts(creatorId, options = {}) {
+    try {
+        let query = supabase
+            .from("video_payouts")
+            .select("*")
+            .eq("creator_id", creatorId);
+
+        if (options.status) {
+            query = query.eq("status", options.status);
+        }
+
+        query = query.order("period_month", { ascending: false });
+
+        if (options.limit) {
+            query = query.limit(options.limit);
+        }
+
+        const { data, error } = await query;
+
+        if (error) {
+            if (!isTransientMonetizationNetworkError(error)) {
+                console.error("Erreur récupération payouts:", error);
+            }
+            return {
+                success: false,
+                error: normalizeMonetizationQueryError(error),
+            };
+        }
+
+        return { success: true, data: data || [] };
+    } catch (error) {
+        if (!isTransientMonetizationNetworkError(error)) {
+            console.error("Exception récupération payouts:", error);
+        }
+        return {
+            success: false,
+            error: normalizeMonetizationQueryError(error),
+        };
+    }
+}
+
+/* ========================================
+   PAIEMENTS (Mobile Money)
    ======================================== */
 
 function resolveMonetizationApiBase() {
@@ -942,67 +1144,18 @@ async function getMonetizationAccessToken() {
     return session.access_token;
 }
 
-// Créer une session de paiement pour un soutien
+// Créer une session de paiement pour un soutien (délègue au flux Mobile Money)
 async function createSupportPaymentSession(
     fromUserId,
     toUserId,
     amount,
     description = "",
 ) {
-    try {
-        if (!fromUserId || !toUserId) {
-            return {
-                success: false,
-                error: "Utilisateur source ou destination manquant.",
-            };
-        }
-
-        const apiBase = resolveMonetizationApiBase();
-        if (!apiBase) {
-            return { success: false, error: "Adresse API introuvable." };
-        }
-
-        const accessToken = await getMonetizationAccessToken();
-        const response = await fetch(`${apiBase}/api/monetization/support`, {
-            method: "POST",
-            headers: {
-                Authorization: `Bearer ${accessToken}`,
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                to_user_id: toUserId,
-                amount,
-                description,
-            }),
-        });
-
-        let payload = {};
-        try {
-            payload = await response.json();
-        } catch (error) {
-            payload = {};
-        }
-
-        if (!response.ok) {
-            return {
-                success: false,
-                error: payload?.error || "Impossible d'envoyer le soutien.",
-            };
-        }
-
-        return {
-            success: true,
-            data: payload,
-        };
-    } catch (error) {
-        console.error("Erreur createSupportPaymentSession:", error);
-        return {
-            success: false,
-            error:
-                error?.message ||
-                "Impossible de contacter le serveur de soutien.",
-        };
-    }
+    return redirectToSupportCheckout({
+        creatorId: toUserId,
+        amount,
+        description,
+    });
 }
 
 const PAYMENT_RETURN_VIEW_PARAM = "payment_return_view";
@@ -1160,148 +1313,51 @@ async function redirectToSupportCheckout({
 
         if (typeof window.showToast === "function") {
             window.showToast(
-                "Initialisation du soutien sécurisé via KPay...",
+                "Initialisation du soutien sécurisé...",
                 "info",
             );
         }
 
-        const apiBase =
-            typeof window.resolveApiBase === "function"
-                ? window.resolveApiBase()
-                : window.location.origin;
-        const checkoutUrl = `${apiBase}/api/kpay/support-checkout`;
+        if (!window.XeraMobileMoney?.openCheckout) {
+            await new Promise((resolve) => {
+                const s = document.createElement("script");
+                s.src = "js/mobile-money-modal.js";
+                s.onload = () => resolve();
+                s.onerror = () => resolve();
+                document.head.appendChild(s);
+            });
+        }
 
         const normalizedMessage = String(message || "")
             .replace(/\s+/g, " ")
             .trim()
             .slice(0, 200);
-        const params = new URLSearchParams();
-        params.set("kind", "support");
-        params.set("to_user_id", safeCreatorId);
-        params.set("amount_usd", String(normalizedAmount));
-        params.set(
-            "description",
-            description || `Soutien pour ${creatorName || "ce créateur"}`,
-        );
-        if (normalizedMessage) {
-            params.set("support_message", normalizedMessage);
-            params.set("donation_message", normalizedMessage);
-            params.set("message", normalizedMessage);
-        }
-        params.set(
-            "return_path",
-            returnPath || buildSupportReturnPath(sourceElement),
-        );
-        params.set("access_token", accessToken);
-        const method = ["card", "mobile_money", "paypal"].includes(
-            String(paymentMethod).toLowerCase(),
-        )
-            ? String(paymentMethod).toLowerCase()
-            : "card";
-        params.set("method", method);
-        params.set("currency", "CDF");
 
-        if (walletId) {
-            params.set("wallet_id", walletId);
-            params.set("phone_number", walletId);
-        }
-        if (provider) {
-            params.set("provider", provider);
-        }
-
-        // Always use AJAX to avoid form submission issues
-        // This allows better error handling and user feedback
-        try {
-            const resp = await fetch(checkoutUrl, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/x-www-form-urlencoded",
-                    Accept: "application/json",
+        if (window.XeraMobileMoney?.openCheckout) {
+            window.XeraMobileMoney.openCheckout({
+                type: "support",
+                title: `Soutien à ${creatorName || "ce créateur"}`,
+                amountLabel: `$${normalizedAmount.toFixed(2)} USD`,
+                payload: {
+                    to_user_id: creatorId,
+                    amount_usd: normalizedAmount,
+                    description: description || `Soutien pour ${creatorName || "ce créateur"}`,
+                    sender_name: user.user_metadata?.name || user.email || "Utilisateur",
+                    message: normalizedMessage || undefined,
                 },
-                body: params.toString(),
-            });
-
-            const resData = await resp.json().catch(() => ({}));
-            supportCheckoutInProgress = false;
-
-            // Handle successful response with gateway URL (card/paypal)
-            if (resp.ok) {
-                if (resData.gatewayUrl) {
-                    // For card payments, open KPay gateway in a new tab
-                    // This ensures PCI compliance while keeping the user experience
-                    if (typeof window.open !== "undefined") {
-                        window.open(
-                            resData.gatewayUrl,
-                            "_blank",
-                            "noopener,noreferrer",
-                        );
-                    } else {
-                        window.location.href = resData.gatewayUrl;
-                    }
-                    return {
-                        success: true,
-                        data: resData,
-                        gatewayUrl: resData.gatewayUrl,
-                    };
-                }
-                // For USSD/Mobile Money
-                else if (resData.success || resData.status === "PENDING") {
+                accessToken,
+                onSuccess: () => {
                     if (typeof window.showToast === "function") {
-                        window.showToast(
-                            resData.message ||
-                                "Demande USSD envoyée ! Validez le code PIN sur votre téléphone.",
-                            "success",
-                        );
-                    } else if (typeof showGlobalNotification === "function") {
-                        showGlobalNotification(
-                            resData.message ||
-                                "Demande USSD envoyée ! Validez le code PIN sur votre téléphone.",
-                            "success",
-                        );
-                    } else {
-                        alert(
-                            resData.message ||
-                                "Demande USSD envoyée sur votre téléphone !",
-                        );
+                        window.showToast("Soutien envoyé avec succès !", "success");
                     }
-                    return { success: true, data: resData };
-                }
-            }
-
-            // Handle error responses
-            const errorMsg =
-                resData.error ||
-                resData.message ||
-                (resp.status === 500
-                    ? "Erreur interne du serveur. Veuillez réessayer plus tard."
-                    : `Erreur ${resp.status}: Impossible d'initialiser le paiement.`);
-
-            // Show error to user
-            if (typeof window.showToast === "function") {
-                window.showToast(errorMsg, "error");
-            } else if (typeof showGlobalNotification === "function") {
-                showGlobalNotification(errorMsg, "error");
-            }
-
-            return {
-                success: false,
-                error: errorMsg,
-                status: resp.status,
-            };
-        } catch (err) {
+                },
+            });
             supportCheckoutInProgress = false;
-            const errorMsg =
-                err.message ||
-                "Erreur réseau lors de la connexion au service de paiement.";
-
-            if (typeof window.showToast === "function") {
-                window.showToast(errorMsg, "error");
-            } else if (typeof showGlobalNotification === "function") {
-                showGlobalNotification(errorMsg, "error");
-            }
-
-            return { success: false, error: errorMsg };
+            return { success: true };
         }
+
+        supportCheckoutInProgress = false;
+        return { success: false, error: "Module de paiement Mobile Money indisponible." };
     } catch (error) {
         supportCheckoutInProgress = false;
         console.error("[Monetization] Direct support checkout error:", error);
