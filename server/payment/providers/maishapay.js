@@ -81,10 +81,10 @@ function getConfig(...requiredKeys) {
   const webhookToken = process.env.MAISHAPAY_WEBHOOK_TOKEN || process.env.MAISHAPAY_WEBHOOK_SECRET;
 
   const cfg = {
-    publicKey:    process.env.MAISHAPAY_PUBLIC_KEY,
-    secretKey:    process.env.MAISHAPAY_SECRET_KEY,
+    publicKey:    (process.env.MAISHAPAY_PUBLIC_KEY || '').trim(),
+    secretKey:    (process.env.MAISHAPAY_SECRET_KEY || '').trim(),
     gatewayMode,
-    webhookToken,
+    webhookToken: (webhookToken || '').trim(),
     baseUrl:      normalizeBaseUrl(process.env.MAISHAPAY_BASE_URL),
     appBaseUrl:   (process.env.APP_BASE_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://xera1.xyz')).replace(/\/+$/, ''),
   };
