@@ -286,50 +286,60 @@ function createSupportModal() {
     });
 }
 
-// Ouvrir la modale de soutien globale
-function openSupportModal(creatorId, creatorName, sourceElement = null) {
-    createSupportModal();
-
+// Ouvrir la modale de soutien globale (Modale unifiée Mobile Money tout-en-un)
+async function openSupportModal(creatorId, creatorName, sourceElement = null) {
     const resolvedCreatorName = resolveSupportCreatorName(
         creatorName,
         sourceElement,
     );
 
-    globalSupportState = {
-        creatorId,
-        creatorName: resolvedCreatorName,
-        amount: 0,
-        message: "",
-        returnPath:
-            typeof buildSupportReturnPath === "function"
-                ? buildSupportReturnPath(sourceElement)
-                : `${window.location.pathname}${window.location.search}${window.location.hash}`,
-    };
-
-    const messageInput = document.getElementById("global-support-message");
-    if (messageInput) {
-        messageInput.value = "";
+    // Vérifier l'authentification
+    const currentUser = await getMonetizationAuthUser();
+    if (!currentUser) {
+        if (typeof showGlobalNotification === "function") {
+            showGlobalNotification(
+                "Veuillez vous connecter pour envoyer un soutien",
+                "error",
+            );
+        }
+        window.location.href =
+            "login.html?redirect=" +
+            encodeURIComponent(window.location.href);
+        return;
     }
 
-    const creatorNameEl = document.getElementById("support-creator-name");
-    if (creatorNameEl) {
-        creatorNameEl.textContent = resolvedCreatorName;
-    }
+    let accessToken = null;
+    try {
+        if (window.supabase?.auth) {
+            const { data: { session } } = await window.supabase.auth.getSession();
+            accessToken = session?.access_token || null;
+        }
+    } catch (_) {}
 
-    // Réinitialiser la sélection
-    document
-        .querySelectorAll("#global-amount-options .amount-btn")
-        .forEach((btn) => {
-            btn.classList.remove("selected");
+    // S'assurer que le script de la modale unifiée est chargé
+    if (!window.XeraMobileMoney?.openCheckout) {
+        await new Promise((resolve) => {
+            const s = document.createElement("script");
+            s.src = "js/mobile-money-modal.js";
+            s.onload = () => resolve();
+            s.onerror = () => resolve();
+            document.head.appendChild(s);
         });
-    document.getElementById("global-custom-amount").value = "";
-    selectGlobalSupportPaymentMethod("card");
-    updateGlobalSupportSummary();
-    updateGlobalSupportOperators();
+    }
 
-    const modal = document.getElementById("support-modal-global");
-    if (modal) {
-        modal.classList.add("active");
+    if (window.XeraMobileMoney?.openCheckout) {
+        window.XeraMobileMoney.openCheckout({
+            type: "support",
+            title: `Soutien à ${resolvedCreatorName}`,
+            creatorId: creatorId,
+            creatorName: resolvedCreatorName,
+            accessToken,
+            onSuccess: () => {
+                if (typeof showGlobalNotification === "function") {
+                    showGlobalNotification("Soutien envoyé avec succès !", "success");
+                }
+            },
+        });
     }
 }
 

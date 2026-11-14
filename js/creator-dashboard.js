@@ -1198,7 +1198,40 @@ let selectedSupportAmount = 0;
 let selectedCreatorId = null;
 let selectedSupportMessage = "";
 
-function openSupportModal(creatorId) {
+async function openSupportModal(creatorId) {
+    if (!window.XeraMobileMoney?.openCheckout) {
+        await new Promise((resolve) => {
+            const s = document.createElement("script");
+            s.src = "js/mobile-money-modal.js";
+            s.onload = () => resolve();
+            s.onerror = () => resolve();
+            document.head.appendChild(s);
+        });
+    }
+
+    if (window.XeraMobileMoney?.openCheckout) {
+        let accessToken = null;
+        try {
+            if (window.supabase?.auth) {
+                const { data: { session } } = await window.supabase.auth.getSession();
+                accessToken = session?.access_token || null;
+            }
+        } catch (_) {}
+
+        window.XeraMobileMoney.openCheckout({
+            type: "support",
+            title: "Soutenir ce créateur",
+            creatorId,
+            accessToken,
+            onSuccess: () => {
+                if (typeof showSuccess === "function") {
+                    showSuccess("Soutien envoyé avec succès !");
+                }
+            },
+        });
+        return;
+    }
+
     selectedCreatorId = creatorId;
     selectedSupportAmount = 0;
     selectedSupportMessage = "";
