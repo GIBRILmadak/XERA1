@@ -1,8 +1,8 @@
 /**
- * js/mobile-money-modal.js
+ * client/public/js/mobile-money-modal.js
  *
- * Modale de paiement unifiée Mobile Money MaishaPay (Airtel Money, Orange Money, M-Pesa).
- * Design XERA Dark Mode tout-en-un avec logos officiels et détection automatique d'opérateur.
+ * Modale de paiement Mobile Money.
+ * Refonte visuelle sobre, premium, accessible (Stripe/Linear level).
  */
 
 (function (window) {
@@ -12,41 +12,24 @@
   let pollIntervalId = null;
   let countdownIntervalId = null;
 
-  // ─── Logos SVG officiels ──────────────────────────────────────────────────
-  const LOGOS = {
-    airtel: `<svg viewBox="0 0 100 32" height="24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="14" cy="16" r="12" fill="#E40000"/>
-      <path d="M14 9c-3.87 0-7 3.13-7 7s3.13 7 7 7c1.63 0 3.13-.56 4.33-1.5l-1.27-1.69A4.85 4.85 0 0 1 14 20.9c-2.7 0-4.9-2.2-4.9-4.9s2.2-4.9 4.9-4.9c2.43 0 4.46 1.78 4.83 4.1h2.14C20.47 11.75 17.5 9 14 9z" fill="#FFFFFF"/>
-      <circle cx="14" cy="16" r="2" fill="#FFFFFF"/>
-      <text x="32" y="15" fill="#FFFFFF" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="800" letter-spacing="-0.3">airtel</text>
-      <text x="32" y="24" fill="#FF8080" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="8.5" font-weight="700" letter-spacing="0.5">MONEY</text>
-    </svg>`,
-
-    orange: `<svg viewBox="0 0 100 32" height="24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect x="2" y="4" width="24" height="24" rx="4" fill="#FF7900"/>
-      <rect x="6" y="18" width="16" height="6" rx="1" fill="#FFFFFF" opacity="0.3"/>
-      <text x="32" y="15" fill="#FFFFFF" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="800" letter-spacing="-0.3">orange</text>
-      <text x="32" y="24" fill="#FFA64D" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="8.5" font-weight="700" letter-spacing="0.5">MONEY</text>
-    </svg>`,
-
-    mpesa: `<svg viewBox="0 0 100 32" height="24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect x="2" y="4" width="24" height="24" rx="5" fill="#009639"/>
-      <rect x="4" y="6" width="20" height="20" rx="4" fill="#E60000"/>
-      <rect x="9.5" y="9" width="9" height="14" rx="2" fill="#FFFFFF"/>
-      <rect x="11.5" y="11" width="5" height="7" rx="1" fill="#009639"/>
-      <circle cx="14" cy="20.5" r="0.9" fill="#009639"/>
-      <text x="32" y="16" fill="#FFFFFF" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="900" letter-spacing="0.2">M-PESA</text>
-      <text x="32" y="24" fill="#4CD964" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="8.5" font-weight="700" letter-spacing="0.5">VODACOM</text>
-    </svg>`,
+  // ─── Icônes SVG inline (trait 1.5px, currentColor, style uniforme) ─────────
+  const SVG = {
+    close: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>',
+    check: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>',
+    lock: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>',
+    spinner: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="xera-mm-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg>',
+    successRing: '<svg width="56" height="56" viewBox="0 0 56 56" fill="none" stroke="#10b981" stroke-linecap="round" stroke-linejoin="round"><circle cx="28" cy="28" r="25" stroke="rgba(16, 185, 129, 0.2)" stroke-width="1.5"></circle><polyline class="xera-mm-check-path" points="18 28 25 35 38 21" stroke-width="2.5"></polyline></svg>',
+    failedRing: '<svg width="56" height="56" viewBox="0 0 56 56" fill="none" stroke="#ef4444" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="28" cy="28" r="25" stroke="rgba(239, 68, 68, 0.2)"></circle><line x1="20" y1="20" x2="36" y2="36"></line><line x1="36" y1="20" x2="20" y2="36"></line></svg>',
+    timeoutRing: '<svg width="56" height="56" viewBox="0 0 56 56" fill="none" stroke="#eab308" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="28" cy="28" r="25" stroke="rgba(234, 179, 8, 0.2)"></circle><polyline points="28 16 28 28 35 32"></polyline></svg>',
   };
 
-  const PROVIDER_INFO = {
-    airtel_money: { name: "Airtel Money", color: "#E40000", glow: "rgba(228, 0, 0, 0.25)" },
-    orange_money: { name: "Orange Money", color: "#FF7900", glow: "rgba(255, 121, 0, 0.25)" },
-    mpesa:        { name: "M-Pesa",       color: "#009639", glow: "rgba(0, 150, 57, 0.25)" },
-  };
+  const OPERATORS = [
+    { id: "airtel_money", label: "Airtel Money", accent: "#e11d48" },
+    { id: "orange_money", label: "Orange Money", accent: "#f97316" },
+    { id: "mpesa",        label: "M-Pesa",       accent: "#10b981" },
+  ];
 
-  // ─── Utilitaires téléphone RDC ─────────────────────────────────────────────
+  // ─── Formatage & Validation RDC ────────────────────────────────────────────
   function isValidDrcPhone(raw) {
     const clean = String(raw || "").replace(/[\s\-\.\(\)]/g, "");
     if (/^\+243[89]\d{8}$/.test(clean)) return true;
@@ -64,6 +47,18 @@
     return "+243" + digits;
   }
 
+  function formatDrcLocalDisplay(raw) {
+    let digits = String(raw || "").replace(/\D/g, "");
+    if (digits.startsWith("00243")) digits = digits.slice(5);
+    else if (digits.startsWith("243")) digits = digits.slice(3);
+    if (digits.startsWith("0")) digits = digits.slice(1);
+    digits = digits.slice(0, 9);
+
+    if (digits.length <= 3) return digits;
+    if (digits.length <= 6) return digits.slice(0, 3) + " " + digits.slice(3);
+    return digits.slice(0, 3) + " " + digits.slice(3, 6) + " " + digits.slice(6);
+  }
+
   function detectOperatorFromPhone(phone) {
     let digits = String(phone || "").replace(/\D/g, "");
     if (digits.startsWith("00243")) digits = digits.slice(5);
@@ -71,12 +66,17 @@
     if (digits.startsWith("0")) digits = digits.slice(1);
 
     if (digits.length >= 2) {
-      const prefix = digits.slice(0, 2);
-      if (["97", "98", "99"].includes(prefix)) return "airtel_money";
-      if (["81", "82", "83"].includes(prefix)) return "mpesa";
-      if (["80", "84", "85", "89"].includes(prefix)) return "orange_money";
+      const p = digits.slice(0, 2);
+      if (["97", "98", "99"].includes(p)) return "airtel_money";
+      if (["81", "82", "83"].includes(p)) return "mpesa";
+      if (["80", "84", "85", "89"].includes(p)) return "orange_money";
     }
     return null;
+  }
+
+  function formatCurrencyFr(amount) {
+    const n = Number(amount) || 0;
+    return n.toFixed(2).replace(".", ",") + " $";
   }
 
   // ─── Injection CSS ─────────────────────────────────────────────────────────
@@ -86,425 +86,536 @@
     style.id = "xera-mm-styles";
     style.textContent = `
       @keyframes xeraMmFadeIn {
-        from { opacity: 0; transform: scale(0.97) translateY(8px); }
+        from { opacity: 0; transform: scale(0.98) translateY(6px); }
         to { opacity: 1; transform: scale(1) translateY(0); }
       }
-      @keyframes xeraMmPulse {
-        0%, 100% { transform: scale(1); opacity: 1; }
-        50% { transform: scale(1.08); opacity: 0.85; }
+      @keyframes xeraMmSheetUp {
+        from { transform: translateY(100%); }
+        to { transform: translateY(0); }
       }
       @keyframes xeraMmSpin {
         to { transform: rotate(360deg); }
       }
+      @keyframes xeraMmCheckDraw {
+        to { stroke-dashoffset: 0; }
+      }
+
+      .xera-mm-spin {
+        animation: xeraMmSpin 0.75s linear infinite;
+        display: inline-block;
+        vertical-align: middle;
+      }
+      .xera-mm-check-path {
+        stroke-dasharray: 40;
+        stroke-dashoffset: 40;
+        animation: xeraMmCheckDraw 0.35s ease-out 0.1s forwards;
+      }
 
       .xera-mm-backdrop {
         position: fixed; inset: 0;
-        background: rgba(3, 2, 8, 0.82);
-        backdrop-filter: blur(12px) saturate(130%);
-        -webkit-backdrop-filter: blur(12px);
+        background: rgba(3, 4, 7, 0.78);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
         display: flex; align-items: center; justify-content: center;
         z-index: 100000;
         padding: 16px; box-sizing: border-box;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        color: #f1f5f9;
       }
+
       .xera-mm-dialog {
-        background: radial-gradient(circle at 10% 0%, rgba(139, 92, 246, 0.15), transparent 45%),
-                    linear-gradient(160deg, #131722 0%, #0d1017 60%, #080a0f 100%);
-        border: 1px solid rgba(255, 255, 255, 0.12);
-        border-radius: 22px;
-        width: 100%; max-width: 460px;
-        color: #f0f6fc;
-        box-shadow: 0 30px 80px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+        background: #0d1117;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 20px;
+        width: 100%; max-width: 440px;
+        box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
         overflow: hidden; position: relative;
-        animation: xeraMmFadeIn 0.24s cubic-bezier(0.16, 1, 0.3, 1);
-        max-height: 92vh; display: flex; flex-direction: column;
+        animation: xeraMmFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        display: flex; flex-direction: column;
+        max-height: 90vh;
       }
+
+      .xera-mm-dialog *:focus-visible {
+        outline: 2px solid #7c3aed;
+        outline-offset: 2px;
+      }
+
       .xera-mm-header {
         padding: 20px 24px 16px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
         display: flex; justify-content: space-between; align-items: flex-start;
       }
-      .xera-mm-title-group {
-        display: flex; align-items: center; gap: 12px;
-      }
-      .xera-mm-icon-badge {
-        width: 40px; height: 40px; border-radius: 12px;
-        display: grid; place-items: center; font-size: 1.25rem;
-        background: linear-gradient(135deg, #a855f7, #6366f1);
-        box-shadow: 0 8px 20px rgba(168, 85, 247, 0.35);
-        flex-shrink: 0;
-      }
       .xera-mm-title {
-        margin: 0; font-size: 1.15rem; font-weight: 700; color: #fff; line-height: 1.3;
+        margin: 0; font-size: 1.05rem; font-weight: 600; color: #f8fafc; letter-spacing: -0.01em;
       }
-      .xera-mm-subtitle {
-        font-size: 0.8rem; color: #8b949e; margin-top: 2px;
+      .xera-mm-recipient {
+        font-size: 0.8rem; color: #94a3b8; margin-top: 2px;
       }
       .xera-mm-close {
-        background: rgba(255, 255, 255, 0.06);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        color: #8b949e; border-radius: 10px; width: 32px; height: 32px;
-        display: grid; place-items: center; font-size: 1.3rem;
-        cursor: pointer; transition: all 0.15s; line-height: 1; padding: 0;
+        background: transparent;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        color: #94a3b8; border-radius: 8px; width: 32px; height: 32px;
+        display: grid; place-items: center; cursor: pointer;
+        transition: background 180ms ease, color 180ms ease; padding: 0;
       }
       .xera-mm-close:hover {
-        color: #fff; background: rgba(255, 255, 255, 0.15);
+        background: rgba(255, 255, 255, 0.06); color: #fff;
       }
+
       .xera-mm-body {
-        padding: 20px 24px 24px; overflow-y: auto;
+        padding: 24px; overflow-y: auto;
       }
+
+      /* Montant héro */
+      .xera-mm-hero-amount {
+        text-align: center; margin-bottom: 24px;
+      }
+      .xera-mm-hero-val {
+        font-size: 2.35rem; font-weight: 700; color: #ffffff;
+        font-variant-numeric: tabular-nums; letter-spacing: -0.02em; line-height: 1.1;
+      }
+      .xera-mm-hero-label {
+        font-size: 0.72rem; font-weight: 600; text-transform: uppercase;
+        letter-spacing: 0.08em; color: #64748b; margin-top: 6px;
+      }
+
       .xera-mm-section {
-        margin-bottom: 18px;
+        margin-bottom: 20px;
       }
       .xera-mm-label {
-        display: block; font-size: 0.82rem; font-weight: 600;
-        color: #cbd5e1; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;
+        display: block; font-size: 0.72rem; font-weight: 600;
+        text-transform: uppercase; letter-spacing: 0.08em;
+        color: #94a3b8; margin-bottom: 8px;
       }
+
+      /* Choix de montants (Soutien) */
       .xera-mm-amounts {
         display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-bottom: 8px;
       }
       .xera-mm-amt-btn {
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid rgba(255, 255, 255, 0.12);
-        color: #e2e8f0; border-radius: 10px; padding: 10px 4px;
-        font-size: 0.95rem; font-weight: 700; cursor: pointer;
-        transition: all 0.15s; text-align: center;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        color: #cbd5e1; border-radius: 8px; padding: 10px 0;
+        font-size: 0.88rem; font-weight: 600; cursor: pointer;
+        min-height: 44px; box-sizing: border-box;
+        transition: background 180ms ease, border-color 180ms ease, color 180ms ease;
       }
       .xera-mm-amt-btn:hover {
-        background: rgba(255, 255, 255, 0.12); color: #fff;
+        background: rgba(255, 255, 255, 0.07); color: #fff;
       }
       .xera-mm-amt-btn.selected {
-        background: linear-gradient(135deg, #a855f7, #6366f1);
-        border-color: #c084fc; color: #fff;
-        box-shadow: 0 4px 14px rgba(168, 85, 247, 0.4);
+        background: rgba(124, 58, 237, 0.12);
+        border-color: #7c3aed; color: #c4b5fd;
       }
+
       .xera-mm-custom-wrap {
         position: relative;
       }
       .xera-mm-custom-sym {
         position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
-        font-weight: 700; color: #8b949e;
+        color: #64748b; font-weight: 600; font-size: 0.88rem;
       }
       .xera-mm-custom-input {
         width: 100%; box-sizing: border-box;
-        background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(255, 255, 255, 0.12);
-        border-radius: 10px; padding: 10px 14px 10px 32px;
-        color: #fff; font-size: 0.9rem; outline: none; transition: border-color 0.15s;
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 8px; padding: 11px 14px 11px 28px;
+        color: #fff; font-size: 0.88rem; outline: none;
+        transition: border-color 180ms ease; min-height: 44px;
       }
       .xera-mm-custom-input:focus {
-        border-color: #a855f7;
+        border-color: #7c3aed;
       }
-      .xera-mm-plan-card {
-        background: rgba(255, 255, 255, 0.04);
-        border: 1px solid rgba(255, 255, 255, 0.12);
-        border-radius: 12px; padding: 12px 16px;
-        display: flex; justify-content: space-between; align-items: center;
+
+      /* Cartes opérateurs */
+      .xera-mm-operators {
+        display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
       }
-      .xera-mm-plan-name {
-        font-weight: 700; font-size: 1rem; color: #fff;
-      }
-      .xera-mm-plan-price {
-        font-size: 1.1rem; font-weight: 800; color: #38bdf8;
-      }
-      .xera-mm-providers-grid {
-        display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
-      }
-      .xera-mm-provider-card {
-        background: rgba(255, 255, 255, 0.03);
-        border: 2px solid rgba(255, 255, 255, 0.08);
-        border-radius: 14px; padding: 12px 6px 10px;
-        cursor: pointer; transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      .xera-mm-operator-card {
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 10px; padding: 14px 8px 12px;
+        min-height: 64px; box-sizing: border-box;
+        cursor: pointer; position: relative;
         display: flex; flex-direction: column; align-items: center; justify-content: center;
-        text-align: center; position: relative; min-height: 72px; box-sizing: border-box;
+        text-align: center;
+        transition: background 180ms ease, border-color 180ms ease;
       }
-      .xera-mm-provider-card:hover {
-        background: rgba(255, 255, 255, 0.07);
-        border-color: rgba(255, 255, 255, 0.2);
-        transform: translateY(-1px);
+      .xera-mm-operator-card:hover {
+        background: rgba(255, 255, 255, 0.05);
+        border-color: rgba(255, 255, 255, 0.14);
       }
-      .xera-mm-provider-card[data-provider="airtel_money"].selected {
-        border-color: #E40000;
-        background: linear-gradient(145deg, rgba(228, 0, 0, 0.18), rgba(228, 0, 0, 0.05));
-        box-shadow: 0 0 16px rgba(228, 0, 0, 0.35);
+      .xera-mm-op-accent {
+        position: absolute; top: 0; left: 12px; right: 12px; height: 2px;
+        border-radius: 0 0 2px 2px; opacity: 0.6;
       }
-      .xera-mm-provider-card[data-provider="orange_money"].selected {
-        border-color: #FF7900;
-        background: linear-gradient(145deg, rgba(255, 121, 0, 0.18), rgba(255, 121, 0, 0.05));
-        box-shadow: 0 0 16px rgba(255, 121, 0, 0.35);
+      .xera-mm-op-name {
+        font-size: 0.85rem; font-weight: 600; color: #e2e8f0;
       }
-      .xera-mm-provider-card[data-provider="mpesa"].selected {
-        border-color: #009639;
-        background: linear-gradient(145deg, rgba(0, 150, 57, 0.18), rgba(0, 150, 57, 0.05));
-        box-shadow: 0 0 16px rgba(0, 150, 57, 0.35);
-      }
-      .xera-mm-check-badge {
+      .xera-mm-op-check {
         position: absolute; top: 6px; right: 6px;
-        width: 14px; height: 14px; border-radius: 50%;
-        background: #fff; color: #000;
-        display: none; place-items: center; font-size: 9px; font-weight: 900;
+        width: 16px; height: 16px; border-radius: 50%;
+        background: #7c3aed; color: #fff;
+        display: none; place-items: center;
       }
-      .xera-mm-provider-card.selected .xera-mm-check-badge {
+      .xera-mm-operator-card.selected {
+        border-color: #7c3aed;
+        background: rgba(124, 58, 237, 0.08);
+      }
+      .xera-mm-operator-card.selected .xera-mm-op-check {
         display: grid;
       }
-      .xera-mm-phone-wrap {
+
+      /* Champ Numéro */
+      .xera-mm-phone-row {
         position: relative; display: flex; align-items: center;
       }
-      .xera-mm-phone-prefix {
-        position: absolute; left: 14px;
-        font-weight: 700; color: #cbd5e1; font-size: 0.95rem;
-        display: flex; align-items: center; gap: 4px; pointer-events: none;
+      .xera-mm-prefix-badge {
+        position: absolute; left: 10px;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 6px; padding: 4px 8px;
+        font-size: 0.82rem; font-weight: 600; color: #cbd5e1;
+        display: flex; align-items: center; gap: 6px; pointer-events: none;
+      }
+      .xera-mm-prefix-iso {
+        font-size: 0.7rem; color: #94a3b8; letter-spacing: 0.04em;
       }
       .xera-mm-phone-input {
         width: 100%; box-sizing: border-box;
-        background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(255, 255, 255, 0.12);
-        border-radius: 12px; padding: 13px 40px 13px 88px;
-        color: #fff; font-size: 1rem; font-weight: 600; outline: none;
-        letter-spacing: 0.5px; transition: all 0.15s;
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 8px; padding: 12px 14px 12px 96px;
+        color: #fff; font-size: 0.95rem; font-weight: 600; outline: none;
+        letter-spacing: 0.04em; min-height: 44px;
+        transition: border-color 180ms ease;
       }
       .xera-mm-phone-input:focus {
-        border-color: #a855f7; box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.2);
+        border-color: #7c3aed;
       }
-      .xera-mm-phone-check {
-        position: absolute; right: 14px;
-        color: #10b981; font-size: 1.15rem; font-weight: 900; display: none;
+      .xera-mm-field-error {
+        font-size: 0.78rem; color: #ef4444; margin-top: 6px;
+        display: none; line-height: 1.35;
       }
-      .xera-mm-phone-hint {
-        font-size: 0.75rem; color: #8b949e; margin-top: 6px;
-      }
-      .xera-mm-detected-tag {
-        font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 6px;
-        background: rgba(255, 255, 255, 0.08); display: none;
-      }
-      .xera-mm-input-msg {
+
+      /* Message optionnel */
+      .xera-mm-msg-input {
         width: 100%; box-sizing: border-box;
-        background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(255, 255, 255, 0.12);
-        border-radius: 10px; padding: 10px 14px;
-        color: #fff; font-size: 0.88rem; outline: none; transition: border-color 0.15s;
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 8px; padding: 11px 14px;
+        color: #fff; font-size: 0.88rem; outline: none;
+        transition: border-color 180ms ease; min-height: 44px;
       }
-      .xera-mm-input-msg:focus {
-        border-color: #a855f7;
+      .xera-mm-msg-input:focus {
+        border-color: #7c3aed;
       }
-      .xera-mm-error {
-        display: none; background: rgba(239, 68, 68, 0.14);
-        border: 1px solid rgba(239, 68, 68, 0.4); color: #fca5a5;
-        padding: 10px 14px; border-radius: 10px; font-size: 0.85rem;
-        margin-bottom: 14px; line-height: 1.4;
+
+      /* Erreur globale formulaire */
+      .xera-mm-alert-error {
+        display: none; background: rgba(239, 68, 68, 0.08);
+        border: 1px solid rgba(239, 68, 68, 0.3); color: #fca5a5;
+        padding: 10px 14px; border-radius: 8px; font-size: 0.82rem;
+        margin-bottom: 16px; line-height: 1.4;
       }
-      .xera-mm-submit {
-        width: 100%; padding: 14px 18px;
-        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-        color: #fff; border: none; border-radius: 12px;
-        font-size: 1rem; font-weight: 700; cursor: not-allowed;
-        opacity: 0.6; transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-        box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3);
+
+      /* Pied / Bouton principal */
+      .xera-mm-footer-action {
+        margin-top: 8px;
       }
-      .xera-mm-submit.ready {
+      .xera-mm-submit-btn {
+        width: 100%; min-height: 46px;
+        background: #7c3aed; color: #ffffff;
+        border: none; border-radius: 10px;
+        font-size: 0.95rem; font-weight: 600; cursor: not-allowed;
+        opacity: 0.45; transition: background 180ms ease, opacity 180ms ease, transform 180ms ease;
+        display: flex; align-items: center; justify-content: center; gap: 8px;
+      }
+      .xera-mm-submit-btn.ready {
         opacity: 1; cursor: pointer;
       }
-      .xera-mm-submit.ready:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 8px 20px rgba(16, 185, 129, 0.45);
+      .xera-mm-submit-btn.ready:hover {
+        background: #6d28d9;
       }
-      .xera-mm-footer-note {
-        text-align: center; font-size: 0.75rem; color: #64748b; margin-top: 12px;
+      .xera-mm-legal {
+        display: flex; align-items: center; justify-content: center; gap: 6px;
+        font-size: 0.72rem; color: #64748b; margin-top: 14px;
       }
-      .xera-mm-pulse-icon {
-        width: 68px; height: 68px; border-radius: 50%;
-        background: rgba(168, 85, 247, 0.16);
-        border: 1px solid rgba(168, 85, 247, 0.35);
-        display: grid; place-items: center; margin: 0 auto 16px;
-        font-size: 2rem; animation: xeraMmPulse 2s infinite ease-in-out;
+
+      /* STEP 2 : Attente USSD avec anneau circulaire */
+      .xera-mm-ring-wrap {
+        position: relative; width: 96px; height: 96px; margin: 4px auto 18px;
       }
-      .xera-mm-timer-box {
-        background: rgba(0, 0, 0, 0.45); border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 12px; padding: 12px; margin-bottom: 16px; text-align: center;
+      .xera-mm-ring-svg {
+        transform: rotate(-90deg); width: 96px; height: 96px;
       }
-      .xera-mm-timer-val {
-        font-size: 1.9rem; font-weight: 800; color: #a855f7;
+      .xera-mm-ring-bg {
+        stroke: rgba(255, 255, 255, 0.08); fill: none; stroke-width: 4;
+      }
+      .xera-mm-ring-meter {
+        stroke: #7c3aed; fill: none; stroke-width: 4;
+        stroke-linecap: round;
+        stroke-dasharray: 264;
+        stroke-dashoffset: 0;
+        transition: stroke-dashoffset 1s linear;
+      }
+      .xera-mm-ring-text {
+        position: absolute; inset: 0;
+        display: grid; place-items: center;
+        font-size: 1.15rem; font-weight: 700; color: #fff;
         font-variant-numeric: tabular-nums;
       }
-      .xera-mm-btn-secondary {
-        padding: 10px 18px; background: rgba(255, 255, 255, 0.08);
-        color: #fff; border: 1px solid rgba(255, 255, 255, 0.14);
-        border-radius: 10px; font-size: 0.9rem; font-weight: 600; cursor: pointer;
+
+      .xera-mm-steps-list {
+        display: flex; flex-direction: column; gap: 10px;
+        max-width: 280px; margin: 18px auto; text-align: left;
       }
-      .xera-mm-btn-secondary:hover {
-        background: rgba(255, 255, 255, 0.15);
+      .xera-mm-step-item {
+        display: flex; align-items: center; gap: 10px;
+        font-size: 0.85rem; color: #94a3b8;
+      }
+      .xera-mm-step-item.active {
+        color: #f1f5f9; font-weight: 600;
+      }
+      .xera-mm-step-dot {
+        width: 18px; height: 18px; border-radius: 50%;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        display: grid; place-items: center; font-size: 0.65rem; color: #94a3b8;
+        flex-shrink: 0;
+      }
+      .xera-mm-step-item.active .xera-mm-step-dot {
+        background: rgba(124, 58, 237, 0.15);
+        border-color: #7c3aed; color: #c4b5fd;
+      }
+      .xera-mm-waiting-sub {
+        font-size: 0.78rem; color: #64748b; margin-top: 12px; text-align: center;
+      }
+
+      /* STEP 3 & 4 : Succès / Échec */
+      .xera-mm-state-icon {
+        margin: 8px auto 16px; display: grid; place-items: center;
+      }
+      .xera-mm-state-title {
+        font-size: 1.2rem; font-weight: 700; color: #fff; margin: 0 0 4px;
+      }
+      .xera-mm-state-desc {
+        font-size: 0.88rem; color: #94a3b8; margin: 0 0 20px; line-height: 1.45;
+      }
+      .xera-mm-btn-ghost {
+        background: transparent;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        color: #f1f5f9; border-radius: 8px; padding: 10px 20px;
+        font-size: 0.88rem; font-weight: 600; cursor: pointer;
+        min-height: 44px; transition: background 180ms ease;
+      }
+      .xera-mm-btn-ghost:hover {
+        background: rgba(255, 255, 255, 0.06);
+      }
+
+      /* Mobile First (<= 480px) */
+      @media (max-width: 480px) {
+        .xera-mm-backdrop {
+          align-items: flex-end; padding: 0;
+        }
+        .xera-mm-dialog {
+          border-radius: 20px 20px 0 0;
+          border-bottom: none;
+          max-height: 92vh; width: 100%;
+          animation: xeraMmSheetUp 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .xera-mm-body {
+          padding: 20px 20px 28px;
+        }
+      }
+
+      /* Prefers Reduced Motion */
+      @media (prefers-reduced-motion: reduce) {
+        .xera-mm-dialog, .xera-mm-spin, .xera-mm-check-path {
+          animation: none !important;
+          transition: none !important;
+        }
       }
     `;
     document.head.appendChild(style);
   }
 
-  // ─── Construction HTML ─────────────────────────────────────────────────────
+  // ─── Modale HTML ───────────────────────────────────────────────────────────
   function createModalHtml(data) {
     const isSupport = data.type === "support";
-    const title = data.title || (isSupport ? "Soutenir ce créateur" : "Paiement Mobile Money");
     const initialAmount = isSupport ? (Number(data.defaultAmount) || 1) : null;
-    const amountLabel = data.amountLabel || "";
+    const recipientName = data.creatorName || "";
+    const title = isSupport ? "Soutien direct" : (data.title || "Abonnement");
 
     return `
-      <div id="xera-mm-backdrop" class="xera-mm-backdrop">
+      <div id="xera-mm-backdrop" class="xera-mm-backdrop" role="dialog" aria-modal="true" aria-labelledby="xera-mm-title">
         <div id="xera-mm-dialog" class="xera-mm-dialog">
           
           <div class="xera-mm-header">
-            <div class="xera-mm-title-group">
-              <div class="xera-mm-icon-badge">${isSupport ? "💖" : "✨"}</div>
-              <div>
-                <h3 class="xera-mm-title">${title}</h3>
-                <div class="xera-mm-subtitle">${isSupport ? "Soutien direct et sécurisé par Mobile Money" : "Abonnement sécurisé par Mobile Money"}</div>
-              </div>
+            <div>
+              <h3 id="xera-mm-title" class="xera-mm-title">${title}</h3>
+              ${recipientName ? `<div class="xera-mm-recipient">Pour ${recipientName}</div>` : ""}
             </div>
-            <button id="xera-mm-close-btn" type="button" class="xera-mm-close" aria-label="Fermer">&times;</button>
+            <button id="xera-mm-close-btn" type="button" class="xera-mm-close" aria-label="Fermer la fenêtre">
+              ${SVG.close}
+            </button>
           </div>
 
-          <div id="xera-mm-content" class="xera-mm-body">
+          <div id="xera-mm-content" class="xera-mm-body" aria-live="polite">
 
             <!-- STEP 1 : FORMULAIRE -->
             <div id="xera-mm-step-form">
 
+              <!-- Montant Héro -->
+              <div class="xera-mm-hero-amount">
+                <div id="xera-mm-hero-val" class="xera-mm-hero-val">
+                  ${isSupport ? formatCurrencyFr(initialAmount) : (data.amountLabel || "1,00 $")}
+                </div>
+                <div class="xera-mm-hero-label">Montant à régler</div>
+              </div>
+
               ${isSupport ? `
-                <!-- Choix du montant pour le soutien -->
+                <!-- Choix prédéfini de montants -->
                 <div class="xera-mm-section">
-                  <label class="xera-mm-label">Montant du soutien (USD) :</label>
-                  <div class="xera-mm-amounts">
-                    <button type="button" class="xera-mm-amt-btn selected" data-amt="1">$1</button>
-                    <button type="button" class="xera-mm-amt-btn" data-amt="3">$3</button>
-                    <button type="button" class="xera-mm-amt-btn" data-amt="5">$5</button>
-                    <button type="button" class="xera-mm-amt-btn" data-amt="10">$10</button>
-                    <button type="button" class="xera-mm-amt-btn" data-amt="25">$25</button>
-                    <button type="button" class="xera-mm-amt-btn" data-amt="50">$50</button>
+                  <div class="xera-mm-amounts" role="radiogroup" aria-label="Choisir un montant">
+                    <button type="button" class="xera-mm-amt-btn selected" data-amt="1">1 $</button>
+                    <button type="button" class="xera-mm-amt-btn" data-amt="3">3 $</button>
+                    <button type="button" class="xera-mm-amt-btn" data-amt="5">5 $</button>
+                    <button type="button" class="xera-mm-amt-btn" data-amt="10">10 $</button>
+                    <button type="button" class="xera-mm-amt-btn" data-amt="25">25 $</button>
+                    <button type="button" class="xera-mm-amt-btn" data-amt="50">50 $</button>
                   </div>
                   <div class="xera-mm-custom-wrap">
                     <span class="xera-mm-custom-sym">$</span>
-                    <input type="number" id="xera-mm-custom-amt" min="1" max="1000" step="1" placeholder="Ou entrez un autre montant personnalisé..." class="xera-mm-custom-input">
+                    <input type="number" id="xera-mm-custom-amt" min="1" max="1000" step="1" inputmode="numeric" placeholder="Autre montant..." class="xera-mm-custom-input" aria-label="Montant personnalisé">
                   </div>
                 </div>
 
-                <!-- Message optionnel -->
+                <!-- Message d'accompagnement -->
                 <div class="xera-mm-section">
-                  <label class="xera-mm-label">Message d'encouragement (optionnel) :</label>
-                  <input type="text" id="xera-mm-support-msg" maxlength="150" placeholder="Un petit mot gentil..." class="xera-mm-input-msg">
+                  <label for="xera-mm-support-msg" class="xera-mm-label">Message (optionnel)</label>
+                  <input type="text" id="xera-mm-support-msg" maxlength="150" placeholder="Un mot pour le créateur..." class="xera-mm-msg-input">
                 </div>
-              ` : `
-                <!-- Carte récapitulative pour abonnement -->
-                <div class="xera-mm-section">
-                  <div class="xera-mm-plan-card">
-                    <div>
-                      <div class="xera-mm-plan-name">${title}</div>
-                      <div style="font-size:0.8rem;color:#94a3b8;margin-top:2px;">${amountLabel}</div>
+              ` : ""}
+
+              <!-- Opérateurs : 3 cartes égales, SANS logo, avec fine barre d'accent -->
+              <div class="xera-mm-section">
+                <span class="xera-mm-label">Opérateur Mobile Money</span>
+                <div class="xera-mm-operators" role="radiogroup" aria-label="Choisir un opérateur">
+                  ${OPERATORS.map((op) => `
+                    <div class="xera-mm-operator-card" data-provider="${op.id}" role="radio" aria-checked="false" tabindex="0">
+                      <div class="xera-mm-op-accent" style="background:${op.accent};"></div>
+                      <span class="xera-mm-op-name">${op.label}</span>
+                      <span class="xera-mm-op-check">${SVG.check}</span>
                     </div>
-                    <div class="xera-mm-plan-price">${amountLabel.split(' ')[0] || "Actif"}</div>
-                  </div>
-                </div>
-              `}
-
-              <!-- Choix de l'opérateur avec les vrais logos -->
-              <div class="xera-mm-section">
-                <label class="xera-mm-label">Choisissez votre opérateur Mobile Money :</label>
-                <div class="xera-mm-providers-grid">
-                  <div class="xera-mm-provider-card selected" data-provider="airtel_money">
-                    <input type="radio" name="xera-mm-provider" value="airtel_money" checked style="display:none;">
-                    ${LOGOS.airtel}
-                    <span class="xera-mm-check-badge">✓</span>
-                  </div>
-                  <div class="xera-mm-provider-card" data-provider="orange_money">
-                    <input type="radio" name="xera-mm-provider" value="orange_money" style="display:none;">
-                    ${LOGOS.orange}
-                    <span class="xera-mm-check-badge">✓</span>
-                  </div>
-                  <div class="xera-mm-provider-card" data-provider="mpesa">
-                    <input type="radio" name="xera-mm-provider" value="mpesa" style="display:none;">
-                    ${LOGOS.mpesa}
-                    <span class="xera-mm-check-badge">✓</span>
-                  </div>
+                  `).join("")}
                 </div>
               </div>
 
-              <!-- Numéro de téléphone RDC -->
+              <!-- Numéro RDC -->
               <div class="xera-mm-section">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                  <label class="xera-mm-label" style="margin:0;">Numéro de téléphone RDC :</label>
-                  <span id="xera-mm-detected-op" class="xera-mm-detected-tag"></span>
+                <label for="xera-mm-phone" class="xera-mm-label">Numéro de téléphone</label>
+                <div class="xera-mm-phone-row">
+                  <div class="xera-mm-prefix-badge">
+                    <span class="xera-mm-prefix-iso">RDC</span>
+                    <span class="xera-mm-prefix-num">+243</span>
+                  </div>
+                  <input id="xera-mm-phone" type="tel" inputmode="tel" placeholder="974 123 456" class="xera-mm-phone-input" autocomplete="tel-national" />
+                  <span id="xera-mm-phone-check" style="display:none;position:absolute;right:14px;color:#10b981;">${SVG.check}</span>
                 </div>
-                <div class="xera-mm-phone-wrap">
-                  <span class="xera-mm-phone-prefix">🇨🇩 +243</span>
-                  <input id="xera-mm-phone" type="tel" placeholder="974 123 456" class="xera-mm-phone-input" />
-                  <span id="xera-mm-phone-check" class="xera-mm-phone-check">✓</span>
-                </div>
-                <div class="xera-mm-phone-hint">Format : 9 ou 10 chiffres (ex: 0974123456 ou 0812345678)</div>
+                <div id="xera-mm-phone-error" class="xera-mm-field-error">Veuillez entrer un numéro de téléphone valide.</div>
               </div>
 
-              <!-- Erreur de validation ou rejet API -->
-              <div id="xera-mm-form-error" class="xera-mm-error"></div>
+              <!-- Erreur globale API -->
+              <div id="xera-mm-form-error" class="xera-mm-alert-error" role="alert"></div>
 
-              <!-- Bouton de paiement dynamique -->
-              <button id="xera-mm-submit-btn" type="button" class="xera-mm-submit" disabled>
-                Payer par Mobile Money
-              </button>
-
-              <div class="xera-mm-footer-note">
-                🔒 Paiement direct et chiffré — validation par code PIN sur votre téléphone
+              <!-- Bouton principal violet -->
+              <div class="xera-mm-footer-action">
+                <button id="xera-mm-submit-btn" type="button" class="xera-mm-submit-btn" disabled>
+                  Payer ${isSupport ? formatCurrencyFr(initialAmount) : "1,00 $"}
+                </button>
+                <div class="xera-mm-legal">
+                  ${SVG.lock}
+                  <span>Paiement sécurisé</span>
+                </div>
               </div>
             </div>
 
-            <!-- STEP 2 : EN ATTENTE USSD -->
-            <div id="xera-mm-step-waiting" style="display:none;text-align:center;padding:12px 0;">
-              <div class="xera-mm-pulse-icon">📱</div>
-              <h4 style="margin:0 0 8px;font-size:1.2rem;color:#fff;font-weight:700;">Validez sur votre téléphone</h4>
-              <p style="font-size:0.9rem;color:#94a3b8;margin:0 auto 18px;max-width:320px;line-height:1.45;">
-                Un prompt push USSD a été envoyé sur votre numéro. Veuillez taper votre code secret Mobile Money pour autoriser la transaction.
-              </p>
+            <!-- STEP 2 : ATTENTE VALIDATION USSD -->
+            <div id="xera-mm-step-waiting" style="display:none;text-align:center;padding:8px 0;">
               
-              <div class="xera-mm-timer-box">
-                <div style="font-size:0.75rem;color:#8b949e;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Temps restant</div>
-                <div id="xera-mm-countdown" class="xera-mm-timer-val">02:00</div>
+              <!-- Anneau SVG circulaire se vidant -->
+              <div class="xera-mm-ring-wrap">
+                <svg class="xera-mm-ring-svg" viewBox="0 0 96 96">
+                  <circle class="xera-mm-ring-bg" cx="48" cy="48" r="42"></circle>
+                  <circle id="xera-mm-ring-meter" class="xera-mm-ring-meter" cx="48" cy="48" r="42"></circle>
+                </svg>
+                <div id="xera-mm-countdown" class="xera-mm-ring-text">02:00</div>
               </div>
 
-              <div style="font-size:0.85rem;color:#cbd5e1;display:flex;align-items:center;justify-content:center;gap:8px;">
-                <span style="width:8px;height:8px;border-radius:50%;background:#eab308;animation:xeraMmPulse 1s infinite;"></span>
-                <span>En attente de votre confirmation...</span>
+              <div class="xera-mm-steps-list">
+                <div class="xera-mm-step-item active">
+                  <span class="xera-mm-step-dot">1</span>
+                  <span>Vérifiez votre téléphone</span>
+                </div>
+                <div class="xera-mm-step-item">
+                  <span class="xera-mm-step-dot">2</span>
+                  <span>Saisissez votre code PIN</span>
+                </div>
+                <div class="xera-mm-step-item">
+                  <span class="xera-mm-step-dot">3</span>
+                  <span>Paiement confirmé</span>
+                </div>
+              </div>
+
+              <div class="xera-mm-waiting-sub">
+                Vous pouvez fermer cette fenêtre, nous vous prévenons.
               </div>
             </div>
 
             <!-- STEP 3 : SUCCÈS -->
-            <div id="xera-mm-step-success" style="display:none;text-align:center;padding:18px 0;">
-              <div style="width:68px;height:68px;border-radius:50%;background:rgba(16,185,129,0.18);border:1px solid rgba(16,185,129,0.4);display:grid;place-items:center;margin:0 auto 16px;color:#10b981;font-size:2.2rem;font-weight:900;">
-                ✓
+            <div id="xera-mm-step-success" style="display:none;text-align:center;padding:12px 0;">
+              <div class="xera-mm-state-icon">
+                ${SVG.successRing}
               </div>
-              <h4 style="margin:0 0 8px;font-size:1.25rem;color:#10b981;font-weight:700;">Paiement confirmé !</h4>
-              <p style="font-size:0.92rem;color:#94a3b8;margin:0 0 16px;line-height:1.45;">
-                ${isSupport ? "Votre soutien a été envoyé avec succès au créateur. Merci pour votre générosité !" : "Votre abonnement a été activé avec succès. Vos avantages sont débloqués !"}
+              <h4 class="xera-mm-state-title">Paiement confirmé</h4>
+              <p class="xera-mm-state-desc">
+                <span id="xera-mm-success-amount" style="font-weight:700;color:#fff;"></span>
+                ${recipientName ? ` envoyé à ${recipientName}` : " validé avec succès"}.
               </p>
+              <button id="xera-mm-done-btn" type="button" class="xera-mm-submit-btn ready" style="width:auto;min-width:140px;margin:0 auto;padding:0 24px;">
+                Terminé
+              </button>
             </div>
 
             <!-- STEP 4 : ÉCHEC -->
-            <div id="xera-mm-step-failed" style="display:none;text-align:center;padding:18px 0;">
-              <div style="width:68px;height:68px;border-radius:50%;background:rgba(239,68,68,0.18);border:1px solid rgba(239,68,68,0.4);display:grid;place-items:center;margin:0 auto 16px;color:#ef4444;font-size:2.2rem;font-weight:900;">
-                ✕
+            <div id="xera-mm-step-failed" style="display:none;text-align:center;padding:12px 0;">
+              <div class="xera-mm-state-icon">
+                ${SVG.failedRing}
               </div>
-              <h4 style="margin:0 0 8px;font-size:1.2rem;color:#ef4444;font-weight:700;">Paiement non confirmé</h4>
-              <p id="xera-mm-failed-msg" style="font-size:0.9rem;color:#94a3b8;margin:0 0 20px;line-height:1.45;">
-                La transaction a échoué ou a été annulée depuis votre téléphone.
+              <h4 class="xera-mm-state-title">Paiement non confirmé</h4>
+              <p id="xera-mm-failed-msg" class="xera-mm-state-desc">
+                La transaction n’a pas abouti sur votre téléphone.
               </p>
-              <button id="xera-mm-retry-btn" type="button" class="xera-mm-btn-secondary">
+              <button id="xera-mm-retry-btn" type="button" class="xera-mm-btn-ghost">
                 Réessayer
               </button>
             </div>
 
-            <!-- STEP 5 : TIMEOUT -->
-            <div id="xera-mm-step-timeout" style="display:none;text-align:center;padding:18px 0;">
-              <div style="width:68px;height:68px;border-radius:50%;background:rgba(234,179,8,0.18);border:1px solid rgba(234,179,8,0.4);display:grid;place-items:center;margin:0 auto 16px;color:#eab308;font-size:2rem;">
-                ⏳
+            <!-- STEP 5 : DÉLAI DÉPASSÉ -->
+            <div id="xera-mm-step-timeout" style="display:none;text-align:center;padding:12px 0;">
+              <div class="xera-mm-state-icon">
+                ${SVG.timeoutRing}
               </div>
-              <h4 style="margin:0 0 8px;font-size:1.2rem;color:#eab308;font-weight:700;">Délai d'attente dépassé</h4>
-              <p style="font-size:0.88rem;color:#94a3b8;margin:0 0 20px;line-height:1.45;">
-                Si vous avez saisi votre code PIN, votre transaction est en cours de traitement par l'opérateur et sera validée dès confirmation.
+              <h4 class="xera-mm-state-title">Délai dépassé</h4>
+              <p class="xera-mm-state-desc">
+                Si vous avez composé votre code PIN, la confirmation reste en cours de traitement.
               </p>
               <div style="display:flex;gap:10px;justify-content:center;">
-                <button id="xera-mm-recheck-btn" type="button" class="xera-mm-submit ready" style="width:auto;padding:10px 18px;font-size:0.9rem;">
+                <button id="xera-mm-recheck-btn" type="button" class="xera-mm-submit-btn ready" style="width:auto;padding:0 20px;">
                   Vérifier à nouveau
                 </button>
-                <button id="xera-mm-done-btn" type="button" class="xera-mm-btn-secondary">
+                <button id="xera-mm-timeout-close-btn" type="button" class="xera-mm-btn-ghost">
                   Fermer
                 </button>
               </div>
@@ -530,7 +641,7 @@
     activeModalEl = null;
   }
 
-  // ─── Contrôleur principal du checkout ──────────────────────────────────────
+  // ─── Contrôleur principal ──────────────────────────────────────────────────
   async function openMobileMoneyCheckout(options) {
     options = options || {};
     injectStyles();
@@ -538,28 +649,31 @@
 
     const isSupport = options.type === "support";
     let selectedAmount = isSupport ? (Number(options.amount || options.payload?.amount_usd) || 1) : null;
-    let selectedProvider = "airtel_money";
-    let userOverrodeOperator = false;
+    // Aucune carte présélectionnée avant la saisie du numéro
+    let selectedProvider = null;
+    let userManualProvider = false;
 
     const div = document.createElement("div");
     div.innerHTML = createModalHtml({ ...options, defaultAmount: selectedAmount });
     activeModalEl = div.firstElementChild;
     document.body.appendChild(activeModalEl);
 
-    // Éléments DOM
+    // Éléments
     const closeBtn = document.getElementById("xera-mm-close-btn");
     const phoneInput = document.getElementById("xera-mm-phone");
     const phoneCheck = document.getElementById("xera-mm-phone-check");
+    const phoneError = document.getElementById("xera-mm-phone-error");
     const submitBtn = document.getElementById("xera-mm-submit-btn");
     const formError = document.getElementById("xera-mm-form-error");
-    const detectedOpTag = document.getElementById("xera-mm-detected-op");
+    const heroAmountEl = document.getElementById("xera-mm-hero-val");
+    const ringMeter = document.getElementById("xera-mm-ring-meter");
+    const countdownEl = document.getElementById("xera-mm-countdown");
 
     const stepForm = document.getElementById("xera-mm-step-form");
     const stepWaiting = document.getElementById("xera-mm-step-waiting");
     const stepSuccess = document.getElementById("xera-mm-step-success");
     const stepFailed = document.getElementById("xera-mm-step-failed");
     const stepTimeout = document.getElementById("xera-mm-step-timeout");
-    const countdownEl = document.getElementById("xera-mm-countdown");
 
     function showStep(stepName) {
       stepForm.style.display = stepName === "form" ? "block" : "none";
@@ -569,21 +683,36 @@
       stepTimeout.style.display = stepName === "timeout" ? "block" : "none";
     }
 
-    closeBtn.addEventListener("click", () => cleanupModal());
-    activeModalEl.addEventListener("click", (e) => {
-      if (e.target === activeModalEl) cleanupModal();
-    });
-
-    // Gestion du montant pour le soutien
-    function updateButtonLabel() {
-      const opInfo = PROVIDER_INFO[selectedProvider] || { name: "Mobile Money" };
-      if (isSupport) {
-        submitBtn.textContent = `Payer ${selectedAmount.toFixed(2)} $ USD via ${opInfo.name}`;
-      } else {
-        submitBtn.textContent = `Activer via ${opInfo.name}`;
+    // Fermeture Échap et clic extérieur
+    function handleKeyDown(e) {
+      if (e.key === "Escape") {
+        cleanupModal();
+        window.removeEventListener("keydown", handleKeyDown);
       }
     }
+    window.addEventListener("keydown", handleKeyDown);
 
+    closeBtn.addEventListener("click", () => {
+      cleanupModal();
+      window.removeEventListener("keydown", handleKeyDown);
+    });
+    activeModalEl.addEventListener("click", (e) => {
+      if (e.target === activeModalEl) {
+        cleanupModal();
+        window.removeEventListener("keydown", handleKeyDown);
+      }
+    });
+
+    // Mise à jour du libellé du bouton (ex: "Payer 1,00 $")
+    function updateButtonLabel() {
+      const formatted = isSupport ? formatCurrencyFr(selectedAmount) : (options.amountLabel || "1,00 $");
+      if (heroAmountEl && isSupport) {
+        heroAmountEl.textContent = formatted;
+      }
+      submitBtn.textContent = `Payer ${formatted}`;
+    }
+
+    // Gestion sélection des montants (soutien)
     if (isSupport) {
       const amtBtns = activeModalEl.querySelectorAll(".xera-mm-amt-btn");
       const customInput = document.getElementById("xera-mm-custom-amt");
@@ -614,76 +743,83 @@
       }
     }
 
-    // Gestion de la sélection d'opérateur
-    const providerCards = activeModalEl.querySelectorAll(".xera-mm-provider-card");
-    function setOperator(provKey, manual = false) {
-      if (!PROVIDER_INFO[provKey]) return;
-      selectedProvider = provKey;
-      if (manual) userOverrodeOperator = true;
+    // Cartes opérateurs
+    const opCards = activeModalEl.querySelectorAll(".xera-mm-operator-card");
+    function selectOperatorCard(provId, isManual = false) {
+      selectedProvider = provId;
+      if (isManual) userManualProvider = true;
 
-      providerCards.forEach((card) => {
-        const isMatch = card.dataset.provider === provKey;
-        card.classList.toggle("selected", isMatch);
-        const radio = card.querySelector('input[type="radio"]');
-        if (radio) radio.checked = isMatch;
+      opCards.forEach((c) => {
+        const match = c.dataset.provider === provId;
+        c.classList.toggle("selected", match);
+        c.setAttribute("aria-checked", String(match));
       });
-
-      updateButtonLabel();
+      validateForm();
     }
 
-    providerCards.forEach((card) => {
+    opCards.forEach((card) => {
       card.addEventListener("click", () => {
-        setOperator(card.dataset.provider, true);
+        selectOperatorCard(card.dataset.provider, true);
+      });
+      card.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          selectOperatorCard(card.dataset.provider, true);
+        }
       });
     });
 
-    // Validation du téléphone et détection automatique d'opérateur
+    // Saisie du numéro avec espacement fluide
     function validateForm() {
-      const val = phoneInput.value.trim();
-      const validPhone = isValidDrcPhone(val);
+      const raw = phoneInput.value;
+      const valid = isValidDrcPhone(raw);
 
-      // Auto-détection de l'opérateur selon le numéro
-      if (!userOverrodeOperator) {
-        const detected = detectOperatorFromPhone(val);
-        if (detected) {
-          setOperator(detected, false);
-          if (detectedOpTag) {
-            const info = PROVIDER_INFO[detected];
-            detectedOpTag.style.display = "inline-block";
-            detectedOpTag.style.color = info.color;
-            detectedOpTag.textContent = `⚡ ${info.name} détecté`;
-          }
-        } else if (detectedOpTag) {
-          detectedOpTag.style.display = "none";
+      // Auto-détection de l'opérateur selon le numéro si non forcé manuellement
+      if (!userManualProvider) {
+        const detected = detectOperatorFromPhone(raw);
+        if (detected && detected !== selectedProvider) {
+          selectOperatorCard(detected, false);
         }
       }
 
+      if (valid) {
+        phoneInput.style.borderColor = "rgba(255, 255, 255, 0.08)";
+        if (phoneCheck) phoneCheck.style.display = "block";
+        if (phoneError) phoneError.style.display = "none";
+      } else {
+        if (phoneCheck) phoneCheck.style.display = "none";
+      }
+
       const validAmount = !isSupport || (Number.isInteger(selectedAmount) && selectedAmount >= 1 && selectedAmount <= 1000);
+      const isReady = valid && Boolean(selectedProvider) && validAmount;
 
-      if (validPhone) {
-        phoneInput.style.borderColor = "#10b981";
-        phoneCheck.style.display = "block";
-      } else {
-        phoneInput.style.borderColor = val.length > 3 ? "#ef4444" : "rgba(255, 255, 255, 0.12)";
-        phoneCheck.style.display = "none";
-      }
-
-      if (validPhone && validAmount) {
-        submitBtn.disabled = false;
-        submitBtn.classList.add("ready");
-      } else {
-        submitBtn.disabled = true;
-        submitBtn.classList.remove("ready");
-      }
+      submitBtn.disabled = !isReady;
+      submitBtn.classList.toggle("ready", isReady);
     }
 
-    phoneInput.addEventListener("input", validateForm);
+    phoneInput.addEventListener("input", () => {
+      const cursor = phoneInput.selectionStart;
+      const formatted = formatDrcLocalDisplay(phoneInput.value);
+      phoneInput.value = formatted;
+      validateForm();
+    });
+
+    phoneInput.addEventListener("blur", () => {
+      const raw = phoneInput.value.trim();
+      if (raw.length > 0 && !isValidDrcPhone(raw)) {
+        if (phoneError) phoneError.style.display = "block";
+        phoneInput.style.borderColor = "#ef4444";
+      } else {
+        if (phoneError) phoneError.style.display = "none";
+      }
+    });
+
     updateButtonLabel();
-    setTimeout(() => phoneInput.focus(), 50);
+    setTimeout(() => phoneInput.focus(), 60);
 
     let currentTxId = null;
 
-    // Polling du statut
+    // Polling du statut (inchangé)
     async function pollStatus(txId) {
       try {
         const headers = {};
@@ -700,16 +836,17 @@
         if (data.status === "succeeded") {
           clearInterval(pollIntervalId);
           clearInterval(countdownIntervalId);
+          
+          const successAmountEl = document.getElementById("xera-mm-success-amount");
+          if (successAmountEl) {
+            successAmountEl.textContent = isSupport ? formatCurrencyFr(selectedAmount) : (options.amountLabel || "");
+          }
+
           showStep("success");
 
           if (typeof options.onSuccess === "function") {
             options.onSuccess(data);
           }
-
-          setTimeout(() => {
-            cleanupModal();
-            window.location.reload();
-          }, 2400);
         } else if (data.status === "failed") {
           clearInterval(pollIntervalId);
           clearInterval(countdownIntervalId);
@@ -726,12 +863,21 @@
       currentTxId = txId;
       showStep("waiting");
 
-      let secondsLeft = 120;
+      const totalSeconds = 120;
+      let secondsLeft = totalSeconds;
+      const circumference = 264; // 2 * pi * 42
+
       countdownIntervalId = setInterval(() => {
         secondsLeft -= 1;
         const mins = String(Math.floor(secondsLeft / 60)).padStart(2, "0");
         const secs = String(secondsLeft % 60).padStart(2, "0");
         if (countdownEl) countdownEl.textContent = mins + ":" + secs;
+
+        // Mise à jour de l'anneau qui se vide
+        if (ringMeter) {
+          const progress = (totalSeconds - secondsLeft) / totalSeconds;
+          ringMeter.style.strokeDashoffset = String(circumference * progress);
+        }
 
         if (secondsLeft <= 0) {
           clearInterval(countdownIntervalId);
@@ -744,19 +890,25 @@
       pollStatus(txId);
     }
 
-    // Clic sur Payer
+    // Soumission du paiement
     submitBtn.addEventListener("click", async () => {
       formError.style.display = "none";
       const rawPhone = phoneInput.value.trim();
 
       if (!isValidDrcPhone(rawPhone)) {
-        formError.textContent = "Veuillez entrer un numéro de téléphone RDC valide (+243...).";
+        if (phoneError) phoneError.style.display = "block";
+        phoneInput.style.borderColor = "#ef4444";
+        return;
+      }
+
+      if (!selectedProvider) {
+        formError.textContent = "Veuillez sélectionner un opérateur.";
         formError.style.display = "block";
         return;
       }
 
       if (isSupport && (!selectedAmount || selectedAmount < 1)) {
-        formError.textContent = "Veuillez sélectionner un montant valide (minimum 1 $).";
+        formError.textContent = "Veuillez choisir un montant valide.";
         formError.style.display = "block";
         return;
       }
@@ -767,7 +919,7 @@
 
       submitBtn.disabled = true;
       submitBtn.classList.remove("ready");
-      submitBtn.innerHTML = '<span style="display:inline-block;width:14px;height:14px;border:2px solid #fff;border-top-color:transparent;border-radius:50%;animation:xeraMmSpin 0.6s linear infinite;margin-right:8px;vertical-align:middle;"></span> Initialisation...';
+      submitBtn.innerHTML = `${SVG.spinner} <span>Traitement en cours…</span>`;
 
       try {
         const payload = { ...(options.payload || {}) };
@@ -812,7 +964,7 @@
         submitBtn.disabled = false;
         submitBtn.classList.add("ready");
         updateButtonLabel();
-        formError.textContent = "Erreur réseau : " + err.message;
+        formError.textContent = "Erreur de connexion. Veuillez réessayer.";
         formError.style.display = "block";
       }
     });
@@ -828,6 +980,11 @@
 
     document.getElementById("xera-mm-done-btn")?.addEventListener("click", () => {
       cleanupModal();
+      window.location.reload();
+    });
+
+    document.getElementById("xera-mm-timeout-close-btn")?.addEventListener("click", () => {
+      cleanupModal();
     });
   }
 
@@ -835,7 +992,7 @@
   async function openSupportCheckout({ creatorId, creatorName, accessToken, onSuccess }) {
     return openMobileMoneyCheckout({
       type: "support",
-      title: `Soutien à ${creatorName || "ce créateur"}`,
+      title: "Soutien direct",
       creatorId,
       creatorName,
       accessToken,
