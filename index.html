@@ -3,12 +3,19 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>XERA | Tracez votre progression</title>
+        <title>XERA1 | Tracez votre progression</title>
         <link rel="manifest" href="/manifest.json" />
-        <link rel="preload" as="image" href="icons/logo-192x192.png" />
-        <link rel="preload" as="image" href="icons/logo-512x512.png" />
+        <link rel="preload" as="image" href="icons/logo.png" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link rel="preconnect" href="https://cdn.jsdelivr.net" />
         <link
-            href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;600;700;800&display=swap"
+            rel="preconnect"
+            href="https://ssbuagqwjptyhavinkxg.supabase.co"
+            crossorigin
+        />
+        <link
+            href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,500;6..96,600;6..96,700&family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;600;700;800&display=swap"
             rel="stylesheet"
         />
         <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -29,36 +36,47 @@
                 }
             })();
         </script>
-        <link rel="icon" type="image/png" href="icons/logo-192x192.png" />
-        <link rel="shortcut icon" href="icons/logo-192x192.png" />
-        <link rel="apple-touch-icon" href="icons/logo-192x192.png" />
+        <link rel="icon" type="image/png" href="icons/logo.png" />
+        <link rel="shortcut icon" href="icons/logo.png" />
+        <link rel="apple-touch-icon" href="icons/logo.png" />
         <meta name="theme-color" content="#050505" />
         <meta
             name="description"
-            content="XERA - Plateforme de suivi de progression transparente sans dopamine sociale"
+            content="Certifiez votre trajectoire, vos jalons et votre exécution de build."
+        />
+        <meta
+            name="keywords"
+            content="XERA1, plateforme de progression, suivi de projet, construire en public, preuve de réalisation, créateurs, startups"
         />
 
-        <meta property="og:title" content="XERA | Découvrez les trajectoires" />
+        <link rel="canonical" href="https://xera1.xyz/" />
+        <meta property="og:site_name" content="XERA1" />
+        <meta
+            property="og:title"
+            content="XERA1 — Infrastructure de Proof of Building"
+        />
         <meta
             property="og:description"
-            content="XERA - Plateforme de suivi de progression transparente sans dopamine sociale"
+            content="Certifiez votre trajectoire, vos jalons et votre exécution de build."
         />
         <meta property="og:type" content="website" />
-        <meta property="og:url" content="" />
-        <meta property="og:image" content="" />
+        <meta property="og:url" content="https://xera1.xyz/" />
+        <meta property="og:image" content="https://xera1.xyz/icons/logo.png" />
         <meta property="og:image:width" content="1200" />
         <meta property="og:image:height" content="630" />
 
         <meta name="twitter:card" content="summary_large_image" />
         <meta
             name="twitter:title"
-            content="XERA | Découvrez les trajectoires"
+            content="XERA1 — Infrastructure de Proof of Building"
         />
         <meta
             name="twitter:description"
-            content="XERA - Plateforme de suivi de progression transparente"
+            content="Certifiez votre trajectoire, vos jalons et votre exécution de build."
         />
-        <meta name="twitter:image" content="" />
+        <meta name="twitter:image" content="https://xera1.xyz/icons/logo.png" />
+
+        <script src="js/seo-schema.js"></script>
 
         <script>
             (function () {
@@ -77,7 +95,7 @@
                             // Mettre à jour les meta tags OG rapidement
                             document.querySelector(
                                 'meta[property="og:title"]',
-                            ).content = content.title || "Contenu XERA";
+                            ).content = content.title || "Contenu XERA1";
                             document.querySelector(
                                 'meta[property="og:description"]',
                             ).content = content.description || "";
@@ -133,86 +151,38 @@
                     "",
             };
         </script>
-        <script src="https://cdn.tailwindcss.com"></script>
-        <link
-            rel="preload"
-            href="css/style.css?v=20260723-1"
-            as="style"
-            onload="
-                this.onload = null;
-                this.rel = 'stylesheet';
-            "
-        />
-        <noscript
-            ><link rel="stylesheet" href="css/style.css?v=20260723-1"
-        /></noscript>
-        <link
-            rel="preload"
-            href="css/search-notification.css"
-            as="style"
-            onload="
-                this.onload = null;
-                this.rel = 'stylesheet';
-            "
-        />
-        <noscript
-            ><link rel="stylesheet" href="css/search-notification.css"
-        /></noscript>
-        <link
-            rel="preload"
-            href="css/arcs.css"
-            as="style"
-            onload="
-                this.onload = null;
-                this.rel = 'stylesheet';
-            "
-        />
-        <noscript><link rel="stylesheet" href="css/arcs.css" /></noscript>
-        <link
-            rel="preload"
-            href="css/streaming-analytics.css"
-            as="style"
-            onload="
-                this.onload = null;
-                this.rel = 'stylesheet';
-            "
-        />
-        <noscript
-            ><link rel="stylesheet" href="css/streaming-analytics.css"
-        /></noscript>
+        <link rel="stylesheet" href="css/style.css?v=20261105-fata-rewards" />
+        <link rel="stylesheet" href="css/messages-ui.css?v=20261005-2" />
+        <link rel="stylesheet" href="css/search-notification.css" />
+        <link rel="stylesheet" href="css/arcs.css" />
+        <link rel="stylesheet" href="css/streaming-analytics.css" />
         <link
             id="monetization-css"
-            rel="preload"
-            as="style"
-            href="css/monetization.css"
-            onload="
-                this.onload = null;
-                this.rel = 'stylesheet';
-            "
+            rel="stylesheet"
+            href="css/monetization.css?v=20261004-2"
         />
-        <noscript
-            ><link rel="stylesheet" href="css/monetization.css"
-        /></noscript>
+        <!-- Icônes : chargées sans bloquer le premier affichage -->
         <link
-            rel="preload"
-            as="style"
+            rel="stylesheet"
             href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
-            onload="
-                this.onload = null;
-                this.rel = 'stylesheet';
-            "
+            media="print"
+            onload="this.media='all'"
         />
-        <noscript
-            ><link
+        <noscript>
+            <link
                 rel="stylesheet"
                 href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
-        /></noscript>
+            />
+        </noscript>
         <script
             src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.111.0/dist/umd/supabase.js"
             defer
         ></script>
+        <script src="js/fata-integration.js?v=20261108-2" defer></script>
+        <!-- Dernière feuille du <head>, comme l'était le <style> du CDN Tailwind -->
+        <link rel="stylesheet" href="css/tailwind.css?v=20261006-1" />
     </head>
-    <body class="has-mobile-nav">
+    <body class="has-mobile-nav index-page">
         <div id="global-progress-bar-placeholder"></div>
         <div id="toast-container"></div>
 
@@ -244,82 +214,18 @@
                 style="cursor: pointer"
             >
                 <div class="logo-img">
-                    <img src="icons/logo.png" alt="XERA - Logo" />
+                    <img src="icons/logo.png" alt="XERA1 - Logo" />
                 </div>
-                <span>XΞRA</span>
+                <span class="logo-text">XΞRA1</span>
             </a>
             <div class="nav-links">
-                <a
-                    id="nav-discover"
-                    class="notification-button nav-discover-btn"
-                    onclick="navigateTo('discover')"
-                    title="Discover"
-                    aria-label="Discover"
-                >
-                    <svg
-                        class="notification-icon nav-discover-icon"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                    >
-                        <path d="M3 10.5L12 3l9 7.5"></path>
-                        <path d="M5 10v10h14V10"></path>
-                        <path d="M9 20v-6h6v6"></path>
-                    </svg>
-                </a>
-                <div
-                    class="notification-button profile-nav-button"
-                    onclick="handleProfileNavigation()"
-                    id="nav-profile"
-                    title="My Trajectory"
-                    aria-label="My Trajectory"
-                    role="button"
-                >
-                    <img
-                        id="nav-profile-avatar"
-                        class="notification-icon profile-nav-avatar"
-                        src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'><rect width='40' height='40' rx='20' fill='%231f2937'/><circle cx='20' cy='16' r='6' fill='%23e5e7eb'/><path d='M8%2034c2.5-6%208-9%2012-9s9.5%203%2012%209' fill='%23e5e7eb'/></svg>"
-                        alt="Avatar utilisateur"
-                    />
-                </div>
-                <div
-                    class="notification-button"
-                    id="nav-pro-page"
-                    onclick="window.navigateToProfessionalPage?.()"
-                    style="display: none; cursor: pointer"
-                    title="Page Pro"
-                >
-                    <img
-                        src="icons/enterprise.svg"
-                        alt="Business"
-                        class="notification-icon"
-                    />
-                </div>
-                <div
-                    class="notification-button messages-nav-button"
-                    onclick="openMessagesPage()"
-                    style="display: none"
-                    id="messages-nav-btn"
-                    title="Messages"
-                >
-                    <img
-                        src="icons/message.svg"
-                        alt="Messages"
-                        class="notification-icon"
-                    />
-                    <span
-                        id="messages-nav-badge"
-                        class="notification-badge"
-                    ></span>
-                </div>
-                <div
+                <button
+                    type="button"
                     class="notification-button"
                     onclick="toggleNotificationPanel()"
-                    style="display: none"
                     id="notification-btn"
+                    title="Notifications"
+                    aria-label="Notifications"
                 >
                     <svg
                         class="notification-icon"
@@ -327,6 +233,7 @@
                         fill="none"
                         stroke="currentColor"
                         stroke-width="2"
+                        aria-hidden="true"
                     >
                         <path
                             d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"
@@ -337,13 +244,144 @@
                         id="notification-badge"
                         class="notification-badge"
                     ></span>
-                </div>
-
-                <a href="login.html" id="nav-auth" data-i18n="navAuth"
-                    >Login / Register</a
-                >
+                </button>
             </div>
         </nav>
+
+        <!-- Popover Hub Profil -->
+        <div id="profile-hub-popover" class="profile-hub-popover">
+            <!-- En-tête profil cliquable → mène au profil + édition -->
+            <a href="profile-personal.html" class="hub-user-header hub-user-header--link" title="Voir et modifier mon profil">
+                <div class="hub-avatar-wrap">
+                    <img
+                        id="hub-user-avatar"
+                        class="hub-user-avatar"
+                        src="icons/logo.png"
+                        alt="Avatar"
+                    />
+                    <span class="hub-avatar-edit-hint"><i class="fas fa-pen"></i></span>
+                </div>
+                <div class="hub-user-info">
+                    <span id="hub-user-name" class="hub-user-name">Bâtisseur XERA1</span>
+                    <span id="hub-user-handle" class="hub-user-handle">@builder</span>
+                    <span id="hub-pro-badge" class="hub-badge-pro" style="display: none">
+                        <i class="fas fa-certificate"></i> PRO
+                    </span>
+                    <span class="hub-edit-label"><i class="fas fa-pencil-alt"></i> Modifier le profil</span>
+                </div>
+            </a>
+
+            <div class="hub-menu-group">
+                <button
+                    type="button"
+                    class="hub-menu-item"
+                    id="nav-pro-page"
+                    onclick="window.navigateToProfessionalPage?.()"
+                    style="display: none"
+                >
+                    <i class="fas fa-building"></i>
+                    <span>Page Pro / Entreprise</span>
+                </button>
+                <button
+                    type="button"
+                    class="hub-menu-item"
+                    onclick="location.href = 'subscription-plans.html'"
+                >
+                    <i class="fas fa-wallet"></i>
+                    <span>Abonnements</span>
+                </button>
+                <button type="button" class="hub-menu-item" id="nav-fata-btn">
+                    <img
+                        src="icons/fata.webp"
+                        style="width: 18px; height: 18px; object-fit: contain"
+                        alt="Fata"
+                    />
+                    <span>Challenge Fata</span>
+                </button>
+            </div>
+
+            <div class="hub-divider"></div>
+
+            <div class="hub-footer-row">
+                <div class="lang-switcher-nav">
+                    <select
+                        id="header-lang-select"
+                        class="nav-lang-select"
+                        aria-label="Language selection"
+                    >
+                        <option value="fr">FR</option>
+                        <option value="en">EN</option>
+                    </select>
+                </div>
+                <a
+                    href="login.html"
+                    id="nav-auth"
+                    class="hub-menu-item"
+                    style="width: auto; padding: 0.4rem 0.6rem"
+                    data-i18n="navAuth"
+                    >Connexion</a
+                >
+            </div>
+        </div>
+
+        <!-- Mobile Bottom Navigation Dock (Elevated Material/iOS Dark) -->
+        <div class="xera-bottom-nav">
+            <a
+                class="xera-bottom-item active"
+                onclick="navigateTo('discover')"
+                title="Accueil"
+            >
+                <div class="xera-bottom-icon">
+                    <i class="fas fa-home"></i>
+                </div>
+                <span>Accueil</span>
+                <span class="bottom-active-pill"></span>
+            </a>
+            <a
+                class="xera-bottom-item"
+                onclick="document.querySelector('.search-input')?.focus()"
+                title="Explorer"
+            >
+                <div class="xera-bottom-icon">
+                    <i class="fas fa-search"></i>
+                </div>
+                <span>Explorer</span>
+                <span class="bottom-active-pill"></span>
+            </a>
+            <button
+                type="button"
+                class="xera-bottom-fab"
+                onclick="window.openCreateChoiceModal?.()"
+                title="Créer"
+                aria-label="Créer"
+            >
+                <i class="fas fa-plus"></i>
+            </button>
+            <a
+                class="xera-bottom-item xera-bottom-item--messages"
+                onclick="openMessagesPage()"
+                title="Messages"
+            >
+                <div class="xera-bottom-icon">
+                    <i class="fas fa-envelope"></i>
+                </div>
+                <span>Messages</span>
+                <span class="bottom-active-pill"></span>
+            </a>
+            <a
+                class="xera-bottom-item"
+                href="#"
+                data-profile-hub-trigger
+                title="Profil"
+                aria-label="Ouvrir le menu Profil"
+            >
+                <div class="xera-bottom-icon">
+                    <i class="fas fa-user"></i>
+                </div>
+                <span>Profil</span>
+                <span class="bottom-active-pill"></span>
+            </a>
+        </div>
 
         <section class="hero" id="hero" data-state="loading" aria-busy="true">
             <div class="hero-loading" aria-hidden="true">
@@ -362,7 +400,7 @@
                         The operating system for ambitious builders.
                     </h1>
                     <p class="hero-lede" data-i18n="heroLede">
-                        XERA helps founders, creators and teams turn progress
+                        XERA1 helps founders, creators and teams turn progress
                         into proof, visibility and momentum.
                     </p>
                     <ul class="hero-bullets" id="hero-bullets">
@@ -402,6 +440,31 @@
                                 <polygon points="5 3 19 12 5 21 5 3"></polygon>
                             </svg>
                         </button>
+                        <a
+                            class="btn btn-ghost hero-secondary hero-docs-btn"
+                            href="https://docs.xera1.xyz"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >
+                            <span>Documentation</span>
+                            <svg
+                                width="18"
+                                height="18"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                aria-hidden="true"
+                            >
+                                <path d="M14 3h7v7"></path>
+                                <path d="M10 14 21 3"></path>
+                                <path
+                                    d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"
+                                ></path>
+                            </svg>
+                        </a>
                     </div>
                     <p class="hero-meta" data-i18n="heroMeta">
                         projet creation → trace logging → dashboard.
@@ -440,12 +503,13 @@
                             <video
                                 id="hero-demo-video"
                                 class="hero-video-player"
-                                src="medias/Create%20arc.MOV"
+                                data-src="medias/create-arc-demo.mp4"
+                                poster="medias/create-arc-demo.webp"
                                 autoplay
                                 muted
                                 loop
                                 playsinline
-                                preload="metadata"
+                                preload="none"
                             >
                                 Your browser does not support the video tag.
                             </video>
@@ -482,7 +546,7 @@
                                 target="_blank"
                                 class="partner-logo-link opacity-40 hover:opacity-100 transition-opacity duration-300"
                             >
-                                <img
+                                <img loading="lazy" decoding="async"
                                     src="./icons/Impact_Hub.webp"
                                     alt="Impact Hub"
                                     class="h-10 md:h-12 object-contain grayscale hover:grayscale-0 transition-all duration-500"
@@ -493,7 +557,7 @@
                                 target="_blank"
                                 class="partner-logo-link opacity-40 hover:opacity-100 transition-opacity duration-300"
                             >
-                                <img
+                                <img loading="lazy" decoding="async"
                                     src="./icons/station-f.png"
                                     alt="Station F"
                                     class="h-10 md:h-12 object-contain grayscale hover:grayscale-0 transition-all duration-500"
@@ -504,9 +568,9 @@
                                 target="_blank"
                                 class="partner-logo-link opacity-40 hover:opacity-100 transition-opacity duration-300"
                             >
-                                <img
+                                <img loading="lazy" decoding="async"
                                     src="./icons/fata.webp"
-                                    alt="Fata School"
+                                    alt="Fata"
                                     class="h-12 md:h-16 object-contain grayscale hover:grayscale-0 transition-all duration-500"
                                 />
                             </a>
@@ -515,7 +579,7 @@
                                 target="_blank"
                                 class="partner-logo-link opacity-40 hover:opacity-100 transition-opacity duration-300"
                             >
-                                <img
+                                <img loading="lazy" decoding="async"
                                     src="./icons/neddigi.jpeg"
                                     alt="Neddigi"
                                     class="h-12 md:h-16 object-contain grayscale hover:grayscale-0 transition-all duration-500 rounded"
@@ -527,7 +591,7 @@
                                 rel="noopener noreferrer"
                                 class="partner-logo-link opacity-40 hover:opacity-100 transition-opacity duration-300"
                             >
-                                <img
+                                <img loading="lazy" decoding="async"
                                     src="./icons/electrical service.jpeg"
                                     alt="electrical service"
                                     class="h-12 md:h-16 object-contain grayscale hover:grayscale-0 transition-all duration-500 rounded"
@@ -539,7 +603,7 @@
                                 class="partner-logo-link opacity-40 hover:opacity-100 transition-opacity duration-300"
                                 aria-hidden="true"
                             >
-                                <img
+                                <img loading="lazy" decoding="async"
                                     src="./icons/Impact_Hub.webp"
                                     alt=""
                                     class="h-10 md:h-12 object-contain grayscale hover:grayscale-0 transition-all duration-500"
@@ -551,7 +615,7 @@
                                 class="partner-logo-link opacity-40 hover:opacity-100 transition-opacity duration-300"
                                 aria-hidden="true"
                             >
-                                <img
+                                <img loading="lazy" decoding="async"
                                     src="./icons/station-f.png"
                                     alt=""
                                     class="h-10 md:h-12 object-contain grayscale hover:grayscale-0 transition-all duration-500"
@@ -563,9 +627,9 @@
                                 class="partner-logo-link opacity-40 hover:opacity-100 transition-opacity duration-300"
                                 aria-hidden="true"
                             >
-                                <img
+                                <img loading="lazy" decoding="async"
                                     src="./icons/fata.webp"
-                                    alt=""
+                                    alt="Fata"
                                     class="h-12 md:h-16 object-contain grayscale hover:grayscale-0 transition-all duration-500"
                                 />
                             </a>
@@ -575,7 +639,7 @@
                                 class="partner-logo-link opacity-40 hover:opacity-100 transition-opacity duration-300"
                                 aria-hidden="true"
                             >
-                                <img
+                                <img loading="lazy" decoding="async"
                                     src="./icons/neddigi.jpeg"
                                     alt=""
                                     class="h-12 md:h-16 object-contain grayscale hover:grayscale-0 transition-all duration-500 rounded"
@@ -588,7 +652,7 @@
                                 class="partner-logo-link opacity-40 hover:opacity-100 transition-opacity duration-300"
                                 aria-hidden="true"
                             >
-                                <img
+                                <img loading="lazy" decoding="async"
                                     src="./icons/electrical service.jpeg"
                                     alt=""
                                     class="h-12 md:h-16 object-contain grayscale hover:grayscale-0 transition-all duration-500 rounded"
@@ -598,6 +662,191 @@
                     </div>
                 </div>
             </div>
+
+            <section
+                id="fata-challenge-panel"
+                class="fata-challenge-panel"
+                aria-labelledby="fata-challenge-title"
+            >
+                <div class="container">
+                    <div class="fata-mini-shell">
+                        <button
+                            type="button"
+                            class="fata-close-btn"
+                            aria-label="Fermer le challenge Fata"
+                        >
+                            ×
+                        </button>
+
+                        <div class="fata-mini-header">
+                            <div class="fata-mini-copy">
+                                <span
+                                    class="fata-kicker"
+                                    data-i18n="fataChallenge.title"
+                                    >Challenge partenaire</span
+                                >
+                                <h2 id="fata-challenge-title">Fata × XERA1</h2>
+                                <p>
+                                    Présentez votre trajectoire, publiez votre
+                                    preuve et validez votre premier jalon.
+                                </p>
+                            </div>
+                            <div class="fata-mini-meta">
+                                <div class="fata-partner-pill">
+                                    <img loading="lazy" decoding="async" src="./icons/fata.webp" alt="Fata" />
+                                    <span>Fata</span>
+                                </div>
+                                <span
+                                    class="status-badge status-badge--success"
+                                    data-i18n="common.active"
+                                >
+                                    Ouvert
+                                </span>
+                            </div>
+                        </div>
+
+                        <div
+                            class="fata-badge-row"
+                            aria-label="Récompenses du challenge Fata"
+                        >
+                            <div class="fata-badge-pill">
+                                <span class="fata-badge-mark">✦</span>
+                                <div class="fata-badge-copy">
+                                    <strong>Badge officiel Fata</strong>
+                                    <small data-fata-badge-status>Offert après validation du challenge.</small>
+                                </div>
+                            </div>
+
+                            <div
+                                class="fata-certificate-card"
+                                aria-label="Récompenses du challenge Fata"
+                            >
+                                <div class="fata-certificate-top">
+                                    <span
+                                        class="fata-section-label"
+                                        data-i18n="fataChallenge.reward"
+                                        >Récompense</span
+                                    >
+                                    <span
+                                        class="status-badge status-badge--pending"
+                                        data-fata-visibility-status
+                                        >À débloquer</span
+                                    >
+                                </div>
+                                <div class="fata-certificate-name" data-fata-visibility-title>
+                                    Visibilité XERA1 ×5 dans le feed
+                                </div>
+                                <small>Débloquée après validation officielle du challenge.</small>
+                            </div>
+                        </div>
+
+                        <div class="fata-mini-grid">
+                            <div class="fata-mini-card main">
+                                <div class="fata-mini-card-header">
+                                    <span
+                                        class="fata-section-label"
+                                        data-i18n="fataChallenge.title"
+                                        >Challenge</span
+                                    >
+                                    <button
+                                        type="button"
+                                        class="btn btn-primary btn-small fata-view-challenge-btn"
+                                        data-i18n="common.view"
+                                    >
+                                        Voir le défi
+                                    </button>
+                                </div>
+
+                                <div class="fata-mini-summary">
+                                    <div class="fata-mini-summary-item">
+                                        <span
+                                            class="fata-label"
+                                            data-i18n="common.status"
+                                            >Statut</span
+                                        >
+                                        <strong data-i18n="fataChallenge.status"
+                                            >À démarrer</strong
+                                        >
+                                    </div>
+                                    <div class="fata-mini-summary-item">
+                                        <span class="fata-label">Objectif</span>
+                                        <strong data-i18n="fataChallenge.goal"
+                                            >3 étapes clés</strong
+                                        >
+                                    </div>
+                                </div>
+
+                                <div
+                                    class="fata-mini-steps"
+                                    aria-label="Étapes du challenge"
+                                >
+                                    <div
+                                        class="fata-step-pill active"
+                                        tabindex="0"
+                                        data-i18n="fataChallenge.step1"
+                                    >
+                                        1. Présenter un projet
+                                    </div>
+                                    <div
+                                        class="fata-step-pill"
+                                        tabindex="0"
+                                        data-i18n="fataChallenge.step2"
+                                    >
+                                        2. Publier une preuve
+                                    </div>
+                                    <div
+                                        class="fata-step-pill"
+                                        tabindex="0"
+                                        data-i18n="fataChallenge.step3"
+                                    >
+                                        3. Valider un jalon
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="fata-mini-card auth">
+                                <div class="fata-mini-card-header auth-header">
+                                    <span
+                                        class="fata-section-label"
+                                        data-i18n="nav.login"
+                                        >Connexion</span
+                                    >
+                                </div>
+
+                                <div class="fata-auth-box">
+                                    <div class="fata-auth-icon">
+                                        <i class="fa-solid fa-link"></i>
+                                    </div>
+                                    <div
+                                        class="fata-auth-status"
+                                        data-i18n="fataChallenge.connectionRequired"
+                                    >
+                                        Compte Fata non connecté
+                                    </div>
+                                    <div
+                                        class="fata-auth-id"
+                                        data-i18n="fataChallenge.connectPrompt"
+                                    >
+                                        Connectez votre compte pour commencer le
+                                        challenge.
+                                    </div>
+                                    <button
+                                        type="button"
+                                        class="btn btn-primary btn-wide fata-connect-btn"
+                                        data-i18n="fataChallenge.connectPrompt"
+                                    >
+                                        Connecter mon compte Fata
+                                    </button>
+                                    <p class="fata-connection-note" hidden>
+                                        La liaison sera activée après ouverture
+                                        du parcours Fata sécurisé.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
 
             <button
                 type="button"
@@ -616,7 +865,9 @@
             <div class="container">
                 <div class="discover-header discover-editorial-header">
                     <div class="discover-editorial-copy">
-                        <p class="discover-kicker">XERA Feed</p>
+                        <p class="discover-kicker" data-i18n="hero.feedTitle">
+                            XERA1 Feed
+                        </p>
                         <p class="discover-subtitle" data-i18n="discoverSub">
                             Live trajectories, proof first.
                         </p>
@@ -649,6 +900,7 @@
                         <button
                             class="filter-btn active"
                             data-filter="all"
+                            data-i18n="discover.filterAll"
                             onclick="toggleDiscoverFilter('all')"
                             aria-pressed="true"
                         >
@@ -657,6 +909,7 @@
                         <button
                             class="filter-btn"
                             data-filter="live"
+                            data-i18n="discover.filterLive"
                             onclick="toggleDiscoverFilter('live')"
                             aria-pressed="false"
                         >
@@ -665,6 +918,7 @@
                         <button
                             class="filter-btn"
                             data-filter="video"
+                            data-i18n="discover.filterVideo"
                             onclick="toggleDiscoverFilter('video')"
                             aria-pressed="false"
                         >
@@ -673,6 +927,7 @@
                         <button
                             class="filter-btn"
                             data-filter="projects"
+                            data-i18n="discover.filterProjects"
                             onclick="toggleDiscoverFilter('projects')"
                             aria-pressed="false"
                         >
@@ -719,56 +974,45 @@
         </section>
 
         <div id="settings-button-container"></div>
-        <div id="floating-create-container">
-            <button
-                id="floating-create-btn"
-                class="btn-add"
-                title="Publier une mise à jour"
-            >
-                <img src="icons/plus.svg" alt="Publier" />
-            </button>
-        </div>
 
+        <script src="js/logger-client.js"></script>
         <script src="js/telemetry.js" defer></script>
-        <script src="js/router.js" defer></script>
-        <script src="js/supabase-config.js" defer></script>
+        <script src="js/router.js?v=20261105-2" defer></script>
+        <script src="js/supabase-config.js?v=20261108-2" defer></script>
         <script src="js/monetization-utils.js" defer></script>
-        <script src="js/monetization.js?v=20260319-1" defer></script>
-        <script src="js/monetization-ui.js?v=20260319-1" defer></script>
+        <script src="js/monetization.js?v=20261004-3" defer></script>
+        <script src="js/monetization-ui.js?v=20261006-1" defer></script>
         <script src="js/push-config.js" defer></script>
         <script src="js/influence.js" defer></script>
         <script src="js/i18n.js" defer></script>
-        <script
-            src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"
-            defer
-        ></script>
-        <script src="js/analytics.js" defer></script>
+        <script src="js/analytics.js?v=20261006-1" defer></script>
         <script src="js/ux-enhancements.js" defer></script>
         <script src="js/app-enhancements.js" defer></script>
         <script src="js/premium-ui.js" defer></script>
         <script src="js/pwa-install.js" defer></script>
         <script src="js/search.js" defer></script>
-        <script src="js/notifications.js?v=20260502-1" defer></script>
-        <script src="js/messages.js?v=20260502-3" defer></script>
-        <script src="js/file-upload.js" defer></script>
+        <script src="js/notifications.js?v=20261004-1" defer></script>
+        <script src="js/messages.js?v=20261006-1" defer></script>
+        <script src="js/c2pa-utils.js" defer></script>
+        <script src="js/file-upload.js?v=20261006-1" defer></script>
         <script src="js/nudges.js" defer></script>
         <script src="js/tutorial.js" defer></script>
-        <script src="js/arcs.js" defer></script>
-        <script src="js/professional-pages.js?v=20260722-3" defer></script>
+        <script src="js/arcs.js?v=20261108-2" defer></script>
+        <script src="js/professional-pages.js?v=20261006-1" defer></script>
         <script
-            src="https://unpkg.com/react@18/umd/react.production.min.js"
+            src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"
             crossorigin
             defer
         ></script>
         <script
-            src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
+            src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"
             crossorigin
             defer
         ></script>
         <script src="js/pro-settings-component.js?v=20260723-1" defer></script>
-        <script src="js/app-supabase.js?v=20260502-3" defer></script>
-        <script src="js/xera-platform-bridge.js?v=20260424-1" defer></script>
-        <script src="js/xera-react-core.js?v=20260424-1" defer></script>
+        <script src="js/app-supabase.js?v=20261105-fata-rewards" defer></script>
+        <script src="js/xera-platform-bridge.js?v=20260828-1" defer></script>
+        <script src="js/xera-react-core.js?v=20260828-1" defer></script>
         <script src="js/react-app.js?v=20260424-1" defer></script>
         <script src="js/session-manager.js" defer></script>
 
@@ -798,8 +1042,11 @@
                     typeof initializeNotifications === "function"
                 ) {
                     initializeNotifications();
-                    document.getElementById("notification-btn").style.display =
-                        "flex";
+                    const notificationButton =
+                        document.getElementById("notification-btn");
+                    if (notificationButton) {
+                        notificationButton.style.display = "flex";
+                    }
                 }
 
                 // Bouton flottant de publication
@@ -869,11 +1116,35 @@
                     });
                 }
 
+                // La démo (1,3 Mo) ne se charge qu'une fois la page affichée, et
+                // pas d'elle-même en mode économie de données / 2G.
+                const loadHeroVideo = () => {
+                    if (!heroVideo || heroVideo.getAttribute("src")) return;
+                    heroVideo.src = heroVideo.dataset.src;
+                };
+                if (heroVideo) {
+                    const connection = navigator.connection;
+                    const constrainedNetwork =
+                        connection &&
+                        (connection.saveData ||
+                            /(^|-)2g$/.test(connection.effectiveType || ""));
+                    if (constrainedNetwork) {
+                        heroVideo.removeAttribute("autoplay");
+                    } else if (document.readyState === "complete") {
+                        loadHeroVideo();
+                    } else {
+                        window.addEventListener("load", loadHeroVideo, {
+                            once: true,
+                        });
+                    }
+                }
+
                 const openDemoFullscreen = async () => {
                     if (!heroVideo) {
                         scrollToDiscover();
                         return;
                     }
+                    loadHeroVideo();
                     try {
                         heroVideo.controls = true;
                         heroVideo.muted = false;
@@ -903,6 +1174,7 @@
                 // Hero demo video: allow unmute toggle
                 if (heroVideo && heroUnmute) {
                     heroUnmute.addEventListener("click", async () => {
+                        loadHeroVideo();
                         const willUnmute = heroVideo.muted;
                         heroVideo.muted = !willUnmute;
                         heroUnmute.textContent = heroVideo.muted
@@ -921,6 +1193,7 @@
 
                     // Fullscreen on click/tap
                     heroVideo.addEventListener("click", async () => {
+                        loadHeroVideo();
                         try {
                             if (document.fullscreenElement) {
                                 await document.exitFullscreen();
@@ -947,6 +1220,7 @@
                 }
             });
         </script>
+        <script src="js/navigation-hub.js?v=20261105-1" defer></script>
         <script src="js/ui-motion.js" defer></script>
     </body>
 </html>

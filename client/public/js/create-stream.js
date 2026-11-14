@@ -1,5 +1,5 @@
 /* ========================================
-   CREATE STREAM - XERA
+   CREATE STREAM - XERA1
    Gestion complète de la création de live stream
    ======================================== */
 
@@ -592,7 +592,7 @@ class StreamCreator {
     async handleStartStream() {
         const title = document.getElementById('stream-title-input').value.trim();
         const description = document.getElementById('stream-description-input').value.trim();
-        const streamingScriptSrc = 'js/streaming.js?v=20260302-1';
+        const streamingScriptSrc = 'js/streaming.js?v=20261004-1';
         const notifyError = (msg, detail) => {
             if (window.ToastManager) {
                 ToastManager.error(msg, detail || '');

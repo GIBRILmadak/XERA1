@@ -1,4 +1,4 @@
-# XERA Egress Optimization & Bot Shutdown
+# XERA1 Egress Optimization & Bot Shutdown
 
 **Date**: May 3, 2026  
 **Issue**: Supabase Service Restricted due to excessive Egress (data out) with minimal active users  

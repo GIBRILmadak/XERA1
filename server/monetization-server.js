@@ -1,14 +1,20 @@
 const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
+const path = require("path");
+const logger = require("./logger");
+if (typeof global.WebSocket === "undefined") { try { global.WebSocket = require("ws"); } catch (e) {} }
 const { createClient } = require("@supabase/supabase-js");
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const webpush = require("web-push");
 const crypto = require("crypto");
+const {
+    validatePartnerAccess,
+    resolvePartnerPromoCode,
+    applyPartnerDiscount,
+    calculatePartnerCommission,
+} = require("./partner-logic");
 const { buildBotPostDraft } = require("./bot-post-generator");
-const oauthHandler = require("./oauth-handler");
-const { startOAuthRefreshScheduler } = require("./oauth-token-manager");
-const { startIngestionWorker } = require("./ingestion-queue");
 const { normalizeReturnPathForBrowser } = require("./payment-return-paths");
 const {
     buildDistributedMinuteSlots,
@@ -27,9 +33,10 @@ dotenv.config();
 
 const {
     APP_BASE_URL = "http://localhost:3000",
+    APP_FRONTEND_URL = "",
     PORT = 5050,
     SUPABASE_URL = "https://ssbuagqwjptyhavinkxg.supabase.co",
-    SUPABASE_SERVICE_ROLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNzYnVhZ3F3anB0eWhhdmlua3hnIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2OTk1MjUzMywiZXhwIjoyMDg1NTI4NTMzfQ._aEaTXFxqpfx64bts6Z7FoP3L4oHMGcqoi08yREU33s",
+    SUPABASE_SERVICE_ROLE_KEY,
     VAPID_PUBLIC_KEY = "BDyU4kv_cnxruA5n_i3kw0-ipEXZTINrLmwVAhyyFhXsIVC6eImDqhkLVLs77Fl-TJdyOJVZsnp-k6z_7bu0bTM",
     VAPID_PRIVATE_KEY = "6dmRHoFpyGEFgL487qqwBc9BQ184TC8N9Yd3siS94Skpka",
     PUSH_CONTACT_EMAIL = "mailto:hello@xera1.xyz",
@@ -38,7 +45,7 @@ const {
     RETURN_REMINDER_SWEEP_MS = "600000",
     RETURN_REMINDER_EMAIL_ENABLED = "0",
     RETURN_REMINDER_EMAIL_PROVIDER = "none",
-    RETURN_REMINDER_EMAIL_FROM = "XERA <hello@xera1.xyz>",
+    RETURN_REMINDER_EMAIL_FROM = "XERA1 <hello@xera1.xyz>",
     RETURN_REMINDER_EMAIL_REPLY_TO = "hello@xera1.xyz",
     RETURN_REMINDER_EMAIL_API_KEY = "",
     RETURN_REMINDER_EMAIL_WEBHOOK_URL = "",
@@ -110,7 +117,7 @@ try {
                 }),
             });
             firebaseAdminInitialized = true;
-            console.log("Firebase admin initialized for native push");
+            logger.info("Firebase admin initialized for native push");
         } catch (err) {
             console.warn(
                 "Failed to initialize Firebase admin:",
@@ -118,24 +125,125 @@ try {
             );
         }
     } else {
-        console.info("Firebase admin not configured; native push disabled.");
+        logger.info("Firebase admin not configured; native push disabled.");
     }
 } catch (err) {
-    console.info("firebase-admin not installed; native push disabled.");
+    logger.info("firebase-admin not installed; native push disabled.");
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 const app = express();
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+app.use(express.static(path.join(__dirname, "..")));
 
-// Routes OAuth
-app.use("/api/auth", oauthHandler);
+app.post("/api/account/delete", async (req, res) => {
+    try {
+        const authorization = String(req.headers.authorization || "");
+        const token = authorization.startsWith("Bearer ")
+            ? authorization.slice("Bearer ".length).trim()
+            : "";
+        if (!token) {
+            return res
+                .status(401)
+                .json({ error: "Missing authorization token" });
+        }
 
-const allowedOrigins = APP_BASE_URL.split(",")
+        const { data: authData, error: authError } =
+            await supabase.auth.getUser(token);
+        const authenticatedUser = authData?.user;
+        if (authError || !authenticatedUser?.id) {
+            return res.status(401).json({ error: "Invalid session token" });
+        }
+
+        const userId = authenticatedUser.id;
+        const requestedUserId = String(req.body?.userId || "").trim();
+        if (requestedUserId && requestedUserId !== userId) {
+            return res
+                .status(403)
+                .json({ error: "Forbidden account deletion target" });
+        }
+
+        const allowedReasons = new Set([
+            "inactive",
+            "technical",
+            "privacy",
+            "experience",
+            "other",
+        ]);
+        const reason = allowedReasons.has(String(req.body?.reason || ""))
+            ? String(req.body.reason)
+            : "other";
+        const detail = String(req.body?.detail || "")
+            .trim()
+            .slice(0, 1200);
+
+        // Keep deletion feedback separate and best-effort so it never blocks deletion.
+        try {
+            await supabase.from("feedback_inbox").insert({
+                mood: null,
+                comment:
+                    `account-delete:${reason}${detail ? ` | detail:${detail}` : ""}`.slice(
+                        0,
+                        400,
+                    ),
+                sender_user_id: userId,
+                receiver_id: null,
+            });
+        } catch (feedbackError) {
+            console.warn(
+                "Account delete feedback insert failed:",
+                feedbackError?.message || feedbackError,
+            );
+        }
+
+        const { error: profileDeleteError } = await supabase
+            .from("users")
+            .delete()
+            .eq("id", userId);
+        if (profileDeleteError) throw profileDeleteError;
+
+        const { error: authDeleteError } =
+            await supabase.auth.admin.deleteUser(userId);
+        if (authDeleteError) throw authDeleteError;
+
+        return res.json({ ok: true });
+    } catch (error) {
+        console.error("Account delete error:", error);
+        return res.status(500).json({
+            error: error?.message || "Unable to delete account",
+        });
+    }
+});
+
+const allowedOrigins = [APP_BASE_URL, APP_FRONTEND_URL]
+    .flatMap((value) => String(value || "").split(","))
     .map((v) => v.trim())
     .filter(Boolean);
+
+// Nettoie une adresse : "https://XERA1.xyz/" devient "https://xera1.xyz"
+function normalizeOrigin(value) {
+    try {
+        return new URL(String(value || "").trim()).origin.toLowerCase();
+    } catch (_) {
+        return "";
+    }
+}
+
+// Liste CORS : adresses nettoyees + variante avec / sans "www."
+const corsAllowedOrigins = new Set();
+allowedOrigins.forEach((raw) => {
+    const origin = normalizeOrigin(raw);
+    if (!origin) return;
+    corsAllowedOrigins.add(origin);
+    const variant = new URL(origin);
+    variant.hostname = variant.hostname.startsWith("www.")
+        ? variant.hostname.slice(4)
+        : "www." + variant.hostname;
+    corsAllowedOrigins.add(variant.origin);
+});
 
 function isLoopbackOrigin(origin) {
     try {
@@ -149,22 +257,43 @@ function isLoopbackOrigin(origin) {
     }
 }
 
+function isOriginAllowed(req) {
+    const origin = req.headers.origin;
+    if (!origin) return true; // webhooks, curl, appels serveur a serveur
+    const normalized = normalizeOrigin(origin);
+    if (corsAllowedOrigins.has(normalized) || isLoopbackOrigin(origin)) {
+        return true;
+    }
+    // Ton propre site qui appelle son propre serveur est toujours accepte
+    return normalized === normalizeOrigin(getRequestOrigin(req));
+}
+
+// Refus explicite : 403 clair, jamais 500
+app.use((req, res, next) => {
+    if (isOriginAllowed(req)) return next();
+    console.warn(
+        "[CORS] origine refusee:",
+        req.headers.origin,
+        "| host:",
+        req.headers.host,
+    );
+    return res.status(403).json({
+        error: "origin_not_allowed",
+        message: "Origine non autorisee.",
+    });
+});
+
 app.use(
     cors({
-        origin(origin, callback) {
-            if (!origin) {
-                callback(null, true);
-                return;
-            }
-            if (allowedOrigins.includes(origin) || isLoopbackOrigin(origin)) {
-                callback(null, true);
-                return;
-            }
-            callback(new Error("Origin not allowed by CORS"));
-        },
+        origin: true, // le controle est deja fait juste au-dessus
         methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     }),
 );
+
+// Routes OAuth: keep body parsing and CORS in front of these handlers.
+app.use("/api/auth", (req, res, next) => {
+    return require("./oauth-handler")(req, res, next);
+});
 
 const APP_PROFILE_CACHE_TTL_MS = Math.max(
     5000,
@@ -290,9 +419,18 @@ function escapeHtmlAttr(value) {
         .replace(/>/g, "&gt;");
 }
 
-const PRIMARY_ORIGIN = stripTrailingSlash(
-    allowedOrigins[0] || APP_BASE_URL.split(",")[0] || "http://localhost:3000",
-);
+const PRODUCTION_FALLBACK_ORIGIN = "https://xera1.xyz";
+const PRIMARY_ORIGIN = (() => {
+    const fromEnv =
+        APP_FRONTEND_URL.split(",")[0]?.trim() ||
+        allowedOrigins[0] ||
+        (APP_BASE_URL ? String(APP_BASE_URL).split(",")[0] : "");
+    const clean = stripTrailingSlash(fromEnv);
+    if (clean) return clean;
+    const isProd =
+        String(process.env.NODE_ENV || "").toLowerCase() === "production";
+    return isProd ? PRODUCTION_FALLBACK_ORIGIN : "http://localhost:3000";
+})();
 const CALLBACK_ORIGIN = resolveCallbackOrigin(
     CALLBACK_BASE_URL,
     PRIMARY_ORIGIN,
@@ -367,10 +505,10 @@ function renderOpenGraphSharePage({
     type = "website",
 }) {
     const safeTitle = escapeHtmlAttr(
-        title || "XERA | Tracez votre progression",
+        title || "XERA1 | Tracez votre progression",
     );
     const safeDescription = escapeHtmlAttr(
-        description || "Découvrez les trajectoires créatives sur XERA",
+        description || "Découvrez les trajectoires créatives sur XERA1",
     );
     const safeImage = escapeHtmlAttr(image || DEFAULT_SHARE_IMAGE_URL);
     const safeUrl = escapeHtmlAttr(url || PRIMARY_ORIGIN);
@@ -385,6 +523,7 @@ function renderOpenGraphSharePage({
     <title>${safeTitle}</title>
     <meta name="description" content="${safeDescription}">
     <link rel="canonical" href="${safeUrl}">
+    <meta property="og:site_name" content="XERA1">
     <meta property="og:title" content="${safeTitle}">
     <meta property="og:description" content="${safeDescription}">
     <meta property="og:type" content="${safeType}">
@@ -400,9 +539,9 @@ function renderOpenGraphSharePage({
 </head>
 <body>
     <main>
-        <h1>${escapeHtmlText(title || "XERA")}</h1>
-        <p>${escapeHtmlText(description || "Ouverture de XERA...")}</p>
-        <p><a href="${safeTargetUrl}">Ouvrir dans XERA</a></p>
+        <h1>${escapeHtmlText(title || "XERA1")}</h1>
+        <p>${escapeHtmlText(description || "Ouverture de XERA1...")}</p>
+        <p><a href="${safeTargetUrl}">Ouvrir dans XERA1</a></p>
     </main>
 </body>
 </html>`;
@@ -431,10 +570,10 @@ async function handleContentSharePage(req, res) {
             `/index.html?content=${encodeURIComponent(content.id)}`,
         );
         const html = renderOpenGraphSharePage({
-            title: content.title || "Contenu XERA",
+            title: content.title || "Contenu XERA1",
             description: summarizeShareDescription(
                 content.description,
-                "Découvrez ce contenu sur XERA",
+                "Découvrez ce contenu sur XERA1",
             ),
             image: pickShareImage(content),
             url: shareUrl,
@@ -465,7 +604,7 @@ async function handleProfileSharePage(req, res) {
         if (error) throw error;
         if (!user) return res.status(404).send("Profile not found");
 
-        const displayName = user.name || "Profil XERA";
+        const displayName = user.name || "Profil XERA1";
         const shareUrl = buildAbsoluteAppUrl(
             `/share/profile/${encodeURIComponent(user.id)}`,
         );
@@ -473,10 +612,10 @@ async function handleProfileSharePage(req, res) {
             `/profile?user=${encodeURIComponent(user.id)}`,
         );
         const html = renderOpenGraphSharePage({
-            title: `${displayName} | XERA`,
+            title: `${displayName} sur XERA1`,
             description: summarizeShareDescription(
                 user.bio || user.title,
-                "Découvrez ce profil sur XERA",
+                "Découvrez ce profil sur XERA1",
             ),
             image: pickShareImage(user),
             url: shareUrl,
@@ -572,6 +711,16 @@ const PROTECTED_BADGES = new Set([
     "ambassador",
 ]);
 
+async function approvePaidVerificationRequest(userId) {
+    if (!userId) return;
+    const { error } = await supabase
+        .from("verification_requests")
+        .update({ status: "approved" })
+        .eq("user_id", userId)
+        .eq("status", "pending");
+    if (error) throw error;
+}
+
 /**
  * Calcule les fonctionnalités premium selon le plan
  * @param {string} plan - Le plan (standard, medium, pro)
@@ -629,21 +778,151 @@ const USD_TO_CDF_RATE_VALUE = Math.max(
 const WITHDRAWAL_MIN_USD = 5;
 const SUPPORT_MIN_USD = 1;
 const SUPPORT_MAX_USD = 1000;
-const SUPPORT_COMMISSION_RATE = 0.2;
+// XERA retains 25% of every confirmed platform donation; this is calculated server-side.
+const SUPPORT_COMMISSION_RATE = 0.25;
+// Provider codes must match exactly what KPay accepts in the paymentMethods field.
+// Source: KPay dashboard → Applications → Edit → country selector (screenshot verified).
 const SUPPORTED_MOBILE_MONEY_PROVIDERS = new Set([
-    "airtel_money",
-    "orange_money",
-    "mpesa",
-    "afrimoney",
-    "other",
+    // Bénin
+    "MTN_MOMO_BEN",
+    "MOOV_BEN",
+    // Cameroun
+    "MTN_MOMO_CMR",
+    "ORANGE_CMR",
+    // Congo-Brazzaville
+    "MTN_MOMO_COG",
+    "AIRTEL_COG",
+    // Côte d'Ivoire
+    "MTN_MOMO_CIV",
+    "ORANGE_CIV",
+    // Gabon
+    "AIRTEL_GAB",
+    // Kenya
+    "MPESA_KEN",
+    // Ouganda
+    "AIRTEL_OAPI_UGA",
+    "MTN_MOMO_UGA",
+    // RD Congo
+    "VODACOM_MPESA_COD",
+    "MTN_MOMO_COD",
+    "AIRTEL_COD",
+    "ORANGE_COD",
+    // Rwanda
+    "MTN_MOMO_RWA",
+    "AIRTEL_RWA",
+    // Sénégal
+    "FREE_SEN",
+    "ORANGE_SEN",
+    // Sierra Leone
+    "ORANGE_SLE",
+    // Zambie
+    "AIRTEL_OAPI_ZMB",
+    "MTN_MOMO_ZMB",
+    "ZAMTEL_ZMB",
 ]);
+
 const MOBILE_MONEY_PROVIDER_LABELS = {
-    airtel_money: "Airtel Money",
-    orange_money: "Orange Money",
-    mpesa: "M-Pesa",
-    afrimoney: "Afrimoney",
-    other: "Autre",
+    MTN_MOMO_BEN: "MTN MoMo (Bénin)",
+    MOOV_BEN: "Moov Money (Bénin)",
+    MTN_MOMO_CMR: "MTN MoMo (Cameroun)",
+    ORANGE_CMR: "Orange Money (Cameroun)",
+    MTN_MOMO_COG: "MTN MoMo (Congo-Brazzaville)",
+    AIRTEL_COG: "Airtel Money (Congo-Brazzaville)",
+    MTN_MOMO_CIV: "MTN MoMo (Côte d'Ivoire)",
+    ORANGE_CIV: "Orange Money (Côte d'Ivoire)",
+    AIRTEL_GAB: "Airtel Money (Gabon)",
+    MPESA_KEN: "M-Pesa (Kenya)",
+    AIRTEL_OAPI_UGA: "Airtel Money (Ouganda)",
+    MTN_MOMO_UGA: "MTN MoMo (Ouganda)",
+    VODACOM_MPESA_COD: "Vodacom M-Pesa (RD Congo)",
+    MTN_MOMO_COD: "MTN MoMo (RD Congo)",
+    AIRTEL_COD: "Airtel Money (RD Congo)",
+    ORANGE_COD: "Orange Money (RD Congo)",
+    MTN_MOMO_RWA: "MTN MoMo (Rwanda)",
+    AIRTEL_RWA: "Airtel Money (Rwanda)",
+    FREE_SEN: "Free Money (Sénégal)",
+    ORANGE_SEN: "Orange Money (Sénégal)",
+    ORANGE_SLE: "Orange Money (Sierra Leone)",
+    AIRTEL_OAPI_ZMB: "Airtel Money (Zambie)",
+    MTN_MOMO_ZMB: "MTN MoMo (Zambie)",
+    ZAMTEL_ZMB: "Zamtel (Zambie)",
 };
+
+function areKPayPayoutsEnabled() {
+    return ["1", "true", "yes", "on"].includes(
+        String(KPAY_PAYOUTS_ENABLED).toLowerCase(),
+    );
+}
+function getKPayPayoutCurrency(country) {
+    try {
+        const values = JSON.parse(KPAY_PAYOUT_CURRENCIES);
+        return String(
+            values?.[String(country || "").toUpperCase()] || "",
+        ).toUpperCase();
+    } catch (_) {
+        return "";
+    }
+}
+async function kpayPayoutRequest(path, options = {}) {
+    const response = await fetch(
+        `https://admin.kpay.site/api/v1/payments${path}`,
+        {
+            ...options,
+            headers: {
+                "X-API-Key": KPAY_PUBLIC_KEY,
+                "X-Secret-Key": KPAY_SECRET_KEY,
+                "Content-Type": "application/json",
+                ...(options.headers || {}),
+            },
+        },
+    );
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok)
+        throw new Error(
+            data?.message ||
+                data?.error ||
+                `KPay payout error (${response.status})`,
+        );
+    return data;
+}
+async function initiateAutomaticKPayPayout({
+    withdrawalId,
+    amountUsd,
+    phoneNumber,
+    description,
+}) {
+    if (!areKPayPayoutsEnabled())
+        throw new Error(
+            "Les retraits KPay ne sont pas encore activés dans la configuration serveur.",
+        );
+    const prediction = await kpayPayoutRequest("/predict-provider", {
+        method: "POST",
+        body: JSON.stringify({ phoneNumber }),
+    });
+    if (!prediction?.provider || !prediction?.country)
+        throw new Error("Opérateur Mobile Money non reconnu par KPay.");
+    const payoutCurrency = getKPayPayoutCurrency(prediction.country);
+    if (!payoutCurrency)
+        throw new Error("Devise de retrait non configurée pour ce pays KPay.");
+    const rateData = await kpayPayoutRequest(
+        "/exchange-rate?from=USD&to=" + encodeURIComponent(payoutCurrency),
+    );
+    const rate = Number(rateData?.rate);
+    if (!Number.isFinite(rate) || rate <= 0)
+        throw new Error("Conversion USD indisponible pour cet opérateur KPay.");
+    const amount = Math.max(1, Math.round(Number(amountUsd) * rate));
+    const payout = await kpayPayoutRequest("/withdraw", {
+        method: "POST",
+        body: JSON.stringify({
+            amount,
+            provider: prediction.provider,
+            phoneNumber: prediction.phoneNumber || phoneNumber,
+            externalId: `XERA-WD-${withdrawalId}`,
+            description,
+        }),
+    });
+    return { payout, prediction, rate, payoutCurrency };
+}
 
 function isValidPlanId(value) {
     return ["standard", "medium", "pro", "elite", "page_verification"].includes(
@@ -660,6 +939,283 @@ function computeSubscriptionAmount(plan, billingCycle, currency) {
         return Math.round(amountUsd * USD_TO_CDF_RATE_VALUE);
     }
     return Math.ceil(amountUsd);
+}
+
+function normalizeDiscountCode(value) {
+    return String(value || "")
+        .trim()
+        .toUpperCase()
+        .replace(/\s+/g, "");
+}
+
+async function findActiveDiscountCode(rawCode) {
+    const code = normalizeDiscountCode(rawCode);
+    if (!code) return null;
+    const nowIso = new Date().toISOString();
+    const { data, error } = await supabase
+        .from("subscription_discount_codes")
+        .select(
+            "id, code, plan, discount_percent, valid_from, valid_until, benefit_duration_days, max_uses, uses_count, active",
+        )
+        .eq("code", code)
+        .eq("active", true)
+        .lte("valid_from", nowIso)
+        .or(`valid_until.is.null,valid_until.gte.${nowIso}`)
+        .maybeSingle();
+    if (!data) return null;
+    if (
+        data.max_uses !== null &&
+        data.max_uses !== undefined &&
+        Number(data.uses_count || 0) >= Number(data.max_uses)
+    )
+        return null;
+    return data;
+}
+
+async function findActivePartnerDiscountCode(rawCode) {
+    const code = normalizeDiscountCode(rawCode);
+    if (!code) return null;
+    const nowIso = new Date().toISOString();
+
+    const { data: promoData, error: promoError } = await supabase
+        .from("promo_codes")
+        .select(
+            "id, code, discount_percentage, applicable_plan, partner_id, valid_until, is_active, partners!inner(id, status, partner_access_code, start_date, end_date)",
+        )
+        .eq("code", code)
+        .eq("is_active", true)
+        .eq("partners.status", "active")
+        .or(`valid_until.is.null,valid_until.gte.${nowIso}`)
+        .maybeSingle();
+
+    if (promoError && promoError.code !== "42P01") throw promoError;
+    if (promoData) {
+        const partner = promoData.partners;
+        const validation = validatePartnerAccess({
+            partner,
+            now: new Date(nowIso),
+            accessCode: partner?.partner_access_code,
+        });
+        if (!validation.valid) return null;
+        return {
+            id: promoData.id,
+            code: promoData.code,
+            partner_id: promoData.partner_id,
+            discount_percent: Number(promoData.discount_percentage || 20),
+            status: "active",
+            expires_at: promoData.valid_until,
+            partners: partner,
+            applicable_plan: promoData.applicable_plan,
+        };
+    }
+
+    const { data, error } = await supabase
+        .from("partner_discount_codes")
+        .select(
+            "id, code, partner_id, discount_percent, status, starts_at, expires_at, partners!inner(status,start_date,end_date,partner_access_code)",
+        )
+        .eq("code", code)
+        .eq("status", "active")
+        .eq("partners.status", "active")
+        .lte("starts_at", nowIso)
+        .or(`expires_at.is.null,expires_at.gte.${nowIso}`)
+        .maybeSingle();
+    if (error && error.code !== "42P01") throw error;
+    if (!data) return null;
+    const validation = validatePartnerAccess({
+        partner: data.partners,
+        accessCode: data.partners.partner_access_code,
+        now: new Date(nowIso),
+    });
+    return validation.valid ? data : null;
+}
+
+async function persistPartnerAssignment({ userId, partnerId }) {
+    if (!userId || !partnerId) return null;
+    const nowIso = new Date().toISOString();
+    await Promise.all([
+        supabase
+            .from("users")
+            .update({ referred_by_partner_id: partnerId, updated_at: nowIso })
+            .eq("id", userId),
+        supabase
+            .from("user_subscriptions")
+            .update({ referred_by_partner_id: partnerId, updated_at: nowIso })
+            .eq("user_id", userId)
+            .eq("status", "active"),
+    ]);
+    return { userId, partnerId };
+}
+
+async function getAssignedPartnerForUser(userId) {
+    if (!userId) return null;
+    const { data: profile, error: profileError } = await supabase
+        .from("users")
+        .select("id, referred_by_partner_id")
+        .eq("id", userId)
+        .maybeSingle();
+    if (profileError && profileError.code !== "42P01") throw profileError;
+    if (profile?.referred_by_partner_id) return profile.referred_by_partner_id;
+
+    const { data: activeSub, error: subError } = await supabase
+        .from("user_subscriptions")
+        .select("referred_by_partner_id")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+    if (subError && subError.code !== "42P01") throw subError;
+    return activeSub?.referred_by_partner_id || null;
+}
+
+async function createPartnerAffiliationFromSubscription({
+    userId,
+    subscriptionId,
+    periodEnd,
+    metadata,
+}) {
+    const partnerCodeId = metadata?.partner_discount_code_id;
+    const partnerId = metadata?.partner_id;
+    if (!partnerCodeId || !partnerId || !subscriptionId || !periodEnd)
+        return null;
+    const { data, error } = await supabase
+        .from("partner_affiliations")
+        .upsert(
+            {
+                user_id: userId,
+                partner_id: partnerId,
+                partner_discount_code_id: partnerCodeId,
+                subscription_id: subscriptionId,
+                status: "active",
+                eligible_from: new Date().toISOString(),
+                eligible_until: periodEnd,
+            },
+            { onConflict: "user_id,subscription_id" },
+        )
+        .select("id")
+        .maybeSingle();
+    if (error && error.code !== "42P01") throw error;
+    if (partnerId) {
+        await persistPartnerAssignment({ userId, partnerId });
+    }
+    return data || null;
+}
+
+async function createPartnerCommissionForSupport({
+    transactionId,
+    beneficiaryUserId,
+    gross,
+    netCreator,
+}) {
+    const nowIso = new Date().toISOString();
+    const partnerId = await getAssignedPartnerForUser(beneficiaryUserId);
+    if (!partnerId) {
+        return null;
+    }
+
+    const { data: partner, error: partnerError } = await supabase
+        .from("partners")
+        .select(
+            "id, status, start_date, end_date, partner_access_code, access_code, commission_rate",
+        )
+        .eq("id", partnerId)
+        .maybeSingle();
+    if (partnerError && partnerError.code !== "42P01") throw partnerError;
+    if (!partner) return null;
+
+    const validation = validatePartnerAccess({
+        partner,
+        now: new Date(nowIso),
+        accessCode: partner.partner_access_code || partner.access_code,
+    });
+    if (!validation.valid) return null;
+
+    const rate = Number(partner.commission_rate || 0.05);
+    const commission = calculatePartnerCommission(gross, rate);
+
+    const partnerCommissionPayload = {
+        partner_id: partnerId,
+        donation_id: transactionId,
+        support_transaction_id: transactionId,
+        beneficiary_user_id: beneficiaryUserId,
+        source_user_id: beneficiaryUserId,
+        donation_amount: gross,
+        amount_gross: gross,
+        commission_amount: commission,
+        beneficiary_net_amount: Math.max(
+            0,
+            Math.round((Number(netCreator) - commission) * 100) / 100,
+        ),
+        currency: "USD",
+        status: "available",
+        available_at: nowIso,
+        created_at: nowIso,
+    };
+
+    const { data, error } = await supabase
+        .from("commissions")
+        .insert({
+            partner_id: partnerId,
+            source_user_id: beneficiaryUserId,
+            donation_id: transactionId,
+            amount_earned: commission,
+            created_at: nowIso,
+        })
+        .select("id")
+        .maybeSingle();
+    if (!error || error.code === "23505") {
+        const { error: dashboardCommissionError } = await supabase
+            .from("partner_commissions")
+            .upsert(partnerCommissionPayload, {
+                onConflict: "partner_id,donation_id",
+            });
+        if (
+            dashboardCommissionError &&
+            !["42P01", "PGRST205"].includes(dashboardCommissionError.code)
+        ) {
+            throw dashboardCommissionError;
+        }
+        return data ? { ...data, commission } : { commission };
+    }
+
+    if (error && error.code !== "23505") {
+        const legacy = await supabase
+            .from("partner_commissions")
+            .upsert(partnerCommissionPayload, {
+                onConflict: "partner_id,donation_id",
+            })
+            .select("id")
+            .maybeSingle();
+        if (legacy.error && legacy.error.code !== "23505") throw legacy.error;
+        return legacy.data ? { ...legacy.data, commission } : null;
+    }
+
+    return data ? { ...data, commission } : null;
+}
+
+async function redeemDiscountCode(code, userId) {
+    const { data, error } = await supabase.rpc(
+        "redeem_subscription_discount_code",
+        {
+            p_code: code,
+            p_user_id: userId,
+        },
+    );
+    if (error) {
+        if (error.message?.includes("INVALID_DISCOUNT_CODE")) return null;
+        if (error.message?.includes("DISCOUNT_CODE_ALREADY_USED")) {
+            const duplicate = new Error("Ce code a déjà été utilisé.");
+            duplicate.code = "DISCOUNT_CODE_ALREADY_USED";
+            throw duplicate;
+        }
+        throw error;
+    }
+    return Array.isArray(data) ? data[0] || null : data || null;
+}
+
+function applyDiscount(amountUsd, discountPercent) {
+    const percent = Math.min(100, Math.max(0, Number(discountPercent) || 0));
+    return Math.max(0, Math.round(amountUsd * (1 - percent / 100) * 100) / 100);
 }
 
 function computeSupportCheckoutAmount(amountUsd, currency) {
@@ -840,6 +1396,11 @@ async function createPendingSubscriptionPayment({
     billingCycle,
     currency,
     amount,
+    originalAmount,
+    discountCode,
+    discountPercent,
+    partnerId,
+    partnerDiscountCodeId,
     method,
     provider,
     walletId,
@@ -862,6 +1423,11 @@ async function createPendingSubscriptionPayment({
         callback_enabled: callbackEnabled,
         callback_origin: callbackEnabled ? callbackOrigin || null : null,
         checkout_started_at: nowIso,
+        original_amount: originalAmount ?? amount,
+        discount_code: discountCode || null,
+        discount_percent: discountPercent || 0,
+        partner_id: partnerId || null,
+        partner_discount_code_id: partnerDiscountCodeId || null,
     };
 
     const { data, error } = await supabase
@@ -905,6 +1471,7 @@ async function createPendingSupportPayment({
     description,
     senderName,
     recipientName,
+    supportMessage = "",
     returnPath,
     callbackEnabled = false,
     callbackOrigin = CALLBACK_ORIGIN,
@@ -913,6 +1480,7 @@ async function createPendingSupportPayment({
     const checkoutRefId = crypto.randomUUID();
     const nowIso = new Date().toISOString();
     const breakdown = computeSupportRevenueBreakdown(amountUsd);
+    const sanitizedSupportMessage = sanitizeSupportMessage(supportMessage, 200);
     const metadata = {
         payment_provider: paymentProvider,
         checkout_ref_id: checkoutRefId,
@@ -923,6 +1491,7 @@ async function createPendingSupportPayment({
         provider: provider || null,
         wallet_id: walletId || null,
         support_amount_usd: breakdown.gross,
+        support_message: sanitizedSupportMessage || null,
         checkout_amount: checkoutAmount,
         checkout_currency: String(checkoutCurrency || "USD").toUpperCase(),
         callback_return_path: returnPath || null,
@@ -1562,11 +2131,12 @@ function resolveTransactionCommissionAmount(row) {
 }
 
 function normalizeMobileMoneyProvider(value) {
-    const normalized = String(value || "")
+    const upper = String(value || "")
         .trim()
-        .toLowerCase()
+        .toUpperCase()
         .replace(/[\s-]+/g, "_");
-    return SUPPORTED_MOBILE_MONEY_PROVIDERS.has(normalized) ? normalized : null;
+    if (SUPPORTED_MOBILE_MONEY_PROVIDERS.has(upper)) return upper;
+    return null;
 }
 
 function sanitizeWalletNumber(value) {
@@ -1630,21 +2200,43 @@ function setResponseHeader(res, name, value) {
     }
 }
 
-function sendCheckoutErrorResponse(res, error, fallbackMessage) {
+function isUuidString(value) {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        String(value || "").trim(),
+    );
+}
+
+function sendCheckoutErrorResponse(res, error, fallbackMessage, context = {}) {
+    const returnPath = context.returnPath || "/";
     const sourceCode = String(error?.code || "").trim() || "UNKNOWN";
+    const requestId = context.requestId || crypto.randomUUID();
+    const stage = String(context.stage || "checkout");
     let category = "checkout_failure";
+    console.error("[Checkout failure]", {
+        requestId,
+        stage,
+        category,
+        code: error?.code || null,
+        message: error?.message || String(error),
+        details: error?.details || null,
+        hint: error?.hint || null,
+    });
+    setResponseHeader(res, "X-Xera1-Request-Id", requestId);
+    setResponseHeader(res, "X-Xera1-Error-Stage", stage);
 
     if (isMissingRelationError(error) || isMissingColumnError(error)) {
         category = "schema_missing";
-        setResponseHeader(res, "X-Xera-Error-Category", category);
-        setResponseHeader(res, "X-Xera-Error-Code", sourceCode);
-        return res.status(503).send(getWalletSchemaErrorMessage());
+        setResponseHeader(res, "X-Xera1-Error-Category", category);
+        setResponseHeader(res, "X-Xera1-Error-Code", sourceCode);
+        return res
+            .status(503)
+            .send(`${getWalletSchemaErrorMessage()} [référence ${requestId}]`);
     }
 
     if (isForeignKeyViolation(error)) {
         category = "foreign_key_violation";
-        setResponseHeader(res, "X-Xera-Error-Category", category);
-        setResponseHeader(res, "X-Xera-Error-Code", sourceCode);
+        setResponseHeader(res, "X-Xera1-Error-Category", category);
+        setResponseHeader(res, "X-Xera1-Error-Code", sourceCode);
         return res
             .status(409)
             .send(
@@ -1654,8 +2246,8 @@ function sendCheckoutErrorResponse(res, error, fallbackMessage) {
 
     if (isNotNullViolation(error)) {
         category = "not_null_violation";
-        setResponseHeader(res, "X-Xera-Error-Category", category);
-        setResponseHeader(res, "X-Xera-Error-Code", sourceCode);
+        setResponseHeader(res, "X-Xera1-Error-Category", category);
+        setResponseHeader(res, "X-Xera1-Error-Code", sourceCode);
         return res
             .status(409)
             .send(
@@ -1666,16 +2258,70 @@ function sendCheckoutErrorResponse(res, error, fallbackMessage) {
             );
     }
 
-    setResponseHeader(res, "X-Xera-Error-Category", category);
-    setResponseHeader(res, "X-Xera-Error-Code", sourceCode);
+    setResponseHeader(res, "X-Xera1-Error-Category", category);
+    setResponseHeader(res, "X-Xera1-Error-Code", sourceCode);
 
-    if (String(process.env.NODE_ENV || "").toLowerCase() !== "production") {
-        return res
-            .status(500)
-            .send(getReadableServerErrorMessage(error, fallbackMessage));
+    const message = String(error?.message || "");
+    const safeKpayMessage =
+        message.startsWith("KPay:") || message.startsWith("KPay API error:")
+            ? message
+            : fallbackMessage;
+
+    const acceptsJson =
+        String(res.req?.headers?.accept || "").includes("application/json") ||
+        String(res.req?.headers?.["x-requested-with"] || "").toLowerCase() ===
+            "xmlhttprequest";
+
+    if (acceptsJson) {
+        return res.status(error?.kpayStatus || 400).json({
+            success: false,
+            error: safeKpayMessage,
+            message: safeKpayMessage,
+            requestId,
+            kpayDetails: error?.kpayDetails || null,
+        });
     }
 
-    return res.status(500).send(fallbackMessage);
+    const acceptsHtml = String(res.req?.headers?.accept || "").includes(
+        "text/html",
+    );
+
+    if (acceptsHtml) {
+        setResponseHeader(res, "Content-Type", "text/html; charset=utf-8");
+        const safeTitle = escapeHtmlText("Service de Paiement KPay");
+        const safeBody = escapeHtmlText(safeKpayMessage);
+        const safeRef = escapeHtmlText(requestId);
+        const safeReturn = escapeHtmlText(returnPath);
+        return res.status(500).send(`<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${safeTitle} - XERA</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #f8fafc; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; text-align: center; }
+        .card { background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 32px; max-width: 480px; width: 100%; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5); }
+        .icon { font-size: 48px; margin-bottom: 16px; }
+        h1 { font-size: 20px; font-weight: 700; margin: 0 0 12px 0; color: #f43f5e; }
+        p { font-size: 14px; color: #94a3b8; line-height: 1.6; margin: 0 0 24px 0; }
+        .btn { display: inline-block; background: #6366f1; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; font-size: 14px; transition: background 0.2s; }
+        .btn:hover { background: #4f46e5; }
+        .ref { margin-top: 20px; font-size: 11px; color: #64748b; font-family: monospace; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="icon">⚠️</div>
+        <h1>${safeTitle}</h1>
+        <p>${safeBody}</p>
+        <a href="${safeReturn}" class="btn">Retour à l'application</a>
+        <div class="ref">Réf: ${safeRef}</div>
+    </div>
+</body>
+</html>`);
+    }
+
+    return res.status(500).send(`${safeKpayMessage} [référence ${requestId}]`);
 }
 
 function extractPayoutSettings(row) {
@@ -1763,7 +2409,6 @@ async function buildCreatorWalletOverview(userId) {
     const [
         profileResult,
         transactionsResult,
-        videoPayoutsResult,
         payoutSettingsResult,
         withdrawalsResult,
     ] = await Promise.all([
@@ -1780,35 +2425,23 @@ async function buildCreatorWalletOverview(userId) {
                 "id, type, amount_gross, amount_net_creator, amount_commission_xera, currency, status, description, metadata, created_at",
             )
             .eq("to_user_id", userId)
-            .in("type", ["support", "video_rpm"])
+            .eq("type", "support")
             .in("status", ["pending", "succeeded"])
             .order("created_at", { ascending: false }),
-        supabase
-            .from("video_payouts")
-            .select(
-                "id, period_month, views, rpm_rate, amount_gross, amount_net_creator, amount_commission_xera, status, paid_at, created_at",
-            )
-            .eq("creator_id", userId)
-            .in("status", ["pending", "processing", "paid"])
-            .order("period_month", { ascending: false }),
         fetchCreatorPayoutSettings(userId),
         fetchCreatorWithdrawalRequests(userId, { limit: 20 }),
     ]);
 
     if (profileResult.error) throw profileResult.error;
     if (transactionsResult.error) throw transactionsResult.error;
-    if (videoPayoutsResult.error) throw videoPayoutsResult.error;
 
     const profile = profileResult.data || null;
     const revenueTransactions = transactionsResult.data || [];
-    const videoPayouts = videoPayoutsResult.data || [];
     const payoutSettings = payoutSettingsResult || null;
     const withdrawals = withdrawalsResult || [];
 
     let supportAvailable = 0;
     let supportPending = 0;
-    let videoAvailable = 0;
-    let videoPending = 0;
 
     revenueTransactions.forEach((tx) => {
         if (!tx) return;
@@ -1817,29 +2450,7 @@ async function buildCreatorWalletOverview(userId) {
             if (tx.status === "succeeded") supportAvailable += net;
             if (tx.status === "pending") supportPending += net;
         }
-        if (tx.type === "video_rpm") {
-            if (tx.status === "succeeded") videoAvailable += net;
-            if (tx.status === "pending") videoPending += net;
-        }
     });
-
-    // Correction de la logique de revenus vidéo si les transactions ne sont pas encore créées
-    const hasVideoRevenueTransactions = revenueTransactions.some(
-        (tx) => tx.type === "video_rpm",
-    );
-    if (!hasVideoRevenueTransactions) {
-        // Si pas de transactions de type video_rpm, on se base sur les payouts calculés
-        videoAvailable = 0;
-        videoPending = 0;
-        videoPayouts.forEach((payout) => {
-            if (!payout) return;
-            const net = roundMoney(payout.amount_net_creator);
-            if (payout.status === "paid") videoAvailable += net;
-            if (["pending", "processing"].includes(payout.status)) {
-                videoPending += net;
-            }
-        });
-    }
 
     let pendingWithdrawals = 0;
     let paidWithdrawals = 0;
@@ -1853,8 +2464,8 @@ async function buildCreatorWalletOverview(userId) {
         }
     });
 
-    const creditedBalance = roundMoney(supportAvailable + videoAvailable);
-    const pendingIncoming = roundMoney(supportPending + videoPending);
+    const creditedBalance = roundMoney(supportAvailable);
+    const pendingIncoming = roundMoney(supportPending);
     const availableBalance = roundMoney(
         Math.max(0, creditedBalance - pendingWithdrawals - paidWithdrawals),
     );
@@ -1872,11 +2483,9 @@ async function buildCreatorWalletOverview(userId) {
             lifetimeNetRevenue: roundMoney(creditedBalance + paidWithdrawals),
             supportAvailable: roundMoney(supportAvailable),
             supportPending: roundMoney(supportPending),
-            videoAvailable: roundMoney(videoAvailable),
-            videoPending: roundMoney(videoPending),
             minimumWithdrawalUsd: WITHDRAWAL_MIN_USD,
             canRequestWithdrawal:
-                availableBalance >= WITHDRAWAL_MIN_USD &&
+                availableBalance >= WITHDRAWAL_MIN_USD * 2 &&
                 Boolean(
                     payoutSettings?.status === "active" &&
                     payoutSettings?.walletNumber &&
@@ -1928,6 +2537,15 @@ async function sweepExpiredSubscriptions() {
             .lte("plan_ends_at", nowIso);
 
         if (usersError) throw usersError;
+
+        try {
+            await notifyUpcomingSubscriptionExpiries();
+        } catch (notificationError) {
+            console.warn(
+                "Subscription expiry notification warning:",
+                notificationError?.message || notificationError,
+            );
+        }
 
         const userIds = (expiredUsers || [])
             .map((row) => row.id)
@@ -2008,6 +2626,7 @@ async function activateSubscription({
     confirmedBy,
     note,
     alreadyClaimed = false,
+    benefitExpiresAt,
 }) {
     const paymentId = transactionRefId ? `maishapay_${transactionRefId}` : null;
     const normalizedPlan = String(plan || "").toLowerCase();
@@ -2033,6 +2652,11 @@ async function activateSubscription({
         }
         if (alreadyClaimed) {
             if (data.effects_applied_at) {
+                if (
+                    ["standard", "medium", "pro", "elite"].includes(normalizedPlan)
+                ) {
+                    await approvePaidVerificationRequest(userId);
+                }
                 const { data: existingUser } = await supabase
                     .from("users")
                     .select("*")
@@ -2046,6 +2670,11 @@ async function activateSubscription({
             }
         } else {
             if (String(data.status || "").toLowerCase() === "succeeded") {
+                if (
+                    ["standard", "medium", "pro", "elite"].includes(normalizedPlan)
+                ) {
+                    await approvePaidVerificationRequest(userId);
+                }
                 const { data: existingUser } = await supabase
                     .from("users")
                     .select("*")
@@ -2072,6 +2701,11 @@ async function activateSubscription({
             .eq("status", "succeeded")
             .maybeSingle();
         if (existing?.id && existing.id !== pendingTransactionId) {
+            if (
+                ["standard", "medium", "pro", "elite"].includes(normalizedPlan)
+            ) {
+                await approvePaidVerificationRequest(userId);
+            }
             const { data: existingUser } = await supabase
                 .from("users")
                 .select("*")
@@ -2087,20 +2721,21 @@ async function activateSubscription({
 
     const now = new Date();
     const nowIso = now.toISOString();
-    const periodEnd =
-        billingCycle === "annual" ? addMonths(now, 12) : addMonths(now, 1);
+    const periodEnd = benefitExpiresAt
+        ? new Date(benefitExpiresAt)
+        : billingCycle === "annual"
+          ? addMonths(now, 12)
+          : addMonths(now, 1);
     const periodEndIso = periodEnd.toISOString();
 
     let badgeToApply = badgeForPlan;
-    let followersCount = 0;
     try {
         const { data: profile } = await supabase
             .from("users")
-            .select("badge, followers_count")
+            .select("badge")
             .eq("id", userId)
             .maybeSingle();
         const existingBadge = String(profile?.badge || "").toLowerCase();
-        followersCount = Number(profile?.followers_count || 0);
         const protectedBadges = new Set([
             "staff",
             "team",
@@ -2115,9 +2750,7 @@ async function activateSubscription({
     } catch (e) {
         // Ignore profile read errors; continue with default badge
     }
-    const isMonetized =
-        ["medium", "pro", "elite"].includes(normalizedPlan) &&
-        followersCount >= 1000;
+    const isMonetized = ["medium", "pro", "elite"].includes(normalizedPlan);
 
     const { error: cancelSubsError } = await supabase
         .from("subscriptions")
@@ -2206,6 +2839,14 @@ async function activateSubscription({
     if (confirmedBy) mergedMetadata.confirmed_by = confirmedBy;
     if (note) mergedMetadata.admin_note = note;
 
+    // Persist the attribution at confirmation time; never infer it later from a coupon string.
+    await createPartnerAffiliationFromSubscription({
+        userId,
+        subscriptionId: insertedSubscription?.id,
+        periodEnd: periodEndIso,
+        metadata: mergedMetadata,
+    });
+
     let transactionId = pendingTransactionId || null;
     if (pendingTransactionId) {
         const updatePayload = alreadyClaimed
@@ -2253,6 +2894,24 @@ async function activateSubscription({
         transactionId = insertedTransaction?.id || null;
     }
 
+    if (["standard", "medium", "pro", "elite"].includes(normalizedPlan)) {
+        await approvePaidVerificationRequest(userId);
+    }
+
+    try {
+        await notifySubscriptionActivation({
+            userId,
+            plan,
+            billingCycle,
+            planEndsAt: updatedUser?.plan_ends_at || periodEndIso,
+        });
+    } catch (notificationError) {
+        console.warn(
+            "Subscription activation notification warning:",
+            notificationError?.message || notificationError,
+        );
+    }
+
     invalidateUserAppCaches(userId);
 
     return {
@@ -2267,11 +2926,23 @@ function supportsPush() {
     return Boolean(VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY);
 }
 
+const INDEFINITE_GIFT_SUPPORT_STATUSES = new Set([
+    "",
+    "active",
+    "gifted",
+    "offered",
+    "granted",
+    "admin_granted",
+    "complimentary",
+]);
+
 function isPlanActiveForUser(user) {
     if (!user) return false;
-    const status = String(user.plan_status || "").toLowerCase();
+    const status = String(user.plan_status || user.planStatus || "")
+        .trim()
+        .toLowerCase();
     if (status !== "active") return false;
-    const planEnd = user.plan_ends_at || null;
+    const planEnd = user.plan_ends_at || user.planEndsAt || null;
     if (!planEnd) return true;
     const endMs = Date.parse(planEnd);
     if (!Number.isFinite(endMs)) return true;
@@ -2281,18 +2952,31 @@ function isPlanActiveForUser(user) {
 function isGiftedProUser(user) {
     if (!user) return false;
     return (
-        ["pro", "elite"].includes(String(user.plan || "").toLowerCase()) &&
-        String(user.plan_status || "").toLowerCase() === "active" &&
-        !user.plan_ends_at
+        ["pro", "elite"].includes(
+            String(user.plan || "").trim().toLowerCase(),
+        ) &&
+        String(user.plan_status || user.planStatus || "")
+            .trim()
+            .toLowerCase() === "active" &&
+        !(user.plan_ends_at || user.planEndsAt)
     );
 }
 
 function canUserReceiveSupport(user) {
     if (!user) return false;
-    const plan = String(user.plan || "").toLowerCase();
+    const plan = String(user.plan || "").trim().toLowerCase();
     if (!["medium", "pro", "elite"].includes(plan)) return false;
-    if (!isPlanActiveForUser(user)) return false;
+    const status = String(user.plan_status || user.planStatus || "")
+        .trim()
+        .toLowerCase();
+    const planEnd = user.plan_ends_at || user.planEndsAt || null;
+    const giftedSupportPlan =
+        ["medium", "pro"].includes(plan) &&
+        !planEnd &&
+        INDEFINITE_GIFT_SUPPORT_STATUSES.has(status);
+    if (!isPlanActiveForUser(user) && !giftedSupportPlan) return false;
     if (isGiftedProUser(user)) return true;
+    if (["medium", "pro"].includes(plan)) return true;
     return (
         user.is_monetized === true || Number(user.followers_count || 0) >= 1000
     );
@@ -2301,6 +2985,29 @@ function canUserReceiveSupport(user) {
 function formatMoneyUsd(value) {
     const amount = roundMoney(value);
     return `$${amount.toFixed(2)}`;
+}
+
+function sanitizeSupportMessage(value, maxLength = 200) {
+    const cleaned = String(value ?? "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, maxLength);
+    return cleaned;
+}
+
+function buildSupportNotificationMessage(
+    senderName,
+    amountUsd,
+    supportMessage,
+) {
+    const safeSenderName =
+        String(senderName || "Quelqu'un").trim() || "Quelqu'un";
+    const safeAmount = formatMoneyUsd(amountUsd ?? 0);
+    const message = sanitizeSupportMessage(supportMessage, 200);
+    if (!message) {
+        return `${safeSenderName} vous a envoyé ${safeAmount} de soutien.`;
+    }
+    return `${safeSenderName} vous a envoyé ${safeAmount} de soutien. Message: "${message}"`;
 }
 
 async function createNotificationRecord({
@@ -2358,6 +3065,108 @@ async function createNotificationRecord({
     }
 }
 
+async function createUniqueSubscriptionNotification({
+    userId,
+    type,
+    message,
+    planEndsAt,
+    link,
+}) {
+    if (!userId || !type || !message) return false;
+
+    const { data: existing, error: lookupError } = await supabase
+        .from("notifications")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("type", type)
+        .eq("message", message)
+        .limit(1);
+    if (lookupError) throw lookupError;
+    if (existing?.length) return false;
+
+    const notification = await createNotificationRecord({
+        userId,
+        type,
+        message,
+        link,
+        metadata: { plan_ends_at: planEndsAt },
+    });
+    return Boolean(notification);
+}
+
+async function notifySubscriptionActivation({
+    userId,
+    plan,
+    billingCycle,
+    planEndsAt,
+}) {
+    const planLabel = String(plan || "").toUpperCase();
+    const cycleLabel =
+        String(billingCycle || "monthly").toLowerCase() === "annual"
+            ? "annuel"
+            : "mensuel";
+    const expiryLabel = planEndsAt
+        ? new Date(planEndsAt).toLocaleDateString("fr-FR")
+        : "la fin de votre période";
+
+    return createUniqueSubscriptionNotification({
+        userId,
+        type: "subscription_activated",
+        message: `Paiement KPay confirmé : votre plan ${planLabel} ${cycleLabel} et votre badge sont actifs jusqu'au ${expiryLabel}.`,
+        planEndsAt,
+        link: "profile.html",
+    });
+}
+
+async function notifySubscriptionExpiryReminder(user, daysRemaining) {
+    const expiryLabel = new Date(user.plan_ends_at).toLocaleDateString("fr-FR");
+    const message =
+        daysRemaining === 0
+            ? `Votre abonnement ${String(user.plan || "").toUpperCase()} et votre badge expirent aujourd'hui (${expiryLabel}). Renouvelez votre abonnement pour conserver vos avantages.`
+            : `Votre abonnement ${String(user.plan || "").toUpperCase()} et votre badge expirent dans ${daysRemaining} jours (${expiryLabel}). Renouvelez votre abonnement pour conserver vos avantages.`;
+
+    return createUniqueSubscriptionNotification({
+        userId: user.id,
+        type: `subscription_expiry_${daysRemaining}d`,
+        message,
+        planEndsAt: user.plan_ends_at,
+        link: "subscription-plans.html",
+    });
+}
+
+async function notifyUpcomingSubscriptionExpiries() {
+    const now = Date.now();
+    const windowMs = Math.max(SUBSCRIPTION_SWEEP_MS || 0, 10 * 60 * 1000);
+    const { data: users, error } = await supabase
+        .from("users")
+        .select("id, plan, plan_status, plan_ends_at")
+        .eq("plan_status", "active")
+        .not("plan_ends_at", "is", null);
+    if (error) throw error;
+
+    let sentCount = 0;
+    for (const user of users || []) {
+        if (!isValidPlanId(user.plan) || user.plan === "page_verification") {
+            continue;
+        }
+        const remainingMs = new Date(user.plan_ends_at).getTime() - now;
+        for (const daysRemaining of [7, 3, 0]) {
+            const targetMs = daysRemaining * 24 * 60 * 60 * 1000;
+            if (
+                remainingMs >= targetMs - windowMs &&
+                remainingMs <= targetMs + windowMs
+            ) {
+                if (
+                    await notifySubscriptionExpiryReminder(user, daysRemaining)
+                ) {
+                    sentCount++;
+                }
+            }
+        }
+    }
+    return sentCount;
+}
+
 async function purgeStalePushSubscription(endpoint) {
     if (!endpoint) return;
     try {
@@ -2383,9 +3192,13 @@ function buildNotificationPushPayload(notification) {
         mention: "Mention",
         achievement: "Succès débloqué",
         stream: "Live en cours",
+        subscription_activated: "Abonnement confirmé",
+        subscription_expiry_7d: "Abonnement bientôt expiré",
+        subscription_expiry_3d: "Abonnement bientôt expiré",
+        subscription_expiry_0d: "Abonnement expiré aujourd'hui",
     };
 
-    const title = typeTitleMap[notification?.type] || "Notification XERA";
+    const title = typeTitleMap[notification?.type] || "Notification XERA1";
     const icon = `${PRIMARY_ORIGIN.replace(/\/$/, "")}/icons/logo.png`;
     const rawLink = String(notification?.link || "").trim();
     const link = rawLink
@@ -2399,7 +3212,7 @@ function buildNotificationPushPayload(notification) {
         body: notification?.message || "",
         icon,
         link,
-        tag: notification?.id || `support-${notification?.user_id || "xera"}`,
+        tag: notification?.id || `support-${notification?.user_id || "xera1"}`,
         renotify: false,
         silent: false,
     };
@@ -2486,7 +3299,9 @@ async function sendPushToUser(userId, payload) {
                         const message = {
                             tokens,
                             notification: {
-                                title: String(payloadWithBadge.title || "XERA"),
+                                title: String(
+                                    payloadWithBadge.title || "XERA1",
+                                ),
                                 body: String(payloadWithBadge.body || ""),
                                 image: String(payloadWithBadge.icon || ""),
                             },
@@ -2728,7 +3543,7 @@ async function confirmSupportPayment({
                   description:
                       description ||
                       pendingPayment?.description ||
-                      "Soutien XERA",
+                      "Soutien XERA1",
                   metadata: mergedMetadata,
                   updated_at: nowIso,
               }
@@ -2744,7 +3559,7 @@ async function confirmSupportPayment({
                   description:
                       description ||
                       pendingPayment?.description ||
-                      "Soutien XERA",
+                      "Soutien XERA1",
                   metadata: mergedMetadata,
                   updated_at: nowIso,
               };
@@ -2765,7 +3580,7 @@ async function confirmSupportPayment({
                 amount_commission_xera: breakdown.commission,
                 currency: "USD",
                 status: "succeeded",
-                description: description || "Soutien XERA",
+                description: description || "Soutien XERA1",
                 metadata: mergedMetadata,
             })
             .select("id")
@@ -2776,10 +3591,46 @@ async function confirmSupportPayment({
 
     const senderName =
         senderProfile?.name || mergedMetadata.sender_name || "Un utilisateur";
+    const supportMessage = sanitizeSupportMessage(
+        pendingPayment?.metadata?.support_message ||
+            mergedMetadata.support_message ||
+            "",
+        200,
+    );
+    const partnerCommission = await createPartnerCommissionForSupport({
+        transactionId,
+        beneficiaryUserId: toUserId,
+        gross: breakdown.gross,
+        netCreator: breakdown.netCreator,
+    });
+    // Partner campaigns add their 5% share to XERA's platform fee; both remain traceable.
+    if (partnerCommission?.commission) {
+        const partnerNet = Math.max(
+            0,
+            Math.round(
+                (breakdown.netCreator - partnerCommission.commission) * 100,
+            ) / 100,
+        );
+        mergedMetadata.partner_commission_amount = partnerCommission.commission;
+        mergedMetadata.amount_net_creator = partnerNet;
+        mergedMetadata.amount_commission_xera = breakdown.commission;
+        await supabase
+            .from("transactions")
+            .update({
+                amount_net_creator: partnerNet,
+                amount_commission_xera: breakdown.commission,
+                metadata: mergedMetadata,
+            })
+            .eq("id", transactionId);
+    }
     const notification = await createNotificationRecord({
         userId: toUserId,
         type: "support",
-        message: `${senderName} vous a envoye ${formatMoneyUsd(breakdown.gross)} de soutien.`,
+        message: buildSupportNotificationMessage(
+            senderName,
+            breakdown.gross,
+            supportMessage,
+        ),
         link: `/creator-dashboard`,
         actorId: fromUserId,
         metadata: {
@@ -2789,6 +3640,7 @@ async function confirmSupportPayment({
             amount_commission_xera: breakdown.commission,
             currency: "USD",
             sender_id: fromUserId,
+            support_message: supportMessage || null,
         },
     });
 
@@ -2797,6 +3649,34 @@ async function confirmSupportPayment({
             toUserId,
             buildNotificationPushPayload(notification),
         );
+    }
+
+    const creatorEmail = await resolveReminderEmailAddress(toUserId);
+    if (creatorEmail) {
+        await sendReminderEmail({
+            to: creatorEmail,
+            transactional: true,
+            subject: `Nouveau soutien de ${senderName}`,
+            html: buildReminderEmailLayout({
+                eyebrow: "Soutien direct",
+                greeting: `Bonjour,`,
+                headline: `${senderName} a envoyé un soutien`,
+                bodyLines: [
+                    `${senderName} vous a envoyé ${formatMoneyUsd(breakdown.gross)} de soutien.`,
+                    supportMessage
+                        ? `Message: “${supportMessage}”`
+                        : "Merci pour votre présence et votre énergie sur XERA1.",
+                    "Votre revenu est maintenant visible dans votre tableau de bord.",
+                ],
+                ctaLabel: "Voir mon tableau de bord",
+                ctaUrl: `${PRIMARY_ORIGIN.replace(/\/$/, "")}/creator-dashboard`,
+            }).html,
+            text: buildSupportNotificationMessage(
+                senderName,
+                breakdown.gross,
+                supportMessage,
+            ),
+        });
     }
 
     return {
@@ -2956,11 +3836,11 @@ function buildReminderEmailLayout({
         .filter(Boolean);
     const safeGreeting = String(greeting || "Bonjour,").trim() || "Bonjour,";
     const safeHeadline = String(headline || "").trim();
-    const safeCtaLabel = String(ctaLabel || "Découvrir sur XERA").trim();
+    const safeCtaLabel = String(ctaLabel || "Découvrir sur XERA1").trim();
     const safeCtaUrl = String(ctaUrl || buildDiscoverReminderUrl()).trim();
     const safeFooter = String(
         footer ||
-            "Tu reçois ce message car tu as activé les notifications par email sur XERA. Tu peux les désactiver à tout moment dans tes réglages.",
+            "Tu reçois ce message car tu as activé les notifications par email sur XERA1. Tu peux les désactiver à tout moment dans tes réglages.",
     ).trim();
 
     const htmlParagraphs = safeLines
@@ -3001,7 +3881,7 @@ function buildReminderEmailLayout({
           <!-- Header -->
           <tr>
             <td style="padding:40px 40px 24px 40px;text-align:left;">
-              <img src="https://ssbuagqwjptyhavinkxg.supabase.co/storage/v1/object/public/assets/logo-512x512.png" alt="XERA" style="width:56px;height:56px;border-radius:14px;display:block;" />
+              <img src="https://xera1.xyz/icons/logo.png" alt="XERA1" style="width:56px;height:56px;border-radius:14px;display:block;" />
             </td>
           </tr>
 
@@ -3009,7 +3889,7 @@ function buildReminderEmailLayout({
           <tr>
             <td style="padding:0 40px 40px 40px;">
               <div style="font-size:12px;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#6366f1;margin-bottom:16px;">
-                ${escapeHtmlAttr(eyebrow || "XERA Update")}
+                ${escapeHtmlAttr(eyebrow || "XERA1 Update")}
               </div>
               <h1 style="margin:0 0 20px 0;font-size:28px;font-weight:900;line-height:1.2;color:#111827;letter-spacing:-0.02em;">
                 ${escapeHtmlAttr(safeHeadline)}
@@ -3035,7 +3915,7 @@ function buildReminderEmailLayout({
                 ${escapeHtmlAttr(safeFooter)}
               </p>
               <div style="margin-top:24px;font-size:12px;color:#9ca3af;font-weight:500;">
-                &copy; ${new Date().getFullYear()} XERA. Tous droits réservés.
+                &copy; ${new Date().getFullYear()} XERA1. Tous droits réservés.
               </div>
             </td>
           </tr>
@@ -3062,7 +3942,7 @@ function buildDailyPostReminderCampaign(user, context, slot) {
     const greeting = user.name ? `Bonjour ${user.name},` : "Bonjour,";
     const variants = [
         {
-            subject: `XERA - ${arcTitle} t'attend toujours`,
+            subject: `XERA1 - ${arcTitle} t'attend toujours`,
             headline: "Si tu as 30 secondes, reviens nous montrer ou tu en es.",
             bodyLines: [
                 `Ton projet "${arcTitle}" est toujours en cours.`,
@@ -3071,7 +3951,7 @@ function buildDailyPostReminderCampaign(user, context, slot) {
             ctaLabel: "Revenir poster",
         },
         {
-            subject: `XERA - On n'a pas oublie ${arcTitle}`,
+            subject: `XERA1 - On n'a pas oublie ${arcTitle}`,
             headline: "On n'a pas oublie ton projet.",
             bodyLines: [
                 `Tu peux revenir sur "${arcTitle}" quand tu veux.`,
@@ -3080,7 +3960,7 @@ function buildDailyPostReminderCampaign(user, context, slot) {
             ctaLabel: "Ouvrir mon update",
         },
         {
-            subject: `XERA - Tu veux remettre ${arcTitle} en mouvement ?`,
+            subject: `XERA1 - Tu veux remettre ${arcTitle} en mouvement ?`,
             headline: "Tu peux remettre ton projet en mouvement aujourd'hui.",
             bodyLines: [
                 `"${arcTitle}" merite sa petite mise a jour du jour.`,
@@ -3089,7 +3969,7 @@ function buildDailyPostReminderCampaign(user, context, slot) {
             ctaLabel: "Publier en un clic",
         },
         {
-            subject: `XERA - Un petit signe de vie pour ${arcTitle} ?`,
+            subject: `XERA1 - Un petit signe de vie pour ${arcTitle} ?`,
             headline: "Un petit signe de vie suffit.",
             bodyLines: [
                 `Si tu avances sur "${arcTitle}", viens nous montrer ca.`,
@@ -3142,7 +4022,7 @@ function buildInactiveReengagementCampaign(user, context, now) {
     const ctaUrl = `${PRIMARY_ORIGIN.replace(/\/$/, "")}/index.html?dashboard=1`;
     const greeting = user.name ? `Salut ${user.name},` : "Salut,";
 
-    const subject = "Ça bouge fort sur XERA 🚀 (tu manques à l'appel)";
+    const subject = "Ça bouge fort sur XERA1 🚀 (tu manques à l'appel)";
     const headline =
         "Ça fait une semaine que tu ne t'es pas connecté, et franchement, tu rates pas mal de choses.";
     const bodyLines = [
@@ -3164,6 +4044,55 @@ function buildInactiveReengagementCampaign(user, context, now) {
     return {
         type: "inactive_week",
         subject,
+        html: layout.html,
+        text: layout.text,
+        ctaUrl,
+    };
+}
+
+function buildNoProjectCampaign(user, context, now) {
+    if (
+        !Number.isFinite(context.accountAgeDays) ||
+        context.accountAgeDays < 1
+    ) {
+        return null;
+    }
+    if (
+        isSentRecently(user.last_no_project_reminder_sent_at, 7 * DAY_MS, now)
+    ) {
+        return null;
+    }
+
+    const displayName = String(user.name || "").trim();
+    const greeting = displayName ? `Salut ${displayName} 👋` : "Salut 👋";
+    const ctaUrl = buildDiscoverReminderUrl();
+    const layout = buildReminderEmailLayout({
+        eyebrow: "Bienvenue sur XERA1",
+        greeting,
+        headline:
+            "Ton histoire est peut-être encore en train d'attendre d'être racontée.",
+        bodyLines: [
+            "Tu as créé ton compte sur XERA1.",
+            "Chaque jour, de nouveaux développeurs, designers, étudiants et entrepreneurs rejoignent XERA1 pour montrer ce qu'ils construisent réellement.",
+            "Aujourd'hui, ton profil est peut-être vide... alors que toi, tu ne l'es probablement pas.",
+            "Prends 5 minutes aujourd'hui :",
+            "✅ Complète ton profil",
+            "✅ Ajoute tes compétences",
+            "✅ Présente ton projet actuel",
+            "✅ Publie ton premier post",
+            "Tu n'as pas besoin d'attendre que ton projet soit terminé. Les meilleurs builders documentent leur progression au fur et à mesure.",
+            "Le badge Membre Pionnier Vérifié est réservé aux membres qui démontrent réellement leur travail : profil complété, activité authentique et au moins 5 publications documentant un vrai projet.",
+            "Merci de faire partie des premiers builders qui construisent XERA1 avec nous. Chaque retour, chaque publication et chaque projet partagé contribue à construire une communauté où les réalisations comptent plus que les promesses.",
+            "À bientôt,\nL'équipe XERA1",
+        ],
+        ctaLabel: "Retourner sur XERA1",
+        ctaUrl,
+        footer: "XERA1 inc • XERA1",
+    });
+
+    return {
+        type: "no_project",
+        subject: "XERA1 - Ton histoire attend d'être racontée",
         html: layout.html,
         text: layout.text,
         ctaUrl,
@@ -3194,7 +4123,7 @@ function buildSocialProgressCampaign(user, context, now) {
     const greeting = user.name ? `Bonjour ${user.name},` : "Bonjour,";
     const variants = [
         {
-            subject: `XERA - ${authorName} a publie quelque chose de nouveau`,
+            subject: `XERA1 - ${authorName} a publie quelque chose de nouveau`,
             headline: "Ca bouge encore du cote des comptes que tu suis.",
             bodyLines: [
                 `${authorName} a partage ${activityTitle}.`,
@@ -3204,7 +4133,7 @@ function buildSocialProgressCampaign(user, context, now) {
         },
         {
             subject:
-                "XERA - Pendant ton absence, quelques updates sont tombees",
+                "XERA1 - Pendant ton absence, quelques updates sont tombees",
             headline: "Tu as peut-etre manque deux ou trois choses.",
             bodyLines: [
                 `${activityCount} update${activityCount > 1 ? "s" : ""} recente${activityCount > 1 ? "s" : ""} viennent d'apparaitre chez les comptes que tu suis.`,
@@ -3213,16 +4142,16 @@ function buildSocialProgressCampaign(user, context, now) {
             ctaLabel: "Retourner dans l'app",
         },
         {
-            subject: "XERA - Les autres avancent, et ta place est toujours la",
+            subject: "XERA1 - Les autres avancent, et ta place est toujours la",
             headline: "Les autres avancent, et ta place est toujours la.",
             bodyLines: [
                 `${authorName} et d'autres continuent a documenter leur progression.`,
                 "Reviens voir ce qui se passe et poster la tienne quand tu veux.",
             ],
-            ctaLabel: "Revenir sur XERA",
+            ctaLabel: "Revenir sur XERA1",
         },
         {
-            subject: "XERA - Il y a du nouveau dans ton reseau",
+            subject: "XERA1 - Il y a du nouveau dans ton reseau",
             headline: "Il y a du nouveau dans ton reseau.",
             bodyLines: [
                 `${authorName} bouge, et tu n'es pas loin de reprendre toi aussi.`,
@@ -3236,7 +4165,7 @@ function buildSocialProgressCampaign(user, context, now) {
         variants,
     );
     const layout = buildReminderEmailLayout({
-        eyebrow: "Pendant ce temps sur XERA",
+        eyebrow: "Pendant ce temps sur XERA1",
         greeting,
         headline: variant.headline,
         bodyLines: variant.bodyLines,
@@ -3274,8 +4203,9 @@ async function buildEmailReminderContexts(users = [], now = new Date()) {
             .eq("status", "in_progress"),
         supabase
             .from("content")
-            .select("id, user_id, title, created_at, arc_id")
-            .in("user_id", userIds)
+            .select("id, author_id, title, created_at, arc_id")
+            .eq("author_type", "USER")
+            .in("author_id", userIds)
             .gte("created_at", recentOwnActivityIso)
             .order("created_at", { ascending: false }),
         supabase
@@ -3298,8 +4228,8 @@ async function buildEmailReminderContexts(users = [], now = new Date()) {
 
     const latestOwnContentByUser = new Map();
     (ownContentResult.data || []).forEach((row) => {
-        if (!latestOwnContentByUser.has(row.user_id)) {
-            latestOwnContentByUser.set(row.user_id, row);
+        if (!latestOwnContentByUser.has(row.author_id)) {
+            latestOwnContentByUser.set(row.author_id, row);
         }
     });
 
@@ -3325,8 +4255,9 @@ async function buildEmailReminderContexts(users = [], now = new Date()) {
         const [socialContentResult, followedUsersResult] = await Promise.all([
             supabase
                 .from("content")
-                .select("id, user_id, title, created_at, arc_id")
-                .in("user_id", followedUserIds)
+                .select("id, author_id, title, created_at, arc_id")
+                .eq("author_type", "USER")
+                .in("author_id", followedUserIds)
                 .gte("created_at", recentSocialActivityIso)
                 .order("created_at", { ascending: false }),
             supabase.from("users").select("id, name").in("id", followedUserIds),
@@ -3343,10 +4274,10 @@ async function buildEmailReminderContexts(users = [], now = new Date()) {
     );
     const recentSocialByAuthor = new Map();
     recentSocialRows.forEach((row) => {
-        if (!recentSocialByAuthor.has(row.user_id)) {
-            recentSocialByAuthor.set(row.user_id, []);
+        if (!recentSocialByAuthor.has(row.author_id)) {
+            recentSocialByAuthor.set(row.author_id, []);
         }
-        recentSocialByAuthor.get(row.user_id).push(row);
+        recentSocialByAuthor.get(row.author_id).push(row);
     });
 
     const contexts = new Map();
@@ -3374,6 +4305,7 @@ async function buildEmailReminderContexts(users = [], now = new Date()) {
             lastOwnDateKey && lastOwnDateKey === dateKey,
         );
         const inactivityDays = getDaysSince(lastOwnContent?.created_at, now);
+        const accountAgeDays = getDaysSince(user.created_at, now);
         const projectAgeDays = oldestActiveArc?.created_at
             ? getDaysSince(oldestActiveArc.created_at, now)
             : 0;
@@ -3405,6 +4337,7 @@ async function buildEmailReminderContexts(users = [], now = new Date()) {
             lastOwnContent,
             hasPostedToday,
             inactivityDays,
+            accountAgeDays,
             projectAgeDays,
             socialSignal:
                 socialCandidates.length > 0
@@ -3426,6 +4359,9 @@ async function buildEmailReminderContexts(users = [], now = new Date()) {
 function selectReminderCampaign(user, context, now = new Date()) {
     if (!user || !context) return null;
     return (
+        (!context.activeArcs || context.activeArcs.length === 0
+            ? buildNoProjectCampaign(user, context, now)
+            : null) ||
         buildInactiveReengagementCampaign(user, context, now) ||
         buildSocialProgressCampaign(user, context, now) ||
         buildDailyPostReminderCampaign(user, context, context.slot)
@@ -3454,7 +4390,9 @@ async function resolveReminderEmailAddress(userId) {
 }
 
 async function sendReminderEmail(payload) {
-    if (!supportsEmailReminders()) return { success: false, skipped: true };
+    if (!supportsEmailReminders() && !payload?.transactional) {
+        return { success: false, skipped: true };
+    }
     if (!payload?.to || !payload?.subject) {
         return { success: false, skipped: true };
     }
@@ -3526,13 +4464,57 @@ async function sendReminderEmail(payload) {
     }
 }
 
+async function sendSubscriptionConfirmationEmail({
+    userId,
+    plan,
+    billingCycle,
+    planEndsAt,
+}) {
+    const email = await resolveReminderEmailAddress(userId);
+    if (!email) {
+        return { success: false, skipped: true, reason: "email_missing" };
+    }
+
+    const planLabel = String(plan || "").toUpperCase();
+    const cycleLabel =
+        String(billingCycle || "monthly").toLowerCase() === "annual"
+            ? "annuel"
+            : "mensuel";
+    const expiryLabel = planEndsAt
+        ? new Date(planEndsAt).toLocaleDateString("fr-FR", {
+              day: "2-digit",
+              month: "long",
+              year: "numeric",
+          })
+        : "la fin de votre période";
+
+    return sendReminderEmail({
+        to: email,
+        transactional: true,
+        subject: "Votre vérification XERA1 est active",
+        html: buildReminderEmailLayout({
+            eyebrow: "Confirmation XERA1",
+            greeting: "Bonjour,",
+            headline: "Paiement confirmé, vérification activée",
+            bodyLines: [
+                `Votre paiement KPay a été confirmé par XERA1.`,
+                `Le plan ${planLabel} (${cycleLabel}) est actif jusqu'au ${expiryLabel}.`,
+                "Votre vérification et les fonctionnalités associées sont maintenant disponibles.",
+            ],
+            ctaLabel: "Ouvrir mon profil",
+            ctaUrl: buildProfileReminderUrl(userId),
+        }).html,
+        text: `Votre paiement KPay a été confirmé. Le plan ${planLabel} (${cycleLabel}) et votre vérification sont actifs jusqu'au ${expiryLabel}.`,
+    });
+}
+
 async function sweepReturnReminderEmails(now = new Date()) {
     if (!supportsEmailReminders()) return { ok: true, skipped: true };
 
     const { data: users, error } = await supabase
         .from("users")
         .select(
-            "id, name, email_reminder_enabled, email_reminder_timezone, last_email_reminder_slot, last_inactive_reminder_sent_at, last_social_progress_email_sent_at",
+            "id, name, created_at, email_reminder_enabled, email_reminder_timezone, last_email_reminder_slot, last_inactive_reminder_sent_at, last_no_project_reminder_sent_at, last_social_progress_email_sent_at",
         )
         .eq("email_reminder_enabled", true);
 
@@ -3585,6 +4567,9 @@ async function sweepReturnReminderEmails(now = new Date()) {
         }
         if (campaign.type === "inactive_week") {
             updatePayload.last_inactive_reminder_sent_at = now.toISOString();
+        }
+        if (campaign.type === "no_project") {
+            updatePayload.last_no_project_reminder_sent_at = now.toISOString();
         }
         if (campaign.type === "social_progress") {
             updatePayload.last_social_progress_email_sent_at =
@@ -3648,13 +4633,13 @@ async function sweepReturnReminderPush(now = new Date()) {
 
         try {
             const pushPayload = JSON.stringify({
-                title: campaign.subject.replace("XERA - ", "XERA • "),
+                title: campaign.subject.replace("XERA1 - ", "XERA1 • "),
                 body: campaign.text
                     .split("\n")
                     .filter((l) => l.trim())
                     .slice(1, 3)
                     .join(" "),
-                icon: "/icons/logo-192x192.png",
+                icon: "/icons/logo.png",
                 link: campaign.ctaUrl || "/index.html",
                 tag: `reminder-${campaign.type}-${user.id}`,
             });
@@ -3793,11 +4778,11 @@ app.post("/api/admin/broadcast-email", async (req, res) => {
         }
 
         const layout = buildReminderEmailLayout({
-            eyebrow: "Annonce XERA",
+            eyebrow: "Annonce XERA1",
             greeting: "Bonjour,",
             headline: subject,
             bodyLines: body.split("\n"),
-            ctaLabel: ctaLabel || "Ouvrir XERA",
+            ctaLabel: ctaLabel || "Ouvrir XERA1",
             ctaUrl: ctaUrl || buildDiscoverReminderUrl(),
         });
 
@@ -3838,7 +4823,7 @@ app.post("/api/admin/broadcast-email", async (req, res) => {
                         }
                         const payload = {
                             to: user.email,
-                            subject: `XERA - ${subject}`,
+                            subject: `XERA1 - ${subject}`,
                             html: layout.html,
                             text: layout.text,
                         };
@@ -3935,7 +4920,7 @@ app.post("/api/admin/gift-plan", async (req, res) => {
 
         const { data: profile, error: profileError } = await supabase
             .from("users")
-            .select("badge, followers_count")
+            .select("badge")
             .eq("id", targetUserId)
             .maybeSingle();
 
@@ -3952,14 +4937,11 @@ app.post("/api/admin/gift-plan", async (req, res) => {
         const badgeForPlan =
             normalizedPlan === "pro" ? "verified_gold" : "verified";
         const existingBadge = String(profile.badge || "").toLowerCase();
-        const badgeToApply = PROTECTED_BADGES.has(existingBadge)
-            ? profile.badge
-            : badgeForPlan;
-        const followersCount = Number(profile.followers_count || 0);
-        const isMonetized =
-            normalizedPlan === "pro"
-                ? true
-                : normalizedPlan === "medium" && followersCount >= 1000;
+        const badgeToApply =
+            normalizedPlan !== "pro" && PROTECTED_BADGES.has(existingBadge)
+                ? profile.badge
+                : badgeForPlan;
+        const isMonetized = ["medium", "pro", "elite"].includes(normalizedPlan);
 
         // Calculer les fonctionnalités premium selon le plan
         const premiumFeatures = computePremiumFeatures(normalizedPlan);
@@ -4082,6 +5064,237 @@ app.get("/api/admin/subscription-payments", async (req, res) => {
     }
 });
 
+app.post("/api/promo/validate", async (req, res) => {
+    try {
+        const { code, plan } = req.body || {};
+        if (!code) {
+            return res.status(400).json({ valid: false, error: "Code requis" });
+        }
+        const normalized = normalizeDiscountCode(code);
+        const discount = await findActiveDiscountCode(normalized);
+        let partnerDiscount = null;
+        if (!discount) {
+            partnerDiscount = await findActivePartnerDiscountCode(normalized);
+        }
+        if (!discount && !partnerDiscount) {
+            return res
+                .status(404)
+                .json({ valid: false, error: "Code invalide ou expiré" });
+        }
+        if (partnerDiscount && plan && String(plan).toLowerCase() !== "pro") {
+            return res.status(400).json({
+                valid: false,
+                error: "Ce code partenaire est valable uniquement pour l'abonnement Pro.",
+            });
+        }
+
+        const activeDiscount = discount || partnerDiscount;
+        const discountPercent = Number(activeDiscount.discount_percent || 0);
+
+        return res.json({
+            valid: true,
+            code: activeDiscount.code,
+            discount_percent: discountPercent,
+            type: discount ? "standard" : "partner",
+            plan: activeDiscount.plan || (partnerDiscount ? "pro" : null),
+        });
+    } catch (err) {
+        console.error("Promo validation error:", err);
+        return res
+            .status(500)
+            .json({ valid: false, error: "Erreur de validation" });
+    }
+});
+
+app.get("/api/admin/discount-codes", async (req, res) => {
+    try {
+        const authResult = await authenticateSuperAdmin(req);
+        if (authResult.error)
+            return res
+                .status(authResult.error.status)
+                .json({ error: authResult.error.message });
+        const { data, error } = await supabase
+            .from("subscription_discount_codes")
+            .select(
+                "id, code, plan, discount_percent, valid_from, valid_until, benefit_duration_days, max_uses, uses_count, active, created_at",
+            )
+            .order("created_at", { ascending: false });
+        if (error) throw error;
+        return res.json({ success: true, codes: data || [] });
+    } catch (error) {
+        console.error("Admin discount codes list error:", error);
+        return res.status(500).json({
+            error: error?.message || "Impossible de charger les codes.",
+        });
+    }
+});
+
+app.post("/api/admin/discount-codes", async (req, res) => {
+    try {
+        const authResult = await authenticateSuperAdmin(req);
+        if (authResult.error)
+            return res
+                .status(authResult.error.status)
+                .json({ error: authResult.error.message });
+        const code = normalizeDiscountCode(req.body?.code);
+        const plan = String(req.body?.plan || "").toLowerCase();
+        const discountPercent = Number(req.body?.discount_percent);
+        const benefitDurationDays = Number(req.body?.benefit_duration_days);
+        const maxUses = req.body?.max_uses ? Number(req.body.max_uses) : null;
+        const validFrom = new Date(req.body?.valid_from || Date.now());
+        const validUntil = req.body?.valid_until
+            ? new Date(req.body.valid_until)
+            : null;
+        if (!/^[A-Z0-9_-]{3,40}$/.test(code))
+            return res
+                .status(400)
+                .json({ error: "Code invalide (3 à 40 caractères)." });
+        if (
+            !Number.isInteger(discountPercent) ||
+            discountPercent < 10 ||
+            discountPercent > 100
+        )
+            return res.status(400).json({
+                error: "La réduction doit être comprise entre 10 et 100 %.",
+            });
+        if (!isValidPlanId(plan))
+            return res.status(400).json({ error: "Plan offert invalide." });
+        if (!Number.isInteger(benefitDurationDays) || benefitDurationDays < 1)
+            return res.status(400).json({
+                error: "La durée des avantages doit être d'au moins 1 jour.",
+            });
+        if (maxUses !== null && (!Number.isInteger(maxUses) || maxUses < 1))
+            return res
+                .status(400)
+                .json({ error: "La limite d'utilisation est invalide." });
+        if (
+            Number.isNaN(validFrom.getTime()) ||
+            (validUntil && Number.isNaN(validUntil.getTime())) ||
+            (validUntil && validUntil < validFrom)
+        )
+            return res
+                .status(400)
+                .json({ error: "Période de validité invalide." });
+        const { data, error } = await supabase
+            .from("subscription_discount_codes")
+            .insert({
+                code,
+                plan,
+                discount_percent: discountPercent,
+                valid_from: validFrom.toISOString(),
+                valid_until: validUntil?.toISOString() || null,
+                benefit_duration_days: benefitDurationDays,
+                max_uses: maxUses,
+                created_by: authResult.user.id,
+            })
+            .select(
+                "id, code, plan, discount_percent, valid_from, valid_until, benefit_duration_days, max_uses, uses_count, active, created_at",
+            )
+            .single();
+        if (error) throw error;
+        return res.status(201).json({ success: true, code: data });
+    } catch (error) {
+        console.error("Admin discount code create error:", {
+            code: error?.code,
+            message: error?.message,
+            details: error?.details,
+            hint: error?.hint,
+        });
+        if (["42P01", "PGRST205", "42883"].includes(error?.code)) {
+            return res.status(503).json({
+                error: "Le schéma des codes de réduction n'est pas installé. Exécutez sql/20260830_subscription_discount_codes.sql dans Supabase, puis réessayez.",
+            });
+        }
+        return res.status(500).json({
+            error:
+                error?.code === "23505"
+                    ? "Ce code existe déjà."
+                    : error?.message || "Impossible de créer le code.",
+            diagnostic: {
+                code: error?.code || null,
+                details: error?.details || null,
+                hint: error?.hint || null,
+            },
+        });
+    }
+});
+
+app.patch("/api/admin/discount-codes/:id", async (req, res) => {
+    try {
+        const authResult = await authenticateSuperAdmin(req);
+        if (authResult.error)
+            return res
+                .status(authResult.error.status)
+                .json({ error: authResult.error.message });
+        const plan = String(req.body?.plan || "").toLowerCase();
+        const discountPercent = Number(req.body?.discount_percent ?? 100);
+        const benefitDurationDays = Number(req.body?.benefit_duration_days);
+        const maxUses = req.body?.max_uses ? Number(req.body.max_uses) : null;
+        const validFrom = new Date(req.body?.valid_from || Date.now());
+        const validUntil = req.body?.valid_until
+            ? new Date(req.body.valid_until)
+            : null;
+        if (
+            !isValidPlanId(plan) ||
+            discountPercent !== 100 ||
+            !Number.isInteger(benefitDurationDays) ||
+            benefitDurationDays < 1 ||
+            (maxUses !== null && (!Number.isInteger(maxUses) || maxUses < 1)) ||
+            Number.isNaN(validFrom.getTime()) ||
+            (validUntil && Number.isNaN(validUntil.getTime())) ||
+            (validUntil && validUntil < validFrom)
+        ) {
+            return res
+                .status(400)
+                .json({ error: "Paramètres du code invalides." });
+        }
+        const { data, error } = await supabase
+            .from("subscription_discount_codes")
+            .update({
+                plan,
+                discount_percent: 100,
+                benefit_duration_days: benefitDurationDays,
+                max_uses: maxUses,
+                valid_from: validFrom.toISOString(),
+                valid_until: validUntil?.toISOString() || null,
+                updated_at: new Date().toISOString(),
+            })
+            .eq("id", req.params.id)
+            .select(
+                "id, code, plan, discount_percent, valid_from, valid_until, benefit_duration_days, max_uses, uses_count, active, created_at",
+            )
+            .single();
+        if (error) throw error;
+        return res.json({ success: true, code: data });
+    } catch (error) {
+        console.error("Admin discount code update error:", error);
+        return res.status(500).json({
+            error: error?.message || "Impossible de modifier le code.",
+        });
+    }
+});
+
+app.delete("/api/admin/discount-codes/:id", async (req, res) => {
+    try {
+        const authResult = await authenticateSuperAdmin(req);
+        if (authResult.error)
+            return res
+                .status(authResult.error.status)
+                .json({ error: authResult.error.message });
+        const { error } = await supabase
+            .from("subscription_discount_codes")
+            .update({ active: false, updated_at: new Date().toISOString() })
+            .eq("id", req.params.id);
+        if (error) throw error;
+        return res.json({ success: true });
+    } catch (error) {
+        console.error("Admin discount code deactivate error:", error);
+        return res.status(500).json({
+            error: error?.message || "Impossible de désactiver le code.",
+        });
+    }
+});
+
 app.post("/api/admin/subscription-payments/confirm", async (req, res) => {
     try {
         const authResult = await authenticateSuperAdmin(req);
@@ -4090,6 +5303,9 @@ app.post("/api/admin/subscription-payments/confirm", async (req, res) => {
                 .status(authResult.error.status)
                 .json({ error: authResult.error.message });
         }
+        return res.status(410).json({
+            error: "La validation manuelle est désactivée. Les abonnements sont activés automatiquement après confirmation KPay.",
+        });
 
         const {
             payment_id: paymentId,
@@ -4149,6 +5365,21 @@ app.post("/api/admin/subscription-payments/confirm", async (req, res) => {
             note,
         });
 
+        if (!activationResult?.alreadyActivated) {
+            const emailResult = await sendSubscriptionConfirmationEmail({
+                userId: payment.userId,
+                plan: payment.plan,
+                billingCycle: payment.billingCycle,
+                planEndsAt: activationResult?.user?.plan_ends_at,
+            });
+            if (!emailResult.success && !emailResult.skipped) {
+                console.warn(
+                    "Manual subscription confirmation email failed:",
+                    emailResult.error,
+                );
+            }
+        }
+
         const { data: refreshedPayment, error: refreshedPaymentError } =
             await supabase
                 .from("transactions")
@@ -4185,6 +5416,9 @@ app.post("/api/admin/subscription-payments/fail", async (req, res) => {
                 .status(authResult.error.status)
                 .json({ error: authResult.error.message });
         }
+        return res.status(410).json({
+            error: "La validation manuelle est désactivée. KPay détermine le statut final du paiement.",
+        });
 
         const { payment_id: paymentId, reason } = req.body || {};
         if (!paymentId) {
@@ -4291,7 +5525,6 @@ app.get("/api/creator-revenue/:userId", async (req, res) => {
             totalNet: 0,
             totalCommission: 0,
             supportRevenue: 0,
-            videoRevenue: 0,
             transactionCount: transactions ? transactions.length : 0,
         };
 
@@ -4307,8 +5540,6 @@ app.get("/api/creator-revenue/:userId", async (req, res) => {
 
                 if (tx.type === "support") {
                     summary.supportRevenue += net;
-                } else if (tx.type === "video_rpm") {
-                    summary.videoRevenue += net;
                 }
             });
         }
@@ -4350,6 +5581,160 @@ app.get("/api/monetization/overview", async (req, res) => {
         return res
             .status(500)
             .json({ error: "Impossible de charger le portefeuille." });
+    }
+});
+
+app.post("/api/monetization/support", async (req, res) => {
+    try {
+        const authResult = await authenticateRequest(req);
+        if (authResult.error) {
+            return res
+                .status(authResult.error.status)
+                .json({ error: authResult.error.message });
+        }
+
+        const fromUserId = authResult.user.id;
+        const {
+            to_user_id: toUserId,
+            amount: rawAmount,
+            description: rawDescription,
+        } = req.body || {};
+
+        if (!toUserId) {
+            return res.status(400).json({ error: "Destinataire manquant." });
+        }
+
+        if (fromUserId === toUserId) {
+            return res
+                .status(400)
+                .json({ error: "Vous ne pouvez pas vous envoyer un soutien." });
+        }
+
+        const amount = Number.parseFloat(rawAmount);
+        if (!Number.isFinite(amount)) {
+            return res.status(400).json({ error: "Montant invalide." });
+        }
+        if (amount < SUPPORT_MIN_USD || amount > SUPPORT_MAX_USD) {
+            return res.status(400).json({
+                error: `Le montant doit etre entre ${SUPPORT_MIN_USD} et ${SUPPORT_MAX_USD} USD.`,
+            });
+        }
+
+        const [senderProfileResult, recipientProfileResult] = await Promise.all(
+            [
+                supabase
+                    .from("users")
+                    .select("id, name, avatar")
+                    .eq("id", fromUserId)
+                    .maybeSingle(),
+                supabase
+                    .from("users")
+                    .select(
+                        "id, name, avatar, followers_count, plan, plan_status, plan_ends_at, is_monetized",
+                    )
+                    .eq("id", toUserId)
+                    .maybeSingle(),
+            ],
+        );
+
+        if (senderProfileResult.error) throw senderProfileResult.error;
+        if (recipientProfileResult.error) throw recipientProfileResult.error;
+
+        const senderProfile = senderProfileResult.data || null;
+        const recipientProfile = recipientProfileResult.data || null;
+
+        if (!recipientProfile) {
+            return res.status(404).json({ error: "Createur introuvable." });
+        }
+
+        if (!canUserReceiveSupport(recipientProfile)) {
+            return res.status(400).json({
+                error: "Ce createur n'est pas eligible aux soutiens.",
+            });
+        }
+
+        const description = String(rawDescription || "")
+            .trim()
+            .slice(0, 160);
+        const breakdown = computeSupportRevenueBreakdown(amount);
+        const metadata = {
+            payment_provider: "internal_support",
+            support_kind: "direct",
+            sender_name:
+                senderProfile?.name || authResult.user.email || "Utilisateur",
+            created_via: "support_api",
+            commission_rate: SUPPORT_COMMISSION_RATE,
+            amount_net_creator: breakdown.netCreator,
+            amount_commission_xera: breakdown.commission,
+        };
+
+        const { data: transaction, error: txError } = await supabase
+            .from("transactions")
+            .insert({
+                from_user_id: fromUserId,
+                to_user_id: toUserId,
+                type: "support",
+                amount_gross: breakdown.gross,
+                amount_net_creator: breakdown.netCreator,
+                amount_commission_xera: breakdown.commission,
+                currency: "USD",
+                status: "succeeded",
+                description: description || "Soutien XERA1",
+                metadata,
+            })
+            .select(
+                "id, from_user_id, to_user_id, type, amount_gross, amount_net_creator, amount_commission_xera, currency, status, description, created_at",
+            )
+            .single();
+
+        if (txError) throw txError;
+
+        const senderName =
+            senderProfile?.name ||
+            authResult.user.user_metadata?.username ||
+            "Un utilisateur";
+        const notification = await createNotificationRecord({
+            userId: toUserId,
+            type: "support",
+            message: `${senderName} vous a envoye ${formatMoneyUsd(breakdown.gross)} de soutien.`,
+            link: `/creator-dashboard`,
+            actorId: fromUserId,
+            metadata: {
+                transaction_id: transaction?.id || null,
+                amount_gross: breakdown.gross,
+                amount_net_creator: breakdown.netCreator,
+                amount_commission_xera: breakdown.commission,
+                currency: "USD",
+                sender_id: fromUserId,
+            },
+        });
+
+        if (notification) {
+            await sendPushToUser(
+                toUserId,
+                buildNotificationPushPayload(notification),
+            );
+        }
+
+        return res.json({
+            success: true,
+            transaction,
+            notification,
+            recipient: {
+                id: recipientProfile.id,
+                name: recipientProfile.name || "Createur",
+            },
+        });
+    } catch (error) {
+        console.error("Monetization support error:", error);
+        if (isMissingRelationError(error) || isMissingColumnError(error)) {
+            return res.status(503).json({
+                error: "Schema monétisation ou notifications incomplet. Exécutez sql/monetization-supabase-one-shot.sql puis sql/notifications-rls-fix.sql si nécessaire.",
+            });
+        }
+        return res
+            .status(500)
+            .json({ error: "Impossible d'envoyer le soutien." });
     }
 });
 
@@ -4489,9 +5874,13 @@ app.post("/api/monetization/withdrawals", async (req, res) => {
                 error: "Votre compte Mobile Money est inactif. Reenregistrez-le avant le retrait.",
             });
         }
-        if (requestedAmount > overview.wallet.availableBalance) {
+        // A withdrawal can never drain the wallet: a $5 reserve remains available.
+        const maxWithdrawal = roundMoney(
+            Math.max(0, overview.wallet.availableBalance - WITHDRAWAL_MIN_USD),
+        );
+        if (requestedAmount > maxWithdrawal) {
             return res.status(400).json({
-                error: "Solde disponible insuffisant pour ce retrait.",
+                error: `Vous devez conserver au moins ${WITHDRAWAL_MIN_USD} USD sur votre compte. Montant maximum retirable : ${formatMoneyUsd(maxWithdrawal)}.`,
             });
         }
 
@@ -4508,17 +5897,69 @@ app.post("/api/monetization/withdrawals", async (req, res) => {
                 wallet_number: payoutSettings.walletNumber,
                 account_name: payoutSettings.accountName,
                 note,
-                status: "pending",
+                status: "processing",
                 requested_at: new Date().toISOString(),
+                processed_at: new Date().toISOString(),
             })
             .select("*")
             .single();
         if (error) throw error;
 
-        return res.json({
-            success: true,
-            withdrawal: extractWithdrawalRequest(data),
-        });
+        try {
+            const initiated = await initiateAutomaticKPayPayout({
+                withdrawalId: data.id,
+                amountUsd: requestedAmount,
+                phoneNumber: payoutSettings.walletNumber,
+                description: "Retrait XERA1",
+            });
+            const kpayStatus = String(
+                initiated.payout?.status || "PENDING",
+            ).toUpperCase();
+            const terminalPaid = kpayStatus === "COMPLETED";
+            const { data: updated, error: updateError } = await supabase
+                .from("withdrawal_requests")
+                .update({
+                    provider: initiated.prediction.provider,
+                    provider_country: initiated.prediction.country,
+                    kpay_withdrawal_id: initiated.payout?.id || null,
+                    kpay_reference: initiated.payout?.reference || null,
+                    kpay_status: kpayStatus,
+                    payout_currency:
+                        initiated.payout?.payoutCurrency ||
+                        initiated.payout?.currency ||
+                        initiated.payoutCurrency,
+                    payout_amount:
+                        initiated.payout?.payoutAmount ||
+                        initiated.payout?.netAmount ||
+                        null,
+                    exchange_rate:
+                        initiated.payout?.exchangeRate || initiated.rate,
+                    payout_fee_amount: initiated.payout?.feeAmount || null,
+                    status: terminalPaid ? "paid" : "processing",
+                    paid_at: terminalPaid ? new Date().toISOString() : null,
+                    operator_ref_id: initiated.payout?.reference || null,
+                })
+                .eq("id", data.id)
+                .select("*")
+                .single();
+            if (updateError) throw updateError;
+            return res.json({
+                success: true,
+                withdrawal: extractWithdrawalRequest(updated),
+            });
+        } catch (payoutError) {
+            await supabase
+                .from("withdrawal_requests")
+                .update({
+                    status: "rejected",
+                    admin_note: `KPay: ${String(payoutError.message || "échec").slice(0, 240)}`,
+                    updated_at: new Date().toISOString(),
+                })
+                .eq("id", data.id);
+            return res.status(502).json({
+                error: payoutError.message || "Retrait KPay impossible.",
+            });
+        }
     } catch (error) {
         console.error("Monetization withdrawal request error:", error);
         if (isMissingRelationError(error) || isMissingColumnError(error)) {
@@ -4529,6 +5970,56 @@ app.post("/api/monetization/withdrawals", async (req, res) => {
         return res
             .status(500)
             .json({ error: "Impossible de creer la demande de retrait." });
+    }
+});
+
+async function sweepKPayPayouts() {
+    if (!areKPayPayoutsEnabled()) return { checked: 0, updated: 0 };
+    const { data: rows, error } = await supabase
+        .from("withdrawal_requests")
+        .select("id,kpay_withdrawal_id")
+        .eq("status", "processing")
+        .not("kpay_withdrawal_id", "is", null)
+        .limit(100);
+    if (error) throw error;
+    let updated = 0;
+    for (const row of rows || []) {
+        const payout = await kpayPayoutRequest(
+            `/withdraw/${encodeURIComponent(row.kpay_withdrawal_id)}`,
+        );
+        const status = String(payout?.status || "PENDING").toUpperCase();
+        if (!["COMPLETED", "FAILED", "CANCELLED"].includes(status)) continue;
+        const paid = status === "COMPLETED";
+        const { error: updateError } = await supabase
+            .from("withdrawal_requests")
+            .update({
+                status: paid ? "paid" : "rejected",
+                kpay_status: status,
+                paid_at: paid ? new Date().toISOString() : null,
+                admin_note: paid
+                    ? null
+                    : `KPay: ${payout?.failureReason || status}`,
+                updated_at: new Date().toISOString(),
+            })
+            .eq("id", row.id);
+        if (updateError) throw updateError;
+        updated += 1;
+    }
+    return { checked: (rows || []).length, updated };
+}
+
+app.get("/api/cron/sweep-kpay-payouts", async (req, res) => {
+    const auth = authorizeCronRequest(req);
+    if (auth.error)
+        return res
+            .status(auth.error.status)
+            .json({ error: auth.error.message });
+    try {
+        return res.json({ success: true, ...(await sweepKPayPayouts()) });
+    } catch (error) {
+        return res.status(500).json({
+            error: error?.message || "Synchronisation KPay impossible.",
+        });
     }
 });
 
@@ -4625,6 +6116,9 @@ app.post("/api/admin/withdrawal-requests/status", async (req, res) => {
                 .status(authResult.error.status)
                 .json({ error: authResult.error.message });
         }
+        return res.status(410).json({
+            error: "Le traitement manuel des retraits est désactivé. Le statut payé doit provenir du prestataire de décaissement.",
+        });
 
         const requestId = String(req.body?.request_id || "").trim();
         const status = String(req.body?.status || "")
@@ -4800,6 +6294,67 @@ app.get("/api/cron/send-reminders", async (req, res) => {
     });
 });
 
+// Master Daily Cron (Vercel Hobby Plan Compatible - Runs once per day)
+app.all(["/api/cron/daily", "/api/cron/master"], async (req, res) => {
+    const auth = authorizeCronRequest(req);
+    if (!auth.ok) {
+        return res.status(auth.status || 401).json({
+            error: auth.message || "Unauthorized cron request.",
+        });
+    }
+
+    const results = {};
+
+    // 1. Reminders
+    try {
+        await sendScheduledReturnReminders();
+        results.reminders = "ok";
+    } catch (err) {
+        results.reminders = err?.message || "error";
+    }
+
+    // 2. Sweep Subscriptions
+    try {
+        await sweepExpiredSubscriptions();
+        results.sweepSubscriptions = "ok";
+    } catch (err) {
+        results.sweepSubscriptions = err?.message || "error";
+    }
+
+    // 3. Sweep KPay Payouts
+    try {
+        results.kpayPayouts = await sweepKPayPayouts();
+    } catch (err) {
+        results.kpayPayouts = err?.message || "error";
+    }
+
+    // 4. Evaluate Tech Badges
+    try {
+        results.techBadges = await evaluateTechBadges();
+    } catch (err) {
+        results.techBadges = err?.message || "error";
+    }
+
+    // 5. Fata Worker
+    try {
+        const {
+            processActivityLog,
+            processPendingEvents,
+        } = require("./fata-worker");
+        await processActivityLog();
+        await processPendingEvents();
+        results.fataWorker = "ok";
+    } catch (err) {
+        results.fataWorker = err?.message || "error";
+    }
+
+    return res.status(200).json({
+        ok: true,
+        message: "Master daily cron executed successfully",
+        results,
+    });
+});
+
 app.get("/api/cron/send-reminder-emails", async (req, res) => {
     const auth = authorizeCronRequest(req);
     if (!auth.ok) {
@@ -4880,6 +6435,554 @@ app.get("/api/cron/evaluate-tech-badges", async (req, res) => {
         console.error("evaluate-tech-badges error:", error);
         return res.status(500).json({ error: error?.message || "failed" });
     }
+});
+
+// Fata Cron Worker
+app.all(["/api/cron/fata-worker", "/cron/fata-worker"], async (req, res) => {
+    if (!String(process.env.CRON_SECRET || "").trim()) {
+        return res.status(503).json({
+            error: "CRON_SECRET must be configured before enabling the Fata worker.",
+        });
+    }
+    const auth = authorizeCronRequest(req);
+    if (!auth.ok) {
+        return res.status(auth.status || 401).json({
+            error: auth.message || "Unauthorized cron request.",
+        });
+    }
+
+    try {
+        const {
+            processActivityLog,
+            processPendingEvents,
+        } = require("./fata-worker");
+        await processActivityLog();
+        await processPendingEvents();
+        return res.status(200).json({
+            ok: true,
+            message: "Fata worker processed successfully",
+        });
+    } catch (error) {
+        console.error("[Fata Cron Worker Error]:", error);
+        return res
+            .status(500)
+            .json({ error: error?.message || "Fata worker error" });
+    }
+});
+
+// List ARC candidates and the immutable selection for the current Fata challenge.
+app.post("/api/fata/sync", async (req, res) => {
+    const auth = await authenticateRequest(req);
+    if (auth.error) {
+        return res.status(auth.error.status).json({ error: auth.error.message });
+    }
+    res.setHeader("Cache-Control", "private, no-store, max-age=0");
+
+    try {
+        await require("./fata-worker").processPendingEvents(auth.user.id, 1);
+        const { data: pendingEvents, error } = await supabase
+            .from("fata_pending_events")
+            .select("id,challenge_id,requirement_id,occurred_at,status,event_id,request_id,last_error,created_at,updated_at")
+            .eq("user_id", auth.user.id)
+            .order("updated_at", { ascending: false })
+            .limit(50);
+        if (error) throw error;
+        return res.json({ pendingEvents: pendingEvents || [] });
+    } catch (error) {
+        console.error("Fata queue sync error:", error);
+        return res.status(500).json({
+            error: "Impossible de synchroniser les confirmations Fata pour le moment.",
+        });
+    }
+});
+
+// Register explicit participation for the Vercel catch-all runtime. The
+// optimized local server exposes the same endpoint through fata-api-routes.
+app.post("/api/fata/participate", async (req, res) => {
+    const auth = await authenticateRequest(req);
+    if (auth.error) {
+        return res.status(auth.error.status).json({ error: auth.error.message });
+    }
+    res.setHeader("Cache-Control", "private, no-store, max-age=0");
+
+    const challengeId = String(req.body?.challengeId || "").trim();
+    try {
+        const {
+            resolveChallengeConfig,
+            areFataRequirementIdsConfigured,
+            challengeRequirementIdsMatch,
+            hasValidChallengeWindow,
+            getChallengeSelection,
+        } = require("./fata-contract");
+        if (!areFataRequirementIdsConfigured()) {
+            return res.status(503).json({
+                error: "Les identifiants d’étapes Fata ne sont pas configurés.",
+            });
+        }
+
+        const challenge = resolveChallengeConfig(challengeId);
+        const provider = require("./oauth-configs").getConfig("fata");
+        if (!provider?.issuer) {
+            return res.status(503).json({
+                error: "La configuration du fournisseur Fata est indisponible.",
+            });
+        }
+
+        const [linkageResult, challengeResult] = await Promise.all([
+            supabase
+                .from("fata_linkages")
+                .select("user_id,fata_iss,metadata")
+                .eq("user_id", auth.user.id)
+                .eq("fata_iss", provider.issuer)
+                .maybeSingle(),
+            supabase
+                .from("fata_challenges_config")
+                .select("id,is_active,opens_at,close_at,receipt_deadline_at,req_arc,req_preuve,req_jalon")
+                .eq("id", challenge.id)
+                .maybeSingle(),
+        ]);
+        if (linkageResult.error || challengeResult.error) {
+            throw linkageResult.error || challengeResult.error;
+        }
+
+        const linkage = linkageResult.data;
+        const challengeRow = challengeResult.data;
+        if (!linkage) {
+            return res.status(409).json({
+                error: "Connectez votre compte Fata avant de participer au challenge.",
+            });
+        }
+        if (!challengeRow?.is_active) {
+            return res.status(409).json({
+                error: "Ce challenge Fata n'est pas actif sur XERA1.",
+            });
+        }
+        if (!hasValidChallengeWindow(challengeRow)) {
+            return res.status(503).json({
+                error: "Les dates du challenge Fata ne sont pas configurées correctement.",
+            });
+        }
+        if (!challengeRequirementIdsMatch(challenge.id, challengeRow)) {
+            return res.status(503).json({
+                error: "La configuration des étapes Fata doit être corrigée avant de participer.",
+            });
+        }
+
+        const now = Date.now();
+        if (
+            (challengeRow.opens_at && now < Date.parse(challengeRow.opens_at)) ||
+            (challengeRow.close_at && now > Date.parse(challengeRow.close_at))
+        ) {
+            return res.status(409).json({
+                error: "La période d'activité de ce challenge n'est pas ouverte.",
+            });
+        }
+        if (
+            challengeRow.receipt_deadline_at &&
+            now > Date.parse(challengeRow.receipt_deadline_at)
+        ) {
+            return res.status(409).json({
+                error: "La date limite de réception de ce challenge est dépassée.",
+            });
+        }
+
+        const { data: intent, error: intentError } = await supabase.rpc(
+            "set_fata_challenge_participation",
+            {
+                p_user_id: auth.user.id,
+                p_issuer: provider.issuer,
+                p_challenge_id: challenge.id,
+            },
+        );
+        if (intentError) throw intentError;
+
+        return res.json({
+            challengeId: challenge.id,
+            participatingAt: intent?.participating_at || null,
+            selection: getChallengeSelection(linkage, challenge.id),
+            requirements: {
+                arc: challengeRow.req_arc,
+                proof: challengeRow.req_preuve,
+                milestone: challengeRow.req_jalon,
+            },
+        });
+    } catch (error) {
+        if (/Invalid Fata challengeId/i.test(error?.message || "")) {
+            return res.status(400).json({ error: "Challenge Fata inconnu." });
+        }
+        console.error("Fata participation error:", error);
+        return res.status(500).json({
+            error: "Impossible d'enregistrer la participation au challenge Fata.",
+        });
+    }
+});
+
+app.get("/api/fata/arcs", async (req, res) => {
+    const auth = await authenticateRequest(req);
+    if (auth.error) {
+        return res.status(auth.error.status).json({ error: auth.error.message });
+    }
+
+    const challengeId = String(req.query.challengeId || "").trim();
+    let challenge;
+    try {
+        const { resolveChallengeConfig, areFataRequirementIdsConfigured, getChallengeSelection, countArcMilestones, isArcFataEligible, challengeRequirementIdsMatch, hasValidChallengeWindow } = require("./fata-contract");
+        if (!areFataRequirementIdsConfigured()) {
+            return res.status(503).json({ error: "Les identifiants d’étapes Fata ne sont pas configurés." });
+        }
+        challenge = resolveChallengeConfig(challengeId);
+        const config = require("./oauth-configs").getConfig("fata");
+        const [{ data: linkage, error: linkageError }, { data: challengeRow, error: challengeError }] = await Promise.all([
+            supabase.from("fata_linkages").select("user_id,fata_iss,fata_sub,created_at,metadata").eq("user_id", auth.user.id).eq("fata_iss", config.issuer).maybeSingle(),
+            supabase.from("fata_challenges_config").select("id,is_active,opens_at,close_at,receipt_deadline_at,req_arc,req_preuve,req_jalon").eq("id", challenge.id).maybeSingle(),
+        ]);
+        if (linkageError || challengeError) throw linkageError || challengeError;
+        if (!linkage || linkage.fata_iss !== config.issuer) {
+            return res.status(409).json({ error: "Connectez votre compte Fata avant de choisir un ARC." });
+        }
+        if (!challengeRow?.is_active) {
+            return res.status(409).json({ error: "Ce challenge Fata n'est pas actif sur XERA1." });
+        }
+        if (!hasValidChallengeWindow(challengeRow)) {
+            return res.status(503).json({ error: "Les dates du challenge Fata ne sont pas configurées correctement." });
+        }
+        if (!challengeRequirementIdsMatch(challenge.id, challengeRow)) {
+            return res.status(503).json({ error: "La configuration des étapes Fata doit être corrigée avant de choisir un ARC." });
+        }
+        const now = Date.now();
+        if ((challengeRow.opens_at && now < Date.parse(challengeRow.opens_at)) ||
+            (challengeRow.close_at && now > Date.parse(challengeRow.close_at))) {
+            return res.status(409).json({ error: "La période d'activité de ce challenge n'est pas ouverte." });
+        }
+        if (challengeRow.receipt_deadline_at && now > Date.parse(challengeRow.receipt_deadline_at)) {
+            return res.status(409).json({ error: "La date limite de réception de ce challenge est dépassée." });
+        }
+
+        const { data: arcs, error: arcsError } = await supabase
+            .from("arcs")
+            .select("id,user_id,page_id,title,description,status,milestones,created_at")
+            .eq("user_id", auth.user.id)
+            .is("page_id", null)
+            .order("created_at", { ascending: false })
+            .limit(100);
+        if (arcsError) throw arcsError;
+
+        const selection = getChallengeSelection(linkage, challenge.id);
+        return res.json({
+            challengeId: challenge.id,
+            selection,
+            arcs: (arcs || []).map((arc) => ({
+                id: arc.id,
+                title: arc.title,
+                description: arc.description,
+                created_at: arc.created_at,
+                milestoneCount: countArcMilestones(arc),
+                eligible: isArcFataEligible(arc, auth.user.id),
+                selected: String(selection?.arc_id || "") === String(arc.id),
+            })),
+        });
+    } catch (error) {
+        if (/Invalid Fata challengeId/i.test(error?.message || "")) {
+            return res.status(400).json({ error: "Challenge Fata inconnu." });
+        }
+        console.error("Fata ARC list error:", error);
+        return res.status(500).json({ error: "Impossible de charger les ARC pour Fata." });
+    }
+});
+
+// Persist one ARC per participant and challenge. The database RPC writes the
+// action and its outbox task atomically; the worker remains a recovery path.
+app.post("/api/fata/select-arc", async (req, res) => {
+    const auth = await authenticateRequest(req);
+    if (auth.error) {
+        return res.status(auth.error.status).json({ error: auth.error.message });
+    }
+
+    const challengeId = String(req.body?.challengeId || "").trim();
+    const arcId = String(req.body?.arcId || "").trim();
+    let challenge;
+    try {
+        const { resolveChallengeConfig, areFataRequirementIdsConfigured, getChallengeSelection, isArcFataEligible, challengeRequirementIdsMatch, hasValidChallengeWindow } = require("./fata-contract");
+        if (!areFataRequirementIdsConfigured()) {
+            return res.status(503).json({ error: "Les identifiants d’étapes Fata ne sont pas configurés." });
+        }
+        challenge = resolveChallengeConfig(challengeId);
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(arcId)) {
+            return res.status(400).json({ error: "ARC invalide." });
+        }
+        const config = require("./oauth-configs").getConfig("fata");
+        const [{ data: linkage, error: linkageError }, { data: challengeRow, error: challengeError }, { data: arc, error: arcError }] = await Promise.all([
+            supabase.from("fata_linkages").select("user_id,fata_iss,fata_sub,created_at,metadata").eq("user_id", auth.user.id).eq("fata_iss", config.issuer).maybeSingle(),
+            supabase.from("fata_challenges_config").select("id,is_active,opens_at,close_at,receipt_deadline_at,req_arc,req_preuve,req_jalon").eq("id", challenge.id).maybeSingle(),
+            supabase.from("arcs").select("id,user_id,page_id,title,description,status,milestones,created_at").eq("id", arcId).maybeSingle(),
+        ]);
+        if (linkageError || challengeError || arcError) throw linkageError || challengeError || arcError;
+        if (!linkage || linkage.fata_iss !== config.issuer) {
+            return res.status(409).json({ error: "Connectez votre compte Fata avant de choisir un ARC." });
+        }
+        if (!challengeRow?.is_active) {
+            return res.status(409).json({ error: "Ce challenge Fata n'est pas actif sur XERA1." });
+        }
+        if (!hasValidChallengeWindow(challengeRow)) {
+            return res.status(503).json({ error: "Les dates du challenge Fata ne sont pas configurées correctement." });
+        }
+        if (!challengeRequirementIdsMatch(challenge.id, challengeRow)) {
+            return res.status(503).json({ error: "La configuration des étapes Fata doit être corrigée avant de choisir un ARC." });
+        }
+        const now = Date.now();
+        if ((challengeRow.opens_at && now < Date.parse(challengeRow.opens_at)) ||
+            (challengeRow.close_at && now > Date.parse(challengeRow.close_at))) {
+            return res.status(409).json({ error: "La période d'activité de ce challenge n'est pas ouverte." });
+        }
+        if (challengeRow.receipt_deadline_at && now > Date.parse(challengeRow.receipt_deadline_at)) {
+            return res.status(409).json({ error: "La date limite de réception de ce challenge est dépassée." });
+        }
+        if (!isArcFataEligible(arc, auth.user.id)) {
+            return res.status(422).json({ error: "Choisissez un ARC personnel publié avec un titre, une description et au moins trois jalons." });
+        }
+
+        const previousSelection = getChallengeSelection(linkage, challenge.id);
+        if (previousSelection && String(previousSelection.arc_id) !== arcId) {
+            return res.status(409).json({
+                error: "Un ARC est déjà associé à cette étape du challenge. Contactez le support XERA1 pour corriger cette sélection.",
+                selection: previousSelection,
+            });
+        }
+
+        const { data: selection, error: selectionError } = await supabase.rpc(
+            "record_fata_arc_selection",
+            {
+                p_user_id: auth.user.id,
+                p_issuer: config.issuer,
+                p_challenge_id: challenge.id,
+                p_arc_id: arcId,
+            },
+        );
+        if (selectionError) {
+            if (selectionError.code === "23505") {
+                return res.status(409).json({ error: "Un ARC est déjà associé à ce challenge." });
+            }
+            throw selectionError;
+        }
+
+        // The selection RPC commits the ARC selection and its outbox row
+        // together. Try this user's queue immediately to meet Fata's
+        // seconds-level confirmation flow; the daily Vercel cron remains
+        // responsible for retries and recovery.
+        let delivery = null;
+        try {
+            await require("./fata-worker").processPendingEvents(auth.user.id, 1);
+            const { data: actionEvent, error: actionEventError } = await supabase
+                .from("fata_pending_events")
+                .select("status,event_id,request_id,last_error")
+                .eq("user_id", auth.user.id)
+                .eq("challenge_id", challenge.id)
+                .eq("requirement_id", challengeRow.req_arc)
+                .order("created_at", { ascending: false })
+                .limit(1)
+                .maybeSingle();
+            if (actionEventError) throw actionEventError;
+            if (actionEvent) {
+                delivery = {
+                    status: actionEvent.status,
+                    eventId: actionEvent.event_id,
+                    requestId: actionEvent.request_id,
+                    error: actionEvent.last_error,
+                };
+            }
+        } catch (deliveryError) {
+            // The durable task is already committed. A transient send or
+            // status lookup failure must not undo the saved selection.
+            console.error("Fata immediate ARC delivery failed:", deliveryError);
+        }
+
+        return res.status(200).json({
+            selection,
+            arc: { id: arc.id, title: arc.title },
+            delivery,
+        });
+    } catch (error) {
+        if (/Invalid Fata challengeId/i.test(error?.message || "")) {
+            return res.status(400).json({ error: "Challenge Fata inconnu." });
+        }
+        console.error("Fata ARC selection error:", error);
+        return res.status(500).json({ error: "Impossible d'enregistrer la sélection de l'ARC." });
+    }
+});
+
+// Fata Linkage & Challenge Status for Authenticated User
+app.get("/api/fata/status", async (req, res) => {
+    res.setHeader("Cache-Control", "private, no-store, max-age=0");
+    const auth = await authenticateRequest(req);
+    if (auth.error) {
+        return res
+            .status(auth.error.status)
+            .json({ error: auth.error.message });
+    }
+
+    try {
+        const userId = auth.user.id;
+        const fataIssuer = require("./oauth-configs").getConfig("fata")?.issuer;
+        const { data: linkage } = await supabase
+            .from("fata_linkages")
+            .select("*")
+            .eq("user_id", userId)
+            .eq("fata_iss", fataIssuer || "")
+            .maybeSingle();
+
+        const { data: pendingEvents } = await supabase
+            .from("fata_pending_events")
+            .select("*")
+            .eq("user_id", userId)
+            .order("created_at", { ascending: false });
+
+        const realChallengeId = String(process.env.FATA_REAL_CHALLENGE_ID || "").trim();
+        let qualification = null;
+        if (realChallengeId) {
+            const { data, error } = await supabase
+                .from("fata_qualifications")
+                .select("*")
+                .eq("user_id", userId)
+                .eq("challenge_id", realChallengeId)
+                .maybeSingle();
+            if (error) throw error;
+            qualification = data || null;
+        }
+
+        const { isFataCelebrationPending } = require("./fata-contract");
+
+        return res.json({
+            connected: Boolean(linkage),
+            linkage: linkage || null,
+            challengeId: realChallengeId || null,
+            qualification,
+            celebrationPending: isFataCelebrationPending(qualification || {}),
+            pendingEvents: pendingEvents || [],
+        });
+    } catch (error) {
+        console.error("Fata status error:", error);
+        return res
+            .status(500)
+            .json({ error: error?.message || "Failed to fetch Fata status" });
+    }
+});
+
+// Acknowledge the completion celebration only after the authenticated user closes it.
+app.post("/api/fata/celebration/seen", async (req, res) => {
+    const auth = await authenticateRequest(req);
+    if (auth.error) {
+        return res
+            .status(auth.error.status)
+            .json({ error: auth.error.message });
+    }
+
+    const challengeId = String(process.env.FATA_REAL_CHALLENGE_ID || "").trim();
+    if (!challengeId) {
+        return res.status(503).json({ error: "Fata challenge is not configured." });
+    }
+
+    try {
+        const { data, error } = await supabase.rpc("mark_fata_celebration_seen", {
+            p_user_id: auth.user.id,
+            p_challenge_id: challengeId,
+        });
+        if (error) throw error;
+        return res.json({ ok: Boolean(data) });
+    } catch (error) {
+        console.error("Fata celebration acknowledgement error:", error?.message || error);
+        return res.status(500).json({ error: "Failed to acknowledge Fata celebration" });
+    }
+});
+
+// Admin Ingestion for Fata Qualified Users
+app.post("/api/admin/fata/qualifications", async (req, res) => {
+    const auth = await authenticateSuperAdmin(req);
+    if (auth.error) {
+        return res
+            .status(auth.error.status)
+            .json({ error: auth.error.message });
+    }
+
+    const {
+        challengeId,
+        subjects,
+    } = req.body || {};
+
+    if (!challengeId || !Array.isArray(subjects) || subjects.length === 0) {
+        return res.status(400).json({
+            error: "challengeId and non-empty subjects array are required",
+        });
+    }
+
+    const {
+        resolveChallengeConfig,
+        isTestChallenge,
+    } = require("./fata-contract");
+    let challengeConfig;
+    try {
+        challengeConfig = resolveChallengeConfig(challengeId);
+    } catch (error) {
+        return res
+            .status(400)
+            .json({ error: error.message || "Invalid challengeId" });
+    }
+
+    const isTest = isTestChallenge(challengeId);
+    const results = {
+        totalSubmitted: subjects.length,
+        matchedCount: 0,
+        unmatchedSubjects: [],
+        qualificationsCreated: 0,
+        qualificationErrors: 0,
+        rewardsApplied: !isTest,
+    };
+
+    const currentFataIssuer = require("./oauth-configs").getConfig("fata")?.issuer || "";
+    for (const rawSub of subjects) {
+        const fataSub = String(rawSub || "").trim();
+        if (!fataSub) continue;
+
+        const { data: linkage } = await supabase
+            .from("fata_linkages")
+            .select("user_id, fata_iss")
+            .eq("fata_sub", fataSub)
+            .eq("fata_iss", currentFataIssuer)
+            .maybeSingle();
+
+        if (!linkage || !linkage.user_id) {
+            results.unmatchedSubjects.push(fataSub);
+            continue;
+        }
+
+        results.matchedCount += 1;
+
+        const { error: qualError } = await supabase.rpc(
+            "award_fata_qualification",
+            {
+                p_user_id: linkage.user_id,
+                p_challenge_id: challengeConfig.id,
+                p_fata_sub: fataSub,
+                p_validated_by: auth.user.id,
+            },
+        );
+
+        if (!qualError) {
+            results.qualificationsCreated += 1;
+        } else {
+            results.qualificationErrors += 1;
+            console.error("Fata qualification award error:", qualError.message);
+        }
+    }
+
+    if (results.qualificationErrors > 0) {
+        return res.status(500).json({
+            ok: false,
+            error: "Some Fata qualifications could not be recorded. Check that the rewards migration is applied, then retry.",
+            results,
+        });
+    }
+
+    return res.json({ ok: true, results });
 });
 
 // Health check
@@ -5022,11 +7125,31 @@ app.put("/api/app/profiles/:userId", async (req, res) => {
 
 app.get("/api/work-items/:userId", async (req, res) => {
     try {
-        const { userId } = req.params;
-        const { data, error } = await supabase
+        const userId = String(req.params.userId || "").trim();
+        if (
+            !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+                userId,
+            )
+        ) {
+            return res.status(400).json({ error: "Invalid user id" });
+        }
+
+        const authResult = await authenticateRequest(req);
+        const isOwner =
+            !authResult.error && authResult.user.id.toLowerCase() === userId.toLowerCase();
+
+        let query = supabase
             .from("work_items")
             .select("*")
-            .eq("userId", userId)
+            .eq("userId", userId);
+
+        // Connected-provider activity may contain private material. Public
+        // visitors and other signed-in users only receive explicitly public rows.
+        if (!isOwner) {
+            query = query.eq("metadata->>isPublic", "true");
+        }
+
+        const { data, error } = await query
             .order("timestamp", { ascending: false })
             .limit(50);
 
@@ -5118,7 +7241,7 @@ app.get("/api/app/discover/users", async (req, res) => {
             success: true,
             data: recommendedResult.data,
             cached: recommendedResult.cached === true,
-            algorithm: "xera-v2-composite", // Identifie l'algo utilisé
+            algorithm: "xera1-v2-composite", // Identifie l'algo utilisé
         });
     } catch (error) {
         console.error("App discover users error:", error);
@@ -5217,6 +7340,13 @@ app.post("/api/push/subscribe", async (req, res) => {
         res.json({ ok: true, timezone: safeTimezone });
     } catch (err) {
         console.error("push subscribe error", err);
+        if (["42P01", "42703", "PGRST204", "PGRST205"].includes(err?.code)) {
+            return res.json({
+                ok: true,
+                skipped: true,
+                reason: "push_schema_missing",
+            });
+        }
         res.status(400).json({ error: err.message });
     }
 });
@@ -5315,6 +7445,13 @@ app.post("/api/notifications/badge-reset", async (req, res) => {
         return res.json({ ok: true });
     } catch (err) {
         console.error("badge reset error", err);
+        if (["42P01", "42703", "PGRST204", "PGRST205"].includes(err?.code)) {
+            return res.json({
+                ok: true,
+                skipped: true,
+                reason: "notifications_schema_missing",
+            });
+        }
         return res.status(500).json({ error: err.message || "failed" });
     }
 });
@@ -5369,7 +7506,8 @@ async function evaluateTechBadges(options = {}) {
     // Fetch recent content for the lookback window
     const { data: rows, error: rowsError } = await supabase
         .from("content")
-        .select("user_id, created_at")
+        .select("author_id, created_at")
+        .eq("author_type", "USER")
         .gte("created_at", startIso);
 
     if (rowsError) {
@@ -5379,7 +7517,7 @@ async function evaluateTechBadges(options = {}) {
     // Build per-user date sets and last post timestamp
     const map = new Map();
     (rows || []).forEach((r) => {
-        const uid = String(r.user_id || "").trim();
+        const uid = String(r.author_id || "").trim();
         if (!uid) return;
         const createdAt = r.created_at;
         if (!createdAt) return;
@@ -5472,7 +7610,8 @@ async function evaluateTechBadges(options = {}) {
                 const { data: lastRow, error: lastErr } = await supabase
                     .from("content")
                     .select("created_at")
-                    .eq("user_id", uid)
+                    .eq("author_type", "USER")
+                    .eq("author_id", uid)
                     .order("created_at", { ascending: false })
                     .limit(1)
                     .maybeSingle();
@@ -5748,7 +7887,7 @@ app.post("/api/admin/bots/delete-all", async (req, res) => {
         }
 
         const botUserIds = (bots || []).map((b) => b.user_id).filter(Boolean);
-        console.log("delete-all: found", botUserIds.length, "bots");
+        logger.debug("delete-all: found", botUserIds.length, "bots");
 
         let deleted = { bots: 0, users: 0 };
 
@@ -5797,7 +7936,7 @@ app.post("/api/admin/bots/delete-all", async (req, res) => {
             { onConflict: "key" },
         );
 
-        console.log("delete-all: success", deleted);
+        logger.debug("delete-all: success", deleted);
         return res.json({ success: true, deleted });
     } catch (e) {
         console.error("/api/admin/bots/delete-all error", e?.message || e);
@@ -6057,7 +8196,8 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
             const { count: todayCount } = await supabase
                 .from("content")
                 .select("*", { count: "exact", head: true })
-                .eq("user_id", bot.user_id)
+                .eq("author_type", "USER")
+                .eq("author_id", bot.user_id)
                 .gte("created_at", todayStartIso)
                 .lt("created_at", nextDayIso);
 
@@ -6066,7 +8206,8 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
             const { data: recentPosts } = await supabase
                 .from("content")
                 .select("title, description, media_url")
-                .eq("user_id", bot.user_id)
+                .eq("author_type", "USER")
+                .eq("author_id", bot.user_id)
                 .order("created_at", { ascending: false })
                 .limit(20);
 
@@ -6088,7 +8229,8 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
                 const { data: lastRow, error: lastErr } = await supabase
                     .from("content")
                     .select("day_number")
-                    .eq("user_id", bot.user_id)
+                    .eq("author_type", "USER")
+                    .eq("author_id", bot.user_id)
                     .order("day_number", { ascending: false })
                     .limit(1)
                     .maybeSingle();
@@ -6517,6 +8659,614 @@ app.post("/api/admin/bots/run-now", async (req, res) => {
     }
 });
 
+// ==================== PARTNERSHIPS / COMMISSIONS ====================
+app.post("/api/partners/activate", async (req, res) => {
+    try {
+        const auth = await authenticateRequest(req);
+        if (auth.error)
+            return res
+                .status(auth.error.status)
+                .json({ error: auth.error.message });
+        const code = normalizeDiscountCode(req.body?.code);
+        const pageId = String(req.body?.professional_page_id || "");
+        if (!code || !pageId)
+            return res
+                .status(400)
+                .json({ error: "Code partenaire et Page Pro requis." });
+        const { data: page, error: pageError } = await supabase
+            .from("professional_pages")
+            .select("id")
+            .eq("id", pageId)
+            .eq("owner_id", auth.user.id)
+            .maybeSingle();
+        if (pageError) throw pageError;
+        if (!page)
+            return res
+                .status(403)
+                .json({ error: "Vous ne gérez pas cette Page Pro." });
+        const now = new Date().toISOString();
+        const { data: partnerCode, error } = await supabase
+            .from("partner_codes")
+            .select(
+                "id, partner_id, status, expires_at, partners!inner(status,start_date,end_date)",
+            )
+            .eq("code", code)
+            .eq("status", "active")
+            .eq("partners.status", "active")
+            .or(`expires_at.is.null,expires_at.gte.${now}`)
+            .maybeSingle();
+        if (error) throw error;
+        if (partnerCode) {
+            const validation = validatePartnerAccess({
+                partner: partnerCode.partners,
+                accessCode: code,
+                now: new Date(now),
+            });
+            if (!validation.valid)
+                return res.status(400).json({
+                    error: "Ce code partenaire est hors période de validité.",
+                });
+        }
+        if (!partnerCode)
+            return res.status(400).json({
+                error: "Ce code partenaire est invalide, expiré ou révoqué.",
+            });
+        const { data: existing } = await supabase
+            .from("partner_page_memberships")
+            .select("partner_id,status")
+            .eq("professional_page_id", pageId)
+            .maybeSingle();
+        if (
+            existing?.status === "active" &&
+            existing.partner_id !== partnerCode.partner_id
+        )
+            return res.status(409).json({
+                error: "Cette Page Pro est déjà rattachée à un autre partenaire.",
+            });
+        const { data, error: upsertError } = await supabase
+            .from("partner_page_memberships")
+            .upsert(
+                {
+                    professional_page_id: pageId,
+                    partner_id: partnerCode.partner_id,
+                    partner_code_id: partnerCode.id,
+                    status: "active",
+                    activated_at: now,
+                    deactivated_at: null,
+                    updated_at: now,
+                },
+                { onConflict: "professional_page_id" },
+            )
+            .select("id, partner_id, status")
+            .single();
+        if (upsertError) throw upsertError;
+        await supabase.from("partner_audit_log").insert({
+            actor_id: auth.user.id,
+            action: "page_partnership_activated",
+            entity_type: "partner_page_membership",
+            entity_id: data.id,
+            metadata: { page_id: pageId, partner_code_id: partnerCode.id },
+        });
+        res.json({ success: true, membership: data });
+    } catch (error) {
+        res.status(500).json({
+            error: error?.message || "Activation impossible.",
+        });
+    }
+});
+
+app.get("/api/partners/dashboard", async (req, res) => {
+    try {
+        const auth = await authenticateRequest(req);
+        if (auth.error)
+            return res
+                .status(auth.error.status)
+                .json({ error: auth.error.message });
+        const pageId = String(req.query.page_id || "");
+        const { data: page } = await supabase
+            .from("professional_pages")
+            .select("id")
+            .eq("id", pageId)
+            .eq("owner_id", auth.user.id)
+            .maybeSingle();
+        if (!page) return res.status(403).json({ error: "Accès refusé." });
+        const { data: membership, error } = await supabase
+            .from("partner_page_memberships")
+            .select(
+                "id, partner_id, partner_code_id, status, partners!inner(name, status, discount_code, discount_rate)",
+            )
+            .eq("professional_page_id", pageId)
+            .maybeSingle();
+        if (error) throw error;
+        if (!membership)
+            return res.json({ active: false, reason: "not_activated" });
+        if (
+            membership.status !== "active" ||
+            membership.partners.status !== "active"
+        )
+            return res.json({ active: false, reason: "expired_or_revoked" });
+        const { data: activeCode } = await supabase
+            .from("partner_codes")
+            .select("status,expires_at")
+            .eq("id", membership.partner_code_id)
+            .maybeSingle();
+        if (
+            !activeCode ||
+            activeCode.status !== "active" ||
+            (activeCode.expires_at &&
+                new Date(activeCode.expires_at).getTime() < Date.now())
+        )
+            return res.json({ active: false, reason: "expired_or_revoked" });
+        const { data: discountCode } = await supabase
+            .from("partner_discount_codes")
+            .select("code,discount_percent,status,starts_at,expires_at")
+            .eq("partner_id", membership.partner_id)
+            .eq("status", "active")
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+        const resolvedDiscountCode =
+            discountCode ||
+            (membership.partners.discount_code
+                ? {
+                      code: membership.partners.discount_code,
+                      discount_percent: membership.partners.discount_rate || 20,
+                      status: "active",
+                  }
+                : null);
+        const { data: commissions, error: commissionError } = await supabase
+            .from("partner_commissions")
+            .select(
+                "id, amount_gross, commission_amount, status, created_at, beneficiary_user_id, support_transaction_id",
+            )
+            .eq("partner_id", membership.partner_id)
+            .order("created_at", { ascending: false })
+            .limit(100);
+        if (commissionError) throw commissionError;
+        const rows = commissions || [];
+        const sum = (status) =>
+            rows
+                .filter((r) => status.includes(r.status))
+                .reduce((n, r) => n + Number(r.commission_amount || 0), 0);
+        const affiliateResult = await supabase
+            .from("partner_affiliations")
+            .select("user_id", { count: "exact", head: true })
+            .eq("partner_id", membership.partner_id);
+        const [{ data: payoutSetting }, { data: payouts }] = await Promise.all([
+            supabase
+                .from("partner_payout_settings")
+                .select("provider,account_name,wallet_number,status")
+                .eq("partner_id", membership.partner_id)
+                .maybeSingle(),
+            supabase
+                .from("partner_payouts")
+                .select("amount_usd,status")
+                .eq("partner_id", membership.partner_id),
+        ]);
+        const reserved = (payouts || [])
+            .filter((p) => ["processing", "paid"].includes(p.status))
+            .reduce((n, p) => n + Number(p.amount_usd || 0), 0);
+        const paid = (payouts || [])
+            .filter((p) => p.status === "paid")
+            .reduce((n, p) => n + Number(p.amount_usd || 0), 0);
+        res.json({
+            active: true,
+            partner: membership.partners.name,
+            discountCode: resolvedDiscountCode,
+            payoutSetting: payoutSetting || null,
+            metrics: {
+                total: sum(["pending", "available", "paid"]),
+                available: Math.max(0, sum(["available"]) - reserved),
+                paid,
+                affiliates: affiliateResult.count || 0,
+                donations: rows.length,
+                donationGross: rows.reduce(
+                    (n, r) => n + Number(r.amount_gross || 0),
+                    0,
+                ),
+            },
+            commissions: rows,
+        });
+    } catch (error) {
+        res.status(500).json({
+            error: error?.message || "Dashboard indisponible.",
+        });
+    }
+});
+
+app.post("/api/partners/payout-settings", async (req, res) => {
+    try {
+        const auth = await authenticateRequest(req);
+        if (auth.error)
+            return res
+                .status(auth.error.status)
+                .json({ error: auth.error.message });
+
+        const pageId = String(req.body?.professional_page_id || "");
+        const provider = normalizeMobileMoneyProvider(req.body?.provider);
+        const accountName = sanitizePayoutText(req.body?.account_name, 80);
+        const walletNumber = sanitizeWalletNumber(req.body?.wallet_number);
+        if (!pageId || !provider || !accountName || walletNumber.length < 8) {
+            return res.status(400).json({
+                error: "Réseau, titulaire et numéro Mobile Money valides requis.",
+            });
+        }
+
+        const { data: page, error: pageError } = await supabase
+            .from("professional_pages")
+            .select("id")
+            .eq("id", pageId)
+            .eq("owner_id", auth.user.id)
+            .maybeSingle();
+        if (pageError) throw pageError;
+        if (!page)
+            return res
+                .status(403)
+                .json({ error: "Vous ne gérez pas cette Page Pro." });
+
+        const { data: membership, error: membershipError } = await supabase
+            .from("partner_page_memberships")
+            .select("partner_id,status,partners!inner(status)")
+            .eq("professional_page_id", pageId)
+            .maybeSingle();
+        if (membershipError) throw membershipError;
+        if (
+            !membership ||
+            membership.status !== "active" ||
+            membership.partners.status !== "active"
+        )
+            return res.status(403).json({ error: "Partenariat actif requis." });
+
+        const { data, error } = await supabase
+            .from("partner_payout_settings")
+            .upsert(
+                {
+                    partner_id: membership.partner_id,
+                    provider,
+                    account_name: accountName,
+                    wallet_number: walletNumber,
+                    status: "active",
+                    updated_at: new Date().toISOString(),
+                },
+                { onConflict: "partner_id" },
+            )
+            .select("provider,account_name,wallet_number,status")
+            .single();
+        if (error) throw error;
+        return res.json({ success: true, payoutSetting: data });
+    } catch (error) {
+        return res.status(500).json({
+            error: error?.message || "Enregistrement du retrait impossible.",
+        });
+    }
+});
+
+app.post("/api/admin/partners", async (req, res) => {
+    try {
+        const auth = await authenticateSuperAdmin(req);
+        if (auth.error)
+            return res
+                .status(auth.error.status)
+                .json({ error: auth.error.message });
+        const name = String(req.body?.name || "").trim();
+        if (name.length < 2)
+            return res.status(400).json({ error: "Nom partenaire invalide." });
+        const accessCode = normalizeDiscountCode(
+            req.body?.access_code ||
+                `PART-${crypto.randomBytes(6).toString("hex").toUpperCase()}`,
+        );
+        const discountCode = normalizeDiscountCode(
+            req.body?.discount_code ||
+                `XERA-${crypto.randomBytes(5).toString("hex").toUpperCase()}`,
+        );
+        const startDate = req.body?.start_date
+            ? new Date(req.body.start_date)
+            : new Date();
+        const endDate = req.body?.end_date
+            ? new Date(req.body.end_date)
+            : new Date(startDate.getTime() + 365 * 24 * 60 * 60 * 1000);
+        if (!/^[A-Z0-9_-]{3,60}$/.test(accessCode))
+            return res.status(400).json({ error: "Code partenaire invalide." });
+        if (!/^[A-Z0-9_-]{3,60}$/.test(discountCode))
+            return res.status(400).json({ error: "Code réduction invalide." });
+        if (
+            Number.isNaN(startDate.getTime()) ||
+            Number.isNaN(endDate.getTime()) ||
+            endDate <= startDate
+        )
+            return res
+                .status(400)
+                .json({ error: "Période de partenariat invalide." });
+        const completePartnerPayload = {
+            name,
+            status: "active",
+            commission_rate: 0.05,
+            start_date: startDate.toISOString(),
+            end_date: endDate.toISOString(),
+            partner_access_code: accessCode,
+            access_code: accessCode,
+            discount_code: discountCode,
+            discount_rate: 20,
+        };
+        const legacyPartnerPayload = {
+            name,
+            status: "active",
+            commission_rate: 0.05,
+            start_date: startDate.toISOString(),
+            end_date: endDate.toISOString(),
+            partner_access_code: accessCode,
+        };
+        let { data, error } = await supabase
+            .from("partners")
+            .insert(completePartnerPayload)
+            .select()
+            .single();
+        const missingColumnCodes = ["42703", "PGRST204", "PGRST205"];
+        if (error && missingColumnCodes.includes(error.code)) {
+            ({ data, error } = await supabase
+                .from("partners")
+                .insert(legacyPartnerPayload)
+                .select()
+                .single());
+        }
+        if (error) {
+            console.error("/api/admin/partners insert failed:", {
+                code: error.code,
+                message: error.message,
+                details: error.details,
+            });
+            if (
+                ["42P01", "42703", "PGRST204", "PGRST205"].includes(error.code)
+            ) {
+                return res.status(503).json({
+                    error: "Le schéma Partenaires est incomplet. Exécutez sql/20260907_partner_commissions_complete.sql dans Supabase, puis rechargez.",
+                    diagnostic: {
+                        code: error.code,
+                        details: error.details || null,
+                    },
+                });
+            }
+            if (error.code === "23505")
+                return res.status(409).json({
+                    error: "Un partenaire portant ce nom existe déjà.",
+                });
+            throw error;
+        }
+        const { error: codeError } = await supabase
+            .from("partner_codes")
+            .upsert(
+                {
+                    partner_id: data.id,
+                    code: accessCode,
+                    expires_at: endDate.toISOString(),
+                },
+                { onConflict: "code" },
+            );
+        const { error: discountError } = await supabase
+            .from("partner_discount_codes")
+            .upsert(
+                {
+                    partner_id: data.id,
+                    code: discountCode,
+                    discount_percent: 20,
+                    status: "active",
+                    starts_at: startDate.toISOString(),
+                    expires_at: endDate.toISOString(),
+                },
+                { onConflict: "code" },
+            );
+        if (codeError || discountError) {
+            console.error("/api/admin/partners code setup failed:", {
+                codeError: codeError?.message,
+                discountError: discountError?.message,
+            });
+            return res.status(503).json({
+                error: "Le partenaire a été créé, mais ses codes ne sont pas disponibles. Exécutez la migration partenaire complète dans Supabase.",
+                diagnostic: {
+                    code: codeError?.code || discountError?.code || null,
+                    details:
+                        codeError?.details || discountError?.details || null,
+                },
+            });
+        }
+        return res.status(201).json({ partner: data });
+    } catch (error) {
+        console.error("/api/admin/partners error:", error);
+        if (
+            [
+                "42P01",
+                "42703",
+                "23502",
+                "23514",
+                "PGRST204",
+                "PGRST205",
+                "42501",
+            ].includes(error?.code)
+        ) {
+            return res.status(503).json({
+                error: "Le schéma Partenaires Supabase est incomplet ou incompatible. Exécutez sql/20260907_partner_commissions_complete.sql, puis réessayez.",
+                diagnostic: {
+                    code: error.code,
+                    details: error.details || null,
+                    hint: error.hint || null,
+                },
+            });
+        }
+        if (error?.code === "23505") {
+            return res.status(409).json({
+                error: "Le nom ou l'un des codes existe déjà. Utilisez des valeurs uniques.",
+                diagnostic: {
+                    code: error.code,
+                    details: error.details || null,
+                },
+            });
+        }
+        return res.status(500).json({
+            error: error?.message || "Création impossible.",
+            diagnostic: {
+                code: error?.code || null,
+                details: error?.details || null,
+                hint: error?.hint || null,
+            },
+        });
+    }
+});
+app.get("/api/admin/partners", async (req, res) => {
+    try {
+        const auth = await authenticateSuperAdmin(req);
+        if (auth.error)
+            return res
+                .status(auth.error.status)
+                .json({ error: auth.error.message });
+        const { data, error } = await supabase
+            .from("partners")
+            .select(
+                "id,name,status,commission_rate,start_date,end_date,created_at,partner_codes(id,code,status,expires_at),partner_discount_codes(id,code,discount_percent,status,starts_at,expires_at)",
+            )
+            .order("created_at", { ascending: false });
+        if (error) throw error;
+        res.json({ partners: data || [] });
+    } catch (error) {
+        res.status(500).json({
+            error: error?.message || "Chargement impossible.",
+        });
+    }
+});
+app.post("/api/admin/partners/:id/codes", async (req, res) => {
+    try {
+        const auth = await authenticateSuperAdmin(req);
+        if (auth.error)
+            return res
+                .status(auth.error.status)
+                .json({ error: auth.error.message });
+        const code = normalizeDiscountCode(req.body?.code);
+        const kind = String(req.body?.kind || "");
+        const expiresAt = req.body?.expires_at || null;
+        if (
+            !/^[A-Z0-9_-]{3,60}$/.test(code) ||
+            !["partner", "discount"].includes(kind)
+        )
+            return res.status(400).json({ error: "Code invalide." });
+        const table =
+            kind === "partner" ? "partner_codes" : "partner_discount_codes";
+        const { data: partner, error: partnerError } = await supabase
+            .from("partners")
+            .select("start_date,end_date,status")
+            .eq("id", req.params.id)
+            .maybeSingle();
+        if (partnerError) throw partnerError;
+        if (!partner || partner.status !== "active")
+            return res
+                .status(404)
+                .json({ error: "Partenaire introuvable ou inactif." });
+        const payload =
+            kind === "partner"
+                ? {
+                      partner_id: req.params.id,
+                      code,
+                      expires_at: partner.end_date || expiresAt,
+                  }
+                : {
+                      partner_id: req.params.id,
+                      code,
+                      discount_percent: 20,
+                      starts_at: partner.start_date,
+                      expires_at: partner.end_date || expiresAt,
+                  };
+        const { data, error } = await supabase
+            .from(table)
+            .insert(payload)
+            .select()
+            .single();
+        if (error) throw error;
+        res.status(201).json({ code: data });
+    } catch (error) {
+        res.status(500).json({
+            error:
+                error?.code === "23505"
+                    ? "Ce code existe déjà."
+                    : error?.message || "Création impossible.",
+        });
+    }
+});
+app.patch(
+    "/api/admin/partners/:partnerId/codes/:kind/:codeId",
+    async (req, res) => {
+        try {
+            const auth = await authenticateSuperAdmin(req);
+            if (auth.error)
+                return res
+                    .status(auth.error.status)
+                    .json({ error: auth.error.message });
+            const table =
+                req.params.kind === "partner"
+                    ? "partner_codes"
+                    : req.params.kind === "discount"
+                      ? "partner_discount_codes"
+                      : null;
+            const status = String(req.body?.status || "");
+            if (!table || !["active", "revoked", "expired"].includes(status))
+                return res.status(400).json({ error: "Mise à jour invalide." });
+            const { data, error } = await supabase
+                .from(table)
+                .update({
+                    status,
+                    revoked_at:
+                        status === "revoked" ? new Date().toISOString() : null,
+                    updated_at: new Date().toISOString(),
+                })
+                .eq("id", req.params.codeId)
+                .eq("partner_id", req.params.partnerId)
+                .select()
+                .single();
+            if (error) throw error;
+            await supabase.from("partner_audit_log").insert({
+                actor_id: auth.user.id,
+                action: "partner_code_updated",
+                entity_type: table,
+                entity_id: data.id,
+                metadata: { status },
+            });
+            res.json({ success: true, code: data });
+        } catch (error) {
+            res.status(500).json({
+                error: error?.message || "Mise à jour impossible.",
+            });
+        }
+    },
+);
+app.patch("/api/admin/partners/:id", async (req, res) => {
+    try {
+        const auth = await authenticateSuperAdmin(req);
+        if (auth.error)
+            return res
+                .status(auth.error.status)
+                .json({ error: auth.error.message });
+        const status = String(req.body?.status || "");
+        if (!["active", "revoked", "expired"].includes(status))
+            return res.status(400).json({ error: "Statut invalide." });
+        const { data, error } = await supabase
+            .from("partners")
+            .update({ status, updated_at: new Date().toISOString() })
+            .eq("id", req.params.id)
+            .select()
+            .single();
+        if (error) throw error;
+        await supabase.from("partner_audit_log").insert({
+            actor_id: auth.user.id,
+            action: "partner_updated",
+            entity_type: "partners",
+            entity_id: data.id,
+            metadata: { status },
+        });
+        res.json({ success: true, partner: data });
+    } catch (error) {
+        res.status(500).json({
+            error: error?.message || "Mise à jour impossible.",
+        });
+    }
+});
+
 if (isDirectRun && SUBSCRIPTION_SWEEP_MS > 0) {
     sweepExpiredSubscriptions();
     setInterval(sweepExpiredSubscriptions, SUBSCRIPTION_SWEEP_MS);
@@ -6527,6 +9277,8 @@ if (isDirectRun && SUBSCRIPTION_SWEEP_MS > 0) {
 }
 
 if (isDirectRun) {
+    const { startOAuthRefreshScheduler } = require("./oauth-token-manager");
+    const { startIngestionWorker } = require("./ingestion-queue");
     startOAuthRefreshScheduler();
     startIngestionWorker();
 }
@@ -6539,8 +9291,8 @@ if (isDirectRun) {
     });
 
     app.listen(PORT, () => {
-        console.log(`Server running on port ${PORT}`);
-        console.log(`API endpoints available at /api/*`);
+        logger.info(`Server running on port ${PORT}`);
+        logger.debug(`API endpoints available at /api/*`);
         if (supportsEmailReminders()) {
             startReminderScheduler();
         } else {
@@ -6552,8 +9304,12 @@ if (isDirectRun) {
 }
 
 module.exports = app;
+module.exports.sanitizeSupportMessage = sanitizeSupportMessage;
+module.exports.buildSupportNotificationMessage =
+    buildSupportNotificationMessage;
 module.exports.sweepExpiredSubscriptions = sweepExpiredSubscriptions;
 module.exports.sweepReturnReminderEmails = sweepReturnReminderEmails;
 module.exports.sendScheduledReturnReminders = sendScheduledReturnReminders;
 module.exports.handlePublicConfig = handlePublicConfig;
 module.exports.evaluateTechBadges = evaluateTechBadges;
+module.exports.canUserReceiveSupport = canUserReceiveSupport;

@@ -59,7 +59,7 @@
         ┌────────────────────────────────┐
         │  Response JSON                 │
         │  [Top 100 Users Ranked]        │
-        │  algorithm: "xera-v2-composite"│
+        │  algorithm: "xera1-v2-composite"│
         └────────────────┬───────────────┘
                          │
                          ▼
@@ -146,7 +146,7 @@ BEFORE (Old Algorithm)
 │ Problem: Chronological only! ❌                │
 └─────────────────────────────────────────────────┘
 
-AFTER (New Algorithm - xera-v2-composite)
+AFTER (New Algorithm - xera1-v2-composite)
 ┌─────────────────────────────────────────────────┐
 │ User B | Score: 89 | Best engagement + followers│ ← Ranked 1st ✅
 │ User C | Score: 72 | Fresh + moderate quality  │ ← Ranked 2nd ✅
@@ -310,7 +310,7 @@ ALL CONNECTED ✅ = RECOMMENDATION ENGINE CAN CALCULATE SCORES
 ## 8. ALGORITHM COMPLEXITY COMPARISON
 
 ```
-OLD ALGORITHM                    NEW ALGORITHM (xera-v2)
+OLD ALGORITHM                    NEW ALGORITHM (xera1-v2)
 ═══════════════════════════════════════════════════════
 
 Simple                           Complex

@@ -27,7 +27,7 @@ let supabase = null;
 if (SUPABASE_URL && SUPABASE_KEY) {
     supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
         auth: { persistSession: false },
-        global: { headers: { "X-Client-Info": "xera-bot-generator" } },
+        global: { headers: { "X-Client-Info": "xera1-bot-generator" } },
     });
 }
 

@@ -3,24 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>XERA | Login</title>
+    <title>XERA1 | Login</title>
     <link rel="manifest" href="/manifest.json">
-    <link rel="preload" as="image" href="icons/logo-192x192.png" />
-    <link rel="preload" as="image" href="icons/logo-512x512.png" />
+    <link rel="preload" as="image" href="icons/logo.png" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
     <!-- Favicon pour navigateur -->
-    <link rel="icon" type="image/png" href="icons/logo-192x192.png" />
-    <link rel="shortcut icon" href="icons/logo-192x192.png" />
+    <link rel="icon" type="image/png" href="icons/logo.png" />
+    <link rel="shortcut icon" href="icons/logo.png" />
 
     <!-- Apple touch icon (iPhone/iPad) -->
-    <link rel="apple-touch-icon" href="icons/logo-192x192.png" />
+    <link rel="apple-touch-icon" href="icons/logo.png" />
     <meta name="theme-color" content="#050505">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/style.css?v=20261006-1">
     <link rel="stylesheet" href="css/search-notification.css">
-    <link rel="stylesheet" href="css/login.css">
+    <link rel="stylesheet" href="css/login.css?v=consent-modal-2">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.111.0/dist/umd/supabase.js"></script>
 </head>
 <body class="login-body has-mobile-nav">
@@ -31,9 +30,9 @@
             style="cursor: pointer"
         >
             <div class="logo-img">
-                <img src="icons/logo.png" alt="XERA - Logo" />
+                <img src="icons/logo.png" alt="XERA1 - Logo" />
             </div>
-            <span>XΞRA</span>
+            <span>XΞRA1</span>
         </a>
         <div class="nav-links">
             <a
@@ -115,23 +114,29 @@
             </div>
 
             <a href="login.html" id="nav-auth" data-i18n="navAuth">Login / Register</a>
+            <div class="lang-switcher-nav">
+                <select id="header-lang-select" class="nav-lang-select" aria-label="Language selection">
+                    <option value="fr">FR</option>
+                    <option value="en">EN</option>
+                </select>
+            </div>
         </div>
     </nav>
     <div class="login-container">
         <div class="login-left">
             <div class="login-hero">
                 <div class="login-logo">
-                    <img src="icons/logo.png" alt="XERA Logo" />
+                    <img src="icons/logo.png" alt="XERA1 Logo" />
                 </div>
-                <h1>Documentez l'effort.</h1>
-                <p>Rejoignez une communauté de builders qui partagent leur progression authentique, sans filtres.</p>
+                <h1 data-i18n="auth.tagline">Documentez l'effort.</h1>
+                <p data-i18n="auth.description">Rejoignez une communauté de builders qui partagent leur progression authentique, sans filtres.</p>
                 <div class="login-features">
                     <div class="feature-item">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
                             <polyline points="22 4 12 14.01 9 11.01"></polyline>
                         </svg>
-                        <span>Progression transparente</span>
+                        <span data-i18n="auth.featureTransparent">Progression transparente</span>
                     </div>
                     <div class="feature-item">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -140,13 +145,13 @@
                             <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
                             <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
                         </svg>
-                        <span>Communauté authentique</span>
+                        <span data-i18n="auth.featureCommunity">Communauté authentique</span>
                     </div>
                     <div class="feature-item">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
                         </svg>
-                        <span>Suivi jour par jour</span>
+                        <span data-i18n="auth.featureDaily">Suivi jour par jour</span>
                     </div>
                 </div>
             </div>
@@ -155,7 +160,7 @@
         <div class="login-right">
             <div class="login-form-container">
                 <div class="login-form-header">
-                    <h2 id="form-title">Welcome to XERA</h2>
+                    <h2 id="form-title">Welcome to XERA1</h2>
                     <p id="form-subtitle">Log in to continue</p>
                 </div>
                 
@@ -197,17 +202,17 @@
                     <!-- Step 3 / Login: Credentials -->
                     <div id="credentials-group">
                         <div class="form-group" id="username-group" style="display: none;">
-                        <label for="username">Nom d'utilisateur</label>
-                        <input type="text" id="username" class="form-input" placeholder="Votre nom d'utilisateur" />
+                        <label for="username" data-i18n="auth.username">Nom d'utilisateur</label>
+                        <input type="text" id="username" class="form-input" placeholder="Votre nom d'utilisateur" data-i18n-placeholder="auth.usernamePlaceholder" />
                     </div>
                     
                     <div class="form-group">
-                        <label for="email">Email</label>
-                        <input type="email" id="email" class="form-input" placeholder="votre@email.com" required />
+                        <label for="email" data-i18n="auth.email">Email</label>
+                        <input type="email" id="email" class="form-input" placeholder="votre@email.com" data-i18n-placeholder="auth.emailPlaceholder" required />
                     </div>
                     
                     <div class="form-group">
-                        <label for="password">Mot de passe</label>
+                        <label for="password" data-i18n="auth.password">Mot de passe</label>
                         <div class="password-input-container">
                             <input type="password" id="password" class="form-input" placeholder="••••••••" required />
                             <button type="button" class="password-toggle" id="password-toggle">
@@ -220,7 +225,7 @@
                     </div>
                     
                     <div class="form-group" id="confirm-password-group" style="display: none;">
-                        <label for="confirm-password">Confirmer le mot de passe</label>
+                        <label for="confirm-password" data-i18n="auth.confirmPassword">Confirmer le mot de passe</label>
                         <div class="password-input-container">
                             <input type="password" id="confirm-password" class="form-input" placeholder="••••••••" />
                             <button type="button" class="password-toggle" id="confirm-password-toggle">
@@ -237,16 +242,16 @@
                             <label class="remember-checkbox">
                                 <input type="checkbox" id="remember-me" />
                                 <span class="checkmark"></span>
-                                Se souvenir de moi
+                                <span data-i18n="auth.rememberMe">Se souvenir de moi</span>
                             </label>
                         </div>
                         <div class="forgot-password-link" id="forgot-password-link" style="display: none;">
-                            <a href="#" id="forgot-password">Mot de passe oublié ?</a>
+                            <a href="#" id="forgot-password" data-i18n="auth.forgotPassword">Mot de passe oublié ?</a>
                         </div>
                     </div>
                     
                     <button type="submit" class="btn-submit" id="submit-btn">
-                        <span id="btn-text">Se connecter</span>
+                        <span id="btn-text" data-i18n="auth.loginSubmit">Se connecter</span>
                         <svg id="btn-loader" class="btn-loader" style="display: none;" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <circle cx="12" cy="12" r="10"></circle>
                         </svg>
@@ -268,19 +273,103 @@
                 </button>
                 
                 <div class="login-toggle">
-                    <p id="toggle-text">Pas encore de compte ?</p>
-                    <a href="#" id="toggle-link">Créer un compte</a>
+                    <p id="toggle-text" data-i18n="auth.noAccount">Pas encore de compte ?</p>
+                    <a href="#" id="toggle-link" data-i18n="auth.createAccountLink">Créer un compte</a>
                 </div>
                 
-                <div class="login-footer">
-                    <a href="index.html">← Retour à l'accueil</a>
+                <div class="login-footer" style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:center;">
+                    <a href="index.html" data-i18n="nav.backToHome">← Retour à l'accueil</a>
+                    <a href="cgu.html" data-i18n="nav.termsOfService">Conditions d’utilisation</a>
+                    <a href="privacy.html" data-i18n="nav.privacyPolicy">Confidentialité</a>
                 </div>
             </div>
         </div>
     </div>
+
+    <div id="account-consent-modal" class="consent-modal" role="dialog" aria-modal="true" aria-labelledby="account-consent-title" aria-describedby="account-consent-description" style="display:none;">
+        <div class="consent-modal__panel">
+            <div class="consent-modal__header">
+                <div>
+                    <p class="consent-modal__eyebrow">Création de compte</p>
+                    <h3 id="account-consent-title">Conditions &amp; Confidentialité</h3>
+                </div>
+                <button type="button" id="account-consent-close" class="consent-modal__close" aria-label="Fermer la fenêtre">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+                        <path d="M6 6l12 12M18 6L6 18" />
+                    </svg>
+                </button>
+            </div>
+
+            <p id="account-consent-description" class="consent-modal__description">
+                Prenez un instant pour confirmer votre accord avant de continuer.
+            </p>
+
+            <div class="consent-modal__choices">
+                <label class="consent-choice">
+                    <input id="account-consent-privacy" type="checkbox" />
+                    <span class="consent-choice__indicator" aria-hidden="true">
+                        <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5 6.2 11 13 4.5" /></svg>
+                    </span>
+                    <span class="consent-choice__text">J’accepte la <a href="privacy.html" target="_blank" rel="noreferrer">Politique de confidentialité</a> de XERA1.</span>
+                </label>
+
+                <label class="consent-choice">
+                    <input id="account-consent-cgu" type="checkbox" />
+                    <span class="consent-choice__indicator" aria-hidden="true">
+                        <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5 6.2 11 13 4.5" /></svg>
+                    </span>
+                    <span class="consent-choice__text">J’ai lu et j’accepte les <a href="cgu.html" target="_blank" rel="noreferrer">Conditions d’utilisation</a> de XERA1.</span>
+                </label>
+            </div>
+
+            <div class="consent-modal__footer">
+                <button type="button" id="account-consent-cancel" class="consent-modal__button consent-modal__button--secondary">Annuler</button>
+                <button type="button" id="account-consent-submit" class="consent-modal__button consent-modal__button--primary" disabled>Continuer</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="password-reset-modal" class="password-reset-modal" role="dialog" aria-modal="true" aria-labelledby="password-reset-title" aria-describedby="password-reset-description" style="display:none;">
+        <div class="password-reset-modal__panel">
+            <div class="password-reset-modal__header">
+                <div>
+                    <p class="password-reset-modal__eyebrow">Accès au compte</p>
+                    <h3 id="password-reset-title">Réinitialiser le mot de passe</h3>
+                </div>
+                <button type="button" id="password-reset-close" class="password-reset-modal__close" aria-label="Fermer la fenêtre">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+                        <path d="M6 6l12 12M18 6L6 18" />
+                    </svg>
+                </button>
+            </div>
+
+            <p id="password-reset-description" class="password-reset-modal__description">
+                Saisissez votre adresse email. Si un compte y est associé, vous recevrez un lien sécurisé.
+            </p>
+
+            <form id="password-reset-form" novalidate>
+                <div class="password-reset-modal__field">
+                    <label for="password-reset-email">Adresse email</label>
+                    <input id="password-reset-email" name="email" type="email" autocomplete="email" placeholder="votre@email.com" required />
+                </div>
+                <p id="password-reset-status" class="password-reset-modal__status" role="status" aria-live="polite"></p>
+                <div class="password-reset-modal__footer">
+                    <button type="button" id="password-reset-cancel" class="password-reset-modal__button password-reset-modal__button--secondary">Annuler</button>
+                    <button type="submit" id="password-reset-submit" class="password-reset-modal__button password-reset-modal__button--primary">
+                        <span id="password-reset-submit-text">Envoyer le lien</span>
+                        <svg id="password-reset-loader" class="password-reset-loader" aria-hidden="true" style="display:none;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="9" stroke-dasharray="42 16"></circle>
+                        </svg>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
     
-    <script src="js/router.js"></script>
-    <script src="js/supabase-config.js"></script>
+    <script src="js/router.js?v=20261105-2"></script>
+    <script src="js/supabase-config.js?v=20261006-1"></script>
+    <script src="js/i18n.js"></script>
+    <script src="js/seo-schema.js"></script>
     <script src="js/monetization-utils.js"></script>
     <script src="js/login.js"></script>
     <script src="js/pwa-install.js" defer></script>

@@ -138,9 +138,7 @@ function getProfileTimeline(userId) {
 
 function formatProfileDate(dateValue) {
     const date = new Date(dateValue);
-    return isNaN(date.getTime())
-        ? ""
-        : PROFILE_DATE_FORMATTER.format(date);
+    return isNaN(date.getTime()) ? "" : PROFILE_DATE_FORMATTER.format(date);
 }
 
 function renderTimelineHistory(userId) {
@@ -164,7 +162,9 @@ function renderTimelineHistory(userId) {
 
             const content = item.content;
             const itemClass = `item-${content.state}`;
-            const dateFormatted = formatProfileDate(content.createdAt || content.created_at);
+            const dateFormatted = formatProfileDate(
+                content.createdAt || content.created_at,
+            );
 
             let stateBadgeSvg = "";
             if (content.state === "success") {
@@ -235,12 +235,18 @@ function calculateMomentum(userId) {
 
     // On calcule l'activité sur les 7 derniers jours
     let score = 0;
-    contents.forEach(content => {
-        const ageInDays = (now - new Date(content.createdAt).getTime()) / MS_PER_DAY;
+    contents.forEach((content) => {
+        const ageInDays =
+            (now - new Date(content.createdAt).getTime()) / MS_PER_DAY;
         if (ageInDays <= 7) {
             // Un succès récent vaut plus (Dopamine Decay)
-            const recencyMultiplier = Math.max(0, 1 - (ageInDays / 7));
-            const stateValue = content.state === 'success' ? 20 : (content.state === 'failure' ? 10 : 5);
+            const recencyMultiplier = Math.max(0, 1 - ageInDays / 7);
+            const stateValue =
+                content.state === "success"
+                    ? 20
+                    : content.state === "failure"
+                      ? 10
+                      : 5;
             score += stateValue * recencyMultiplier;
         }
     });
@@ -254,10 +260,19 @@ function renderMomentumBadge(userId) {
     let color = "#6366f1"; // Default
     let label = "Stable";
 
-    if (momentum > 70) { color = "#f59e0b"; label = "EN FEU"; }
-    else if (momentum > 40) { color = "#10b981"; label = "En Progression"; }
-    else if (momentum > 10) { color = "#6366f1"; label = "Actif"; }
-    else { color = "#9ca3af"; label = "Au repos"; }
+    if (momentum > 70) {
+        color = "#f59e0b";
+        label = "EN FEU";
+    } else if (momentum > 40) {
+        color = "#10b981";
+        label = "En Progression";
+    } else if (momentum > 10) {
+        color = "#6366f1";
+        label = "Actif";
+    } else {
+        color = "#9ca3af";
+        label = "Au repos";
+    }
 
     return `
         <div class="momentum-pulse" style="--momentum-color: ${color};" title="Momentum: ${momentum}%">
@@ -574,7 +589,7 @@ function generateBadge(badgeType, label) {
     }
 
     const svg = badgeSVGs[badgeType];
-    if (!svg) return "";
+    if (!svg && badgeType !== "ai") return "";
 
     let cssClass = "badge";
     if (badgeType.startsWith("consistency")) cssClass += "";
@@ -583,11 +598,16 @@ function generateBadge(badgeType, label) {
     else if (badgeType === "pause") cssClass += " badge-pause badge-filled";
     else if (badgeType === "empty") cssClass += "";
     else if (badgeType === "transparent") cssClass += " badge-success";
+    else if (badgeType === "ai") cssClass += " badge-success badge-filled";
     else cssClass += "";
+
+    const badgeContent = svg
+        ? `<div class="badge-icon">${svg}</div>`
+        : `<div class="badge-icon" aria-hidden="true">✦</div>`;
 
     return `
         <div class="${cssClass}" title="${label}">
-            <div class="badge-icon">${svg}</div>
+            ${badgeContent}
             <span>${label}</span>
         </div>
     `;
@@ -650,7 +670,16 @@ function getContentBadges(content) {
         empty: "Vide",
     };
 
-    badges.push({ type: content.state, label: stateLabels[content.state] });
+    if (content && content.state) {
+        badges.push({ type: content.state, label: stateLabels[content.state] });
+    }
+
+    if (
+        typeof resolveContentAIFlag === "function" &&
+        resolveContentAIFlag(content)
+    ) {
+        badges.push({ type: "ai", label: "IA" });
+    }
 
     return badges;
 }
@@ -1217,9 +1246,10 @@ function renderImmersiveContent(userId) {
             const contentBadges = getContentBadges(content);
             const badgesHtml = renderBadges(contentBadges);
 
-            const timeAgo = typeof formatNotificationTime === 'function'
-                ? formatNotificationTime(content.createdAt)
-                : "Récemment";
+            const timeAgo =
+                typeof formatNotificationTime === "function"
+                    ? formatNotificationTime(content.createdAt)
+                    : "Récemment";
 
             let mediaHtml = "";
             if (content.mediaUrl) {
@@ -1261,8 +1291,8 @@ function renderImmersiveContent(userId) {
                         </div>
 
                         <div class="post-stats-row">
-                            <div class="post-stat-item">👁 <span>${content.views || '1.2K'}</span> Views</div>
-                            <div class="post-stat-item">💪 <span>${content.encouragements || '45'}</span> Encouragements</div>
+                            <div class="post-stat-item">👁 <span>${content.views || "1.2K"}</span> Views</div>
+                            <div class="post-stat-item">💪 <span>${content.encouragements || "45"}</span> Encouragements</div>
                         </div>
 
                         <div class="post-expanded-actions">
@@ -1287,6 +1317,42 @@ function toggleImmersiveDescription(element) {
 }
 
 // Construire la documentation d'un projet (optionnelle)
+function getProjectC2PAState(project) {
+    const metadata = project?.metadata || {};
+    const c2pa = metadata.c2pa || metadata.C2PA || metadata.provenance || null;
+    const isAI =
+        !!metadata.is_ai ||
+        !!metadata.isAI ||
+        !!metadata.ai_generated ||
+        !!metadata.aiGenerated ||
+        !!c2pa?.isAI ||
+        !!c2pa?.is_ai;
+
+    return {
+        isAI,
+        provenance: c2pa?.provenance || null,
+        source: c2pa?.source || null,
+        raw: c2pa || null,
+    };
+}
+
+function renderProjectBadgeHtml(project) {
+    const state = getProjectC2PAState(project);
+    if (!state.isAI) return "";
+
+    return `
+        <button
+            type="button"
+            class="c2pa-badge c2pa-badge--profile"
+            title="Contenu certifié C2PA / AI"
+            onclick="event.stopPropagation(); if (window.openC2PAModal) { window.openC2PAModal({ isAI: true, provenance: ${JSON.stringify(state.provenance || null)}, source: ${JSON.stringify(state.source || null)} }); }"
+            aria-label="Afficher les détails C2PA"
+        >
+            AI
+        </button>
+    `;
+}
+
 function renderProjectDoc(project) {
     const doc = project.doc || {};
     const values = Object.values(doc).filter(
@@ -1460,7 +1526,9 @@ function renderProfileTimeline(userId, viewerId = "user-1") {
         } else if (content.state === "pause") {
             stateBadgeSvg = badgeSVGs.pause;
         }
-        const dateFormatted = formatProfileDate(content.createdAt || content.created_at);
+        const dateFormatted = formatProfileDate(
+            content.createdAt || content.created_at,
+        );
 
         return `
                 <div class="timeline-item-latest">
@@ -1503,18 +1571,41 @@ function renderProfileTimeline(userId, viewerId = "user-1") {
         ? `
         <div class="projects-grid">
             ${projects
-                .map(
-                    (p) => `
-                <div class="project-card">
-                    <img src="${p.cover || user.banner || user.avatar}" class="project-cover" alt="Cover">
+                .map((p) => {
+                    const projectMetadata = p?.metadata || {};
+                    const projectC2PA =
+                        projectMetadata?.c2pa ||
+                        projectMetadata?.C2PA ||
+                        projectMetadata?.provenance ||
+                        null;
+                    const isAiProject =
+                        !!projectMetadata.is_ai ||
+                        !!projectMetadata.isAI ||
+                        !!projectMetadata.ai_generated ||
+                        !!projectMetadata.aiGenerated ||
+                        !!projectC2PA?.isAI;
+                    const payload = JSON.stringify({
+                        isAI: isAiProject,
+                        provenance: projectC2PA?.provenance || null,
+                        source: projectC2PA?.source || null,
+                    });
+                    const projectBadge = isAiProject
+                        ? `<div style="position: relative;"><button type="button" class="c2pa-badge c2pa-badge--profile" title="Contenu certifié C2PA / AI" onclick='event.stopPropagation(); const payload = ${payload}; if (window.openC2PAModal) { window.openC2PAModal(payload); }'>AI</button></div>`
+                        : "";
+                    return `
+                <div class="project-card" style="position: relative;">
+                    <div style="position: relative; display: block;">
+                        <img src="${p.cover || user.banner || user.avatar}" class="project-cover" alt="Cover">
+                        ${projectBadge}
+                    </div>
                     <div class="project-meta">
                         <h4>${p.name}</h4>
                         <p>${p.desc || ""}</p>
                         ${renderProjectDoc(p)}
                     </div>
                 </div>
-            `,
-                )
+            `;
+                })
                 .join("")}
         </div>
     `
@@ -1678,9 +1769,17 @@ function showCreateProjectForm(userId) {
     const coverFileInput = form.querySelector("#proj-cover-file");
     const coverUrlInput = form.querySelector("#proj-cover-url");
     form._coverData = null;
-    coverFileInput.addEventListener("change", function () {
+    form._coverC2PA = null;
+    coverFileInput.addEventListener("change", async function () {
         const f = this.files && this.files[0];
         if (!f) return;
+        try {
+            if (typeof inspectMediaC2PA === "function") {
+                form._coverC2PA = await inspectMediaC2PA(f);
+            }
+        } catch (error) {
+            console.warn("Inspection C2PA de la cover projet ignorée:", error);
+        }
         const reader = new FileReader();
         reader.onload = function (ev) {
             form._coverData = ev.target.result;
@@ -1719,6 +1818,12 @@ function showCreateProjectForm(userId) {
             desc,
             cover: cover,
             contents: [],
+            metadata: form._coverC2PA
+                ? {
+                      c2pa: form._coverC2PA,
+                      is_ai: !!form._coverC2PA.isAI,
+                  }
+                : {},
             doc: {
                 role,
                 duration,
@@ -1850,7 +1955,9 @@ function lazyLoadDiscoverMedia() {
         { rootMargin: "250px 0px", threshold: 0.1 },
     );
 
-    grid.querySelectorAll(".user-card").forEach((card) => observer.observe(card));
+    grid.querySelectorAll(".user-card").forEach((card) =>
+        observer.observe(card),
+    );
     if (window.__discoverMediaObserver) {
         window.__discoverMediaObserver.disconnect();
     }

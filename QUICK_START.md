@@ -12,13 +12,13 @@
 
 ```bash
 # Terminal - SQL Migration
-cd /home/g/Bureau/XERA
+cd /home/g/Bureau/XERA1
 
 # Exécute le schema
-psql "postgresql://postgres:password@localhost:5432/xera" < sql/engagement-tracking-schema.sql
+psql "postgresql://postgres:password@localhost:5432/xera1" < sql/engagement-tracking-schema.sql
 
 # Vérifier succès
-psql "postgresql://postgres:password@localhost:5432/xera" -c "\dt user_interactions"
+psql "postgresql://postgres:password@localhost:5432/xera1" -c "\dt user_interactions"
 # Devrait montrer: "user_interactions | table | postgres"
 ```
 
@@ -56,7 +56,7 @@ const {
 // Ajouter ces 3 lignes:
 const setupEngagementTracking = require("./engagement-tracking-api");
 setupEngagementTracking(app, supabase);
-console.log("[XERA] Engagement tracking endpoints initialized");
+console.log("[XERA1] Engagement tracking endpoints initialized");
 ```
 
 ✅ **Fait!** Les endpoints sont activés
@@ -170,7 +170,7 @@ function onShareCreator(creator) {
 curl http://localhost:5050/api/app/discover/users
 
 # Devrait retourner:
-# "algorithm": "xera-v2-composite"  ✅
+# "algorithm": "xera1-v2-composite"  ✅
 ```
 
 **Test 2 - Vérifier le tracking JS:**
@@ -249,7 +249,7 @@ vercel deploy --prod
 # Execute SQL: sql/engagement-tracking-schema.sql
 
 # 4. Monitor
-# Check logs for "[XERA] Engagement tracking endpoints initialized"
+# Check logs for "[XERA1] Engagement tracking endpoints initialized"
 # Check dashboard for new recommendations working
 ```
 

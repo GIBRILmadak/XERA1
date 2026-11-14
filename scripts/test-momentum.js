@@ -19,7 +19,7 @@ const calculateMomentum = (series, daysInMonth) => {
     const intensity = Math.min(1.4, 0.5 + (avgDaily / 4));
 
     // Score Final : On multiplie les facteurs
-    // frequency est au carré car c'est le facteur le plus important chez XERA
+    // frequency est au carré car c'est le facteur le plus important chez XERA1
     const rawScore = (intensity * Math.pow(frequency, 1.5) * consistency) * 130;
 
     return {
@@ -57,7 +57,7 @@ const cases = [
     }
 ];
 
-console.log("=== TEST DE PRÉCISION DU MOMENTUM XERA (V3) ===\n");
+console.log("=== TEST DE PRÉCISION DU MOMENTUM XERA1 (V3) ===\n");
 cases.forEach(c => {
     const res = calculateMomentum(c.series, days);
     console.log(`CASE: ${c.name}`);

@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="fr">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>XERA1 | Tracez votre progression</title>
+        <link
+            href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;600;700;800&display=swap"
+            rel="stylesheet"
+        />
+        <!-- Web icon and branding -->
+        <link rel="icon" type="image/png" href="icons/logo.png" />
+        <link rel="shortcut icon" href="icons/logo.png" />
+        <meta name="theme-color" content="#050505" />
+        <meta
+            name="description"
+            content="XERA1 - Plateforme de suivi de progression transparente sans dopamine sociale"
+        />
+        <meta
+            name="keywords"
+            content="XERA1, profil créateur, progression de projet, portfolio public, preuve de réalisation"
+        />
+
+        <!-- Open Graph meta tags for link previews -->
+        <meta property="og:title" content="XERA1 | Mon Profil" />
+        <meta property="og:site_name" content="XERA1" />
+        <meta
+            property="og:description"
+            content="Découvrez mon profil sur XERA1 - Plateforme de suivi de progression"
+        />
+        <meta property="og:type" content="profile" />
+        <meta property="og:url" content="https://xera1.xyz/profile" />
+        <meta property="og:image" content="https://xera1.xyz/icons/logo.png" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+
+        <!-- Twitter Card -->
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="XERA1 | Mon Profil" />
+        <meta
+            name="twitter:description"
+            content="Découvrez mon profil sur XERA1"
+        />
+        <meta name="twitter:image" content="https://xera1.xyz/icons/logo.png" />
+
+        <!-- Styles globaux -->
+        <link rel="stylesheet" href="css/style.css?v=20261111-fata-forms" />
+        <link rel="stylesheet" href="css/search-notification.css" />
+        <link rel="stylesheet" href="css/arcs.css?v=20261111-fata-forms" />
+        <link rel="stylesheet" href="css/streaming-analytics.css" />
+        <link
+            id="monetization-css"
+            rel="stylesheet"
+            href="css/monetization.css?v=20261004-2"
+        />
+        <link
+            rel="stylesheet"
+            href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+        />
+        <!-- Supabase JS -->
+        <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.111.0/dist/umd/supabase.js"></script>
+    </head>
+    <body class="profile-open has-mobile-nav">
+        <!-- Container pour les notifications Toast -->
+        <div id="toast-container"></div>
+
+        <!-- Overlay Immersif -->
+        <div id="immersive-overlay">
+            <!-- Contenu injecté dynamiquement -->
+        </div>
+
+        <!-- Modale Réglages -->
+        <div id="settings-modal">
+            <div class="settings-container">
+                <!-- Contenu injecté dynamiquement -->
+            </div>
+        </div>
+
+        <!-- Modale Création -->
+        <div id="create-modal">
+            <div class="create-container">
+                <!-- Contenu injecté dynamiquement -->
+            </div>
+        </div>
+
+        <!-- Panneau de Notifications -->
+        <div id="notification-panel" class="notification-panel">
+            <div class="notification-panel-header">
+                <h3 class="notification-panel-title">Notifications</h3>
+                <span
+                    class="notification-mark-all"
+                    onclick="markAllNotificationsAsRead()"
+                    >Tout marquer comme lu</span
+                >
+            </div>
+            <div id="notification-list" class="notification-list">
+                <!-- Notifications injectées dynamiquement -->
+            </div>
+        </div>
+
+        <div
+            id="fata-challenge-panel"
+            class="fata-challenge-panel"
+            aria-labelledby="personal-fata-title"
+        >
+            <div class="fata-panel-header">
+                <div class="fata-panel-title-group">
+                    <img src="icons/fata.webp" alt="Fata" class="fata-panel-logo" />
+                    <div>
+                        <h3 id="personal-fata-title" class="fata-panel-title">Challenge Fata × XERA1</h3>
+                        <p class="fata-panel-subtitle">Proof of Building & Progression</p>
+                    </div>
+                </div>
+                <button type="button" class="fata-close-btn" aria-label="Fermer">&times;</button>
+            </div>
+            <div class="fata-panel-body">
+                <div class="fata-auth-card">
+                    <div class="fata-auth-header">
+                        <div class="fata-auth-icon is-pending">
+                            <i class="fas fa-link"></i>
+                        </div>
+                        <div class="fata-auth-details">
+                            <span class="fata-auth-status">Compte Fata non connecté</span>
+                            <span class="fata-auth-id">Liez votre compte Fata pour synchroniser vos preuves.</span>
+                        </div>
+                    </div>
+                    <button type="button" class="fata-connect-btn">
+                        <i class="fab fa-openid"></i> Connecter mon compte Fata
+                    </button>
+                    <p class="fata-connection-note" hidden></p>
+                </div>
+            </div>
+        </div>
+
+        <nav>
+            <a
+                class="logo"
+                onclick="navigateTo('discover')"
+                style="cursor: pointer"
+            >
+                <div class="logo-img">
+                    <img src="icons/logo.png" alt="XERA1 - Logo" />
+                </div>
+                <span>XΞRA1</span>
+            </a>
+            <a
+                href="javascript:history.back()"
+                style="
+                    display: flex;
+                    align-items: center;
+                    gap: 0.5rem;
+                    color: #888;
+                    text-decoration: none;
+                    font-size: 0.85rem;
+                    transition: color 0.2s;
+                    margin-left: 15px;
+                "
+                onmouseover="this.style.color = '#f5f5f5'"
+                onmouseout="this.style.color = '#888'"
+            >
+                <i class="fas fa-arrow-left"></i> Retour
+            </a>
+            <div class="nav-links">
+                <a
+                    id="nav-discover"
+                    class="notification-button nav-discover-btn"
+                    onclick="navigateTo('discover')"
+                    title="Discover"
+                    aria-label="Discover"
+                >
+                    <svg
+                        class="notification-icon nav-discover-icon"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                    >
+                        <path d="M3 10.5L12 3l9 7.5"></path>
+                        <path d="M5 10v10h14V10"></path>
+                        <path d="M9 20v-6h6v6"></path>
+                    </svg>
+                </a>
+                <div
+                    class="notification-button profile-nav-button"
+                    onclick="handleProfileNavigation()"
+                    id="nav-profile"
+                    title="My Trajectory"
+                    aria-label="My Trajectory"
+                    role="button"
+                >
+                    <img
+                        id="nav-profile-avatar"
+                        class="notification-icon profile-nav-avatar"
+                        src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'><rect width='40' height='40' rx='20' fill='%231f2937'/><circle cx='20' cy='16' r='6' fill='%23e5e7eb'/><path d='M8%2034c2.5-6%208-9%2012-9s9.5%203%2012%209' fill='%23e5e7eb'/></svg>"
+                        alt="Avatar utilisateur"
+                    />
+                </div>
+                <div
+                    class="notification-button"
+                    id="nav-pro-page"
+                    onclick="window.navigateToProfessionalPage?.()"
+                    style="display: none"
+                    title="Page Pro"
+                >
+                    <img
+                        src="icons/enterprise.svg"
+                        alt="Business"
+                        class="notification-icon"
+                    />
+                </div>
+                <div
+                    class="notification-button messages-nav-button"
+                    onclick="openMessagesPage()"
+                    style="display: none"
+                    id="messages-nav-btn"
+                    title="Messages"
+                >
+                    <img
+                        src="icons/message.svg"
+                        alt="Messages"
+                        class="notification-icon"
+                    />
+                    <span
+                        id="messages-nav-badge"
+                        class="notification-badge"
+                    ></span>
+                </div>
+                <!-- Bouton Notifications -->
+                <div
+                    class="notification-button"
+                    onclick="toggleNotificationPanel()"
+                    style="display: none"
+                    id="notification-btn"
+                >
+                    <svg
+                        class="notification-icon"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                    >
+                        <path
+                            d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"
+                        ></path>
+                        <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                    </svg>
+                    <span
+                        id="notification-badge"
+                        class="notification-badge"
+                    ></span>
+                </div>
+            </div>
+        </nav>
+
+        <div id="profile-hub-popover" class="profile-hub-popover">
+            <a
+                href="profile-personal.html?view=personal"
+                class="hub-user-header hub-user-header--link"
+                title="Voir et modifier mon profil"
+            >
+                <div class="hub-avatar-wrap">
+                    <img
+                        id="hub-user-avatar"
+                        class="hub-user-avatar"
+                        src="icons/logo.png"
+                        alt="Avatar"
+                    />
+                    <span class="hub-avatar-edit-hint"
+                        ><i class="fas fa-pen"></i
+                    ></span>
+                </div>
+                <div class="hub-user-info">
+                    <span id="hub-user-name" class="hub-user-name"
+                        >Mon profil</span
+                    >
+                    <span
+                        id="hub-user-handle"
+                        class="hub-user-handle"
+                        hidden
+                    ></span>
+                    <span
+                        id="hub-pro-badge"
+                        class="hub-badge-pro"
+                        style="display: none"
+                    >
+                        <i class="fas fa-certificate"></i> PRO
+                    </span>
+                    <span class="hub-edit-label"
+                        ><i class="fas fa-pencil-alt"></i> Modifier le
+                        profil</span
+                    >
+                </div>
+            </a>
+
+            <div class="hub-menu-group">
+                <button
+                    type="button"
+                    class="hub-menu-item hub-pro-page-item"
+                    id="nav-hub-pro-page"
+                    data-profile-hub-pro-page
+                    onclick="window.navigateToProfessionalPage?.()"
+                >
+                    <i
+                        class="fas fa-building"
+                        data-pro-page-icon
+                        aria-hidden="true"
+                    ></i>
+                    <img
+                        class="hub-pro-page-avatar"
+                        data-pro-page-avatar
+                        alt=""
+                        hidden
+                    />
+                    <span data-pro-page-name>Page Pro</span>
+                </button>
+                <button
+                    type="button"
+                    class="hub-menu-item"
+                    onclick="location.href = 'subscription-plans.html'"
+                >
+                    <i class="fas fa-wallet"></i>
+                    <span>Abonnements</span>
+                </button>
+                <button type="button" class="hub-menu-item" id="nav-fata-btn">
+                    <img
+                        src="icons/fata.webp"
+                        style="width: 18px; height: 18px; object-fit: contain"
+                        alt="Fata"
+                    />
+                    <span>Challenge Fata</span>
+                </button>
+            </div>
+
+            <div class="hub-divider"></div>
+            <div class="hub-footer-row">
+                <div class="lang-switcher-nav">
+                    <select
+                        id="header-lang-select"
+                        class="nav-lang-select"
+                        aria-label="Language selection"
+                    >
+                        <option value="fr">FR</option>
+                        <option value="en">EN</option>
+                    </select>
+                </div>
+                <a
+                    href="login.html"
+                    id="nav-auth"
+                    class="hub-menu-item"
+                    style="width: auto; padding: 0.4rem 0.6rem"
+                    data-i18n="navAuth"
+                    >Connexion</a
+                >
+            </div>
+        </div>
+
+        <!-- BOUTON RÉGLAGES (FIXED POSITION) -->
+        <div id="settings-button-container"></div>
+
+        <!-- PROFIL (TIMELINE) -->
+        <section id="profile" class="page active">
+            <div class="container profile-container">
+                <div
+                    class="profile-skeleton profile-skeleton--initial"
+                    role="status"
+                    aria-label="Chargement du profil"
+                    aria-busy="true"
+                    aria-live="polite"
+                >
+                    <div
+                        class="skeleton skeleton-banner"
+                        aria-hidden="true"
+                    ></div>
+                    <div class="profile-skeleton-header">
+                        <div
+                            class="skeleton skeleton-avatar-lg"
+                            aria-hidden="true"
+                        ></div>
+                        <div class="profile-skeleton-meta">
+                            <div
+                                class="skeleton skeleton-text"
+                                style="width: 50%; height: 1.1rem"
+                            ></div>
+                            <div
+                                class="skeleton skeleton-text"
+                                style="width: 35%; height: 0.95rem"
+                            ></div>
+                            <div class="profile-skeleton-actions">
+                                <div
+                                    class="skeleton skeleton-pill"
+                                    aria-hidden="true"
+                                ></div>
+                                <div
+                                    class="skeleton skeleton-pill"
+                                    aria-hidden="true"
+                                ></div>
+                                <div
+                                    class="skeleton skeleton-pill skeleton-pill-short"
+                                    aria-hidden="true"
+                                ></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="profile-skeleton-stats" aria-hidden="true">
+                        <div class="skeleton skeleton-chip"></div>
+                        <div class="skeleton skeleton-chip"></div>
+                        <div class="skeleton skeleton-chip"></div>
+                    </div>
+                    <div class="profile-skeleton-feed" aria-hidden="true">
+                        <div class="profile-skeleton-feed-card">
+                            <div class="skeleton skeleton-card-sm"></div>
+                            <div class="skeleton skeleton-text"></div>
+                            <div
+                                class="skeleton skeleton-text"
+                                style="width: 65%"
+                            ></div>
+                        </div>
+                        <div class="profile-skeleton-feed-card">
+                            <div class="skeleton skeleton-card-sm"></div>
+                            <div class="skeleton skeleton-text"></div>
+                            <div
+                                class="skeleton skeleton-text"
+                                style="width: 65%"
+                            ></div>
+                        </div>
+                        <div class="profile-skeleton-feed-card">
+                            <div class="skeleton skeleton-card-sm"></div>
+                            <div class="skeleton skeleton-text"></div>
+                            <div
+                                class="skeleton skeleton-text"
+                                style="width: 65%"
+                            ></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- PAGE PRO -->
+        <section id="pro-page" class="page">
+            <div class="container pro-page-container">
+                <!-- Contenu injecté dynamiquement -->
+            </div>
+        </section>
+
+        <!-- RÉGLAGES DE LA PAGE PROFESSIONNELLE -->
+        <section id="pro-settings-page" class="page">
+            <div class="container pro-settings-page-container">
+                <!-- Réglages de la page pro injectés dynamiquement -->
+            </div>
+        </section>
+
+        <!-- MESSAGES -->
+        <section id="messages" class="page">
+            <div class="container">
+                <div class="messages-mount">
+                    <!-- Messagerie injectée dynamiquement -->
+                </div>
+            </div>
+        </section>
+
+        <!-- Configuration Supabase -->
+        <script src="js/router.js?v=20261105-2"></script>
+        <script src="js/supabase-config.js?v=20261108-2"></script>
+        <script src="js/monetization-utils.js"></script>
+        <script src="js/monetization.js?v=20261004-3"></script>
+        <script src="js/monetization-ui.js?v=20261006-1"></script>
+        <!-- Config push (clé publique VAPID) -->
+        <script src="js/push-config.js"></script>
+        <script src="js/influence.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+        <script src="js/analytics.js?v=20261006-1"></script>
+        <!-- Améliorations UX -->
+        <script src="js/ux-enhancements.js"></script>
+        <script src="js/app-enhancements.js"></script>
+        <!-- Modules de fonctionnalités -->
+        <script src="js/search.js"></script>
+        <script src="js/notifications.js?v=20261004-1"></script>
+        <script src="js/messages.js?v=20261006-1"></script>
+        <script src="js/file-upload.js?v=20261006-1"></script>
+        <script src="js/nudges.js"></script>
+        <script src="js/tutorial.js"></script>
+        <script src="js/arcs.js?v=20261111-fata-forms"></script>
+        <script
+            src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"
+            crossorigin
+            defer
+        ></script>
+        <script
+            src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"
+            crossorigin
+            defer
+        ></script>
+        <script src="js/pro-settings-component.js?v=20260723-1" defer></script>
+        <!-- Script principal avec intégration Supabase -->
+        <script src="js/c2pa-utils.js"></script>
+        <script src="js/app-supabase.js?v=20261111-fata-forms"></script>
+        <script src="js/profile-workspace.js?v=20261004-1"></script>
+        <script>
+            window.navigateToProfessionalPage = function () {
+                window.location.href = "profile.html?pro=xera1";
+            };
+        </script>
+
+        <style>
+            /* Styles pour masquer le profil par défaut si c'est un compte Pro */
+            body.is-pro #profile {
+                display: none !important;
+            }
+            body:not(.is-pro) #pro-page {
+                display: none !important;
+            }
+        </style>
+
+        <script>
+            // Initialiser les fonctionnalités au chargement
+            document.addEventListener("DOMContentLoaded", function () {
+                // Initialiser la recherche
+                initializeSearch();
+
+                // Initialiser les notifications si l'utilisateur est connecté
+                if (currentUser) {
+                    initializeNotifications();
+                    document.getElementById("notification-btn").style.display =
+                        "flex";
+                }
+            });
+        </script>
+        <script src="js/ui-motion.js" defer></script>
+        <script src="js/personal-profile-page.js"></script>
+        <script src="js/i18n.js"></script>
+        <script src="js/seo-schema.js"></script>
+        <script src="js/navigation-hub.js?v=20261105-1" defer></script>
+        <script src="js/fata-integration.js?v=20261111-fata-forms" defer></script>
+    </body>
+</html>

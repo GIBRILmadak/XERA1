@@ -233,11 +233,11 @@ async function shareProfileLink(userId) {
             const user = getUser(userId);
             const url = buildProfileShareUrl(userId);
             const title = user
-                ? `Profil de ${user.name} | XERA`
-                : "Profil XERA";
+                ? `Profil de ${user.name} | XERA1`
+                : "Profil XERA1";
             const text = user
-                ? `Découvre le profil de ${user.name} sur XERA.`
-                : "Découvre ce profil sur XERA.";
+                ? `Découvre le profil de ${user.name} sur XERA1.`
+                : "Découvre ce profil sur XERA1.";
 
             if (navigator.share) {
                 try {
@@ -1502,7 +1502,7 @@ function ensureLoginPromptElements() {
             overlay.innerHTML = `
 <div class="login-prompt-card">
             <button class="login-prompt-close" aria-label="Fermer">✕</button>
-            <h3 class="login-prompt-title">Vous aimez XERA ?</h3>
+            <h3 class="login-prompt-title">Vous aimez XERA1 ?</h3>
             <p class="login-prompt-text">
                 Connectez-vous et profitez sans interruption.
             </p>
@@ -1605,7 +1605,7 @@ async function handleSignOut() {
 
 function getAccountDeleteReasonLabel(reason) {
             const map = {
-                inactive: "Je n'utilise plus XERA",
+                inactive: "Je n'utilise plus XERA1",
                 technical: "J'ai des problèmes techniques",
                 privacy: "Confidentialité / sécurité",
                 experience: "L'expérience ne me convient pas",
@@ -2539,7 +2539,7 @@ async function notifyAnnouncementOwnerOfReply(
                 (typeof getCurrentUserDisplayName === "function" &&
                     getCurrentUserDisplayName()) ||
                 current.name ||
-                "Un membre XERA";
+                "Un membre XERA1";
             const announcementTitle = shortenReplyNotificationText(
                 title || "votre annonce",
                 70,
@@ -2985,7 +2985,7 @@ function showMobileArcOnboardingNotification(userId) {
             <div style="flex:1; min-width:0;">
                 <div style="font-weight:700; font-size:0.95rem; margin-bottom:4px;">Démarrez votre premier projet</div>
                 <div style="font-size:0.84rem; color:rgba(245,245,245,0.82); line-height:1.35;">
-                    Sur XERA, un projet est votre trajectoire. Créez-le pour publier vos mises à jour et suivre votre progression.
+                    Sur XERA1, un projet est votre trajectoire. Créez-le pour publier vos mises à jour et suivre votre progression.
                 </div>
             </div>
 </div>
@@ -3059,7 +3059,7 @@ async function maybeStartFirstPostFlow() {
                 if (isMobileContext) return;
                 const shouldOpenCreate =
                     confirm(
-                        "Bienvenue sur XERA. Voulez-vous publier votre première mise à jour maintenant ?",
+                        "Bienvenue sur XERA1. Voulez-vous publier votre première mise à jour maintenant ?",
                     ) === true;
                 if (shouldOpenCreate) {
                     openCreateMenu(userId, firstArcId);
@@ -3070,7 +3070,7 @@ async function maybeStartFirstPostFlow() {
             const shouldStartArc = isMobileContext
                 ? true
                 : confirm(
-                      "Bienvenue sur XERA. Pour publier votre première mise à jour, commencez par créer votre premier projet. Lancer la création maintenant ?",
+                      "Bienvenue sur XERA1. Pour publier votre première mise à jour, commencez par créer votre premier projet. Lancer la création maintenant ?",
                   ) === true;
             if (isMobileContext) {
                 showMobileArcOnboardingNotification(userId);
@@ -3558,7 +3558,7 @@ function getCurrentUserDisplayName() {
                 profile?.name ||
                 profile?.username ||
                 window.currentUser?.email ||
-                "Un membre XERA"
+                "Un membre XERA1"
             );
 }
 
@@ -4512,7 +4512,7 @@ function getSuperAdminPanelHtml() {
             <div class="verification-admin-block" style="margin-top: 1.5rem;">
                 <h4>Envoyer un email à tout le monde</h4>
                 <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
-                    Envoyer un email officiel XERA à tous les utilisateurs enregistrés.
+                    Envoyer un email officiel XERA1 à tous les utilisateurs enregistrés.
                 </p>
                 <div class="verification-input-row" style="flex-direction: column; align-items: stretch;">
                     <input type="text" id="admin-broadcast-subject" class="form-input" placeholder="Sujet de l'email">
@@ -5583,7 +5583,7 @@ function sanitizeUserMedia(user) {
 
 const PROFILE_THEME_PRESETS = {
             xera: {
-                label: "XERA",
+                label: "XERA1",
                 accent: "#10b981",
                 secondary: "#f59e0b",
             },
@@ -12398,7 +12398,7 @@ ${
             const verificationCtaHtml = showVerificationCta
                 ? `
 <div class="profile-verify-block">
-            <button class="profile-verify-cta" onclick="window.location.href='subscription-plans.html'" aria-label="Demander une vérification XERA">
+            <button class="profile-verify-cta" onclick="window.location.href='subscription-plans.html'" aria-label="Demander une vérification XERA1">
                 <span>Obtenir une vérification</span>
                 <img src="icons/verify-personal.svg?v=${BADGE_ASSET_VERSION}" alt="" aria-hidden="true" />
             </button>
@@ -12654,7 +12654,7 @@ ${showPublicStats ? analyticsSectionHtml : ""}
                         <img src="${user.avatar && (user.avatar.startsWith("http") || user.avatar.startsWith("data:")) ? withCacheBust(user.avatar) : "https://placehold.co/150"}" class="profile-avatar-img" alt="Avatar de ${user.name}" onclick="navigateToUserProfile('${userId}')" style="cursor: pointer;">
                     </div>
                     <div class="profile-name-block">
-                        <span class="profile-section-kicker">Profil XERA</span>
+                        <span class="profile-section-kicker">Profil XERA1</span>
                         <h2>${renderUsernameForProfile(user.name, user.id)}${monetizationBadgeHtml}</h2>
                         ${profileRoleBadgeHtml}
                         <p class="profile-title"><strong>${profileTitleHtml}</strong></p>
@@ -12706,7 +12706,7 @@ ${publicActivityHtml}
                     <a href="index.html" style="color: var(--text-secondary); text-decoration: none; transition: color 0.3s;">Accueil</a>
                     <a href="credits.html" style="color: var(--text-secondary); text-decoration: none; transition: color 0.3s;">Crédits</a>
                 </div>
-                <p style="color: var(--text-muted); font-size: 0.9rem;">© 2026 XERA - Documentez l'effort</p>
+                <p style="color: var(--text-muted); font-size: 0.9rem;">© 2026 XERA1 - Documentez l'effort</p>
             </div>
 </footer>
     `;
@@ -14006,7 +14006,7 @@ async function openSettings(userId) {
                                 <div class="profile-customization-preview-banner"></div>
                                 <div class="profile-customization-preview-grid">
                                     <div class="profile-customization-preview-card">
-                                        <span class="profile-section-kicker">Profil XERA</span>
+                                        <span class="profile-section-kicker">Profil XERA1</span>
                                         <strong>${escapeHtml(user.name || "Utilisateur")}</strong>
                                     </div>
                                     <div class="profile-customization-preview-card is-signal">
@@ -14378,7 +14378,7 @@ async function openSettings(userId) {
                                 <div class="delete-account-reasons">
                                     <label class="delete-account-reason-item">
                                         <input type="radio" name="delete-account-reason" value="inactive">
-                                        <span>Je n'utilise plus XERA</span>
+                                        <span>Je n'utilise plus XERA1</span>
                                     </label>
                                     <label class="delete-account-reason-item">
                                         <input type="radio" name="delete-account-reason" value="technical">
@@ -15659,14 +15659,14 @@ function buildPublishFeedbackPayload({
                 eyebrow = "Nouveau depart";
                 title = "Ton premier post est en ligne.";
                 message = safeArcTitle
-                    ? `Tu viens de lancer "${safeArcTitle}" sur XERA.`
-                    : "Tu viens de publier ton premier contenu sur XERA.";
+                    ? `Tu viens de lancer "${safeArcTitle}" sur XERA1.`
+                    : "Tu viens de publier ton premier contenu sur XERA1.";
             } else if (previousGapDays >= 3) {
                 eyebrow = "Bon retour";
                 title = "Tu viens de relancer ton rythme.";
                 message = safeArcTitle
                     ? `"${safeArcTitle}" repart avec une nouvelle update.`
-                    : "Ta progression repart sur XERA.";
+                    : "Ta progression repart sur XERA1.";
             } else if (streakDetails.streak >= 7) {
                 eyebrow = "Serie en cours";
                 title = `${streakDetails.streak} jours de suite.`;
@@ -15683,7 +15683,7 @@ function buildPublishFeedbackPayload({
                 title = "Ta mise a jour est en ligne.";
                 message = safeArcTitle
                     ? `"${safeArcTitle}" a recu une nouvelle avancee.`
-                    : "Ton contenu est maintenant visible sur XERA.";
+                    : "Ton contenu est maintenant visible sur XERA1.";
             }
 
             const chips = [];
@@ -17216,7 +17216,7 @@ async function openCreateMenu(
                                     ? "Mise a jour terminee"
                                     : "Publication terminee",
                                 message:
-                                    "Votre contenu est maintenant en ligne sur XERA.",
+                                    "Votre contenu est maintenant en ligne sur XERA1.",
                                 autoHideMs: 3200,
                             });
                             requestAnimationFrame(() =>

@@ -1,4 +1,4 @@
-// PWA install helper: shows a pinned mini-banner on mobile to install XERA as a PWA.
+// PWA install helper: shows a pinned mini-banner on mobile to install XERA1 as a PWA.
 // Keeps footprint tiny and avoids interfering with existing flows.
 (function () {
     const DISMISS_KEY = "xera_pwa_install_dismissed_ts";
@@ -10,9 +10,11 @@
     let iosHintEl = null;
     let mobileHintEl = null;
 
-    const isIos = () => /iphone|ipad|ipod/.test(navigator.userAgent.toLowerCase());
+    const isIos = () =>
+        /iphone|ipad|ipod/.test(navigator.userAgent.toLowerCase());
     const isStandalone = () =>
-        (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) ||
+        (window.matchMedia &&
+            window.matchMedia("(display-mode: standalone)").matches) ||
         window.navigator.standalone === true;
 
     function ensureServiceWorker() {
@@ -61,7 +63,10 @@
     function shouldShowBanner() {
         if (isStandalone()) return false;
         if (localStorage.getItem(INSTALLED_KEY) === "1") return false;
-        const dismissedAt = parseInt(localStorage.getItem(DISMISS_KEY) || "0", 10);
+        const dismissedAt = parseInt(
+            localStorage.getItem(DISMISS_KEY) || "0",
+            10,
+        );
         const cooldownMs = 12 * 60 * 60 * 1000; // 12h cooldown after dismissal
         if (dismissedAt && Date.now() - dismissedAt < cooldownMs) return false;
         return true;
@@ -85,18 +90,21 @@
         iosHintEl.id = "pwa-ios-hint";
         iosHintEl.innerHTML = `
             <div class="pwa-card">
-                <h4>Installer XERA sur iOS</h4>
+                <h4>Installer XERA1 sur iOS</h4>
                 <ol>
                     <li>Appuyez sur le bouton <strong>Partager</strong> (icône carré + flèche).</li>
                     <li>Sélectionnez <strong>"Ajouter à l'écran d'accueil"</strong>.</li>
-                    <li>Validez pour épingler XERA parmi vos applications.</li>
+                    <li>Validez pour épingler XERA1 parmi vos applications.</li>
                 </ol>
                 <button type="button" data-action="close-hint">Compris</button>
             </div>
         `;
 
         iosHintEl.addEventListener("click", (e) => {
-            if (e.target === iosHintEl || e.target.closest('[data-action="close-hint"]')) {
+            if (
+                e.target === iosHintEl ||
+                e.target.closest('[data-action="close-hint"]')
+            ) {
                 iosHintEl.classList.remove("show");
                 setTimeout(() => iosHintEl?.remove(), 180);
             }
@@ -120,14 +128,14 @@
         const ua = navigator.userAgent.toLowerCase();
         const isAndroid = ua.includes("android");
         const title = isAndroid
-            ? "Installer XERA sur Android"
-            : "Installer XERA sur mobile";
+            ? "Installer XERA1 sur Android"
+            : "Installer XERA1 sur mobile";
         const steps = isAndroid
             ? `
                 <ol>
                     <li>Ouvrez le menu du navigateur (<strong>⋮</strong> ou <strong>•••</strong>).</li>
                     <li>Appuyez sur <strong>"Installer l'application"</strong> ou <strong>"Ajouter à l'écran d'accueil"</strong>.</li>
-                    <li>Validez pour épingler XERA parmi vos applications.</li>
+                    <li>Validez pour épingler XERA1 parmi vos applications.</li>
                 </ol>
             `
             : `
@@ -173,10 +181,12 @@
         bannerEl.innerHTML = `
             <div class="pwa-icon"><i class="fas fa-mobile-alt"></i></div>
             <div class="pwa-copy">
-                <div class="pwa-title">Installer XERA</div>
-                <div class="pwa-desc">${iosMode
-                    ? "Ajoutez XERA à votre écran d'accueil pour l'avoir comme une app."
-                    : "Téléchargez XERA pour un accès rapide depuis votre écran d'accueil."}</div>
+                <div class="pwa-title">Installer XERA1</div>
+                <div class="pwa-desc">${
+                    iosMode
+                        ? "Ajoutez XERA1 à votre écran d'accueil pour l'avoir comme une app."
+                        : "Téléchargez XERA1 pour un accès rapide depuis votre écran d'accueil."
+                }</div>
             </div>
             <div class="pwa-actions">
                 <button class="pwa-primary" data-action="install">Installer</button>
@@ -184,44 +194,54 @@
             </div>
         `;
 
-        bannerEl.querySelector('[data-action="install"]').addEventListener("click", async () => {
-            if (isStandalone()) {
-                localStorage.setItem(INSTALLED_KEY, "1");
-                removeBanner();
-                return;
-            }
-
-            if (isIos()) {
-                showIosHint();
-                return;
-            }
-
-            if (!deferredPrompt) {
-                showMobileHint();
-                return;
-            }
-
-            try {
-                deferredPrompt.prompt();
-                const { outcome } = await deferredPrompt.userChoice;
-                if (outcome === "accepted") {
+        bannerEl
+            .querySelector('[data-action="install"]')
+            .addEventListener("click", async () => {
+                if (isStandalone()) {
                     localStorage.setItem(INSTALLED_KEY, "1");
-                    ToastManager?.success?.("XERA installé", "Retrouvez-la comme une application.");
                     removeBanner();
-                } else {
-                    localStorage.setItem(DISMISS_KEY, Date.now().toString());
+                    return;
                 }
-            } catch (err) {
-                console.warn("Install prompt failed", err);
-            } finally {
-                deferredPrompt = null;
-            }
-        });
 
-        bannerEl.querySelector('[data-action="close"]').addEventListener("click", () => {
-            localStorage.setItem(DISMISS_KEY, Date.now().toString());
-            removeBanner();
-        });
+                if (isIos()) {
+                    showIosHint();
+                    return;
+                }
+
+                if (!deferredPrompt) {
+                    showMobileHint();
+                    return;
+                }
+
+                try {
+                    deferredPrompt.prompt();
+                    const { outcome } = await deferredPrompt.userChoice;
+                    if (outcome === "accepted") {
+                        localStorage.setItem(INSTALLED_KEY, "1");
+                        ToastManager?.success?.(
+                            "XERA1 installé",
+                            "Retrouvez-la comme une application.",
+                        );
+                        removeBanner();
+                    } else {
+                        localStorage.setItem(
+                            DISMISS_KEY,
+                            Date.now().toString(),
+                        );
+                    }
+                } catch (err) {
+                    console.warn("Install prompt failed", err);
+                } finally {
+                    deferredPrompt = null;
+                }
+            });
+
+        bannerEl
+            .querySelector('[data-action="close"]')
+            .addEventListener("click", () => {
+                localStorage.setItem(DISMISS_KEY, Date.now().toString());
+                removeBanner();
+            });
 
         document.body.appendChild(bannerEl);
     }
@@ -239,7 +259,10 @@
     window.addEventListener("appinstalled", () => {
         localStorage.setItem(INSTALLED_KEY, "1");
         removeBanner();
-        ToastManager?.success?.("XERA installé", "Ouvez-la depuis votre écran d'accueil.");
+        ToastManager?.success?.(
+            "XERA1 installé",
+            "Ouvez-la depuis votre écran d'accueil.",
+        );
     });
 
     // React when display-mode changes (desktop Chrome after install)

@@ -4,7 +4,7 @@
 
 (function () {
     console.log('[stream-page] chargé');
-    const STREAMING_SCRIPT_SRC = 'js/streaming.js?v=20260302-1';
+    const STREAMING_SCRIPT_SRC = 'js/streaming.js?v=20261004-1';
 
     function getParams() {
         const urlParams = new URLSearchParams(window.location.search);

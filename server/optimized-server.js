@@ -1,60 +1,125 @@
-const express = require('express');
-const cors = require('cors');
-const dotenv = require('dotenv');
-const path = require('path');
-const { createClient } = require('@supabase/supabase-js');
-const webpush = require('web-push');
-const oauthHandler = require('./oauth-handler');
+const express = require("express");
+const fs = require("fs");
+const cors = require("cors");
+const dotenv = require("dotenv");
+const path = require("path");
+const logger = require("./logger");
+const { createClient } = require("@supabase/supabase-js");
+const webpush = require("web-push");
 
 dotenv.config();
 
+const oauthHandler = require("./oauth-handler");
+const { createFataApiRouter } = require("./fata-api-routes");
+
 const {
-    APP_BASE_URL = 'http://localhost:3000',
+    APP_BASE_URL = "http://localhost:3000",
+    APP_FRONTEND_URL = "",
     PORT = 5050,
     SUPABASE_URL,
     SUPABASE_SERVICE_ROLE_KEY,
     VAPID_PUBLIC_KEY,
     VAPID_PRIVATE_KEY,
-    PUSH_CONTACT_EMAIL = 'mailto:hello@xera1.xyz',
-    RETURN_REMINDER_HOURS = '10,18',
-    RETURN_REMINDER_WINDOW_MINUTES = '15',
-    RETURN_REMINDER_SWEEP_MS = '60000',
+    PUSH_CONTACT_EMAIL = "mailto:hello@xera1.xyz",
+    RETURN_REMINDER_HOURS = "10,18",
+    RETURN_REMINDER_WINDOW_MINUTES = "15",
+    RETURN_REMINDER_SWEEP_MS = "60000",
 } = process.env;
 
 // Configuration Supabase
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
+    console.error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
     process.exit(1);
 }
 
 // Configuration VAPID pour push notifications
 if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
-    console.warn('Warning: Missing VAPID keys. Push notifications will not be sent.');
+    console.warn(
+        "Warning: Missing VAPID keys. Push notifications will not be sent.",
+    );
 } else {
-    let vapidSubject = String(PUSH_CONTACT_EMAIL || '').trim();
+    let vapidSubject = String(PUSH_CONTACT_EMAIL || "").trim();
     if (vapidSubject && !/^(mailto:|https?:)/i.test(vapidSubject)) {
         vapidSubject = `mailto:${vapidSubject}`;
     }
     try {
-        webpush.setVapidDetails(vapidSubject, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+        webpush.setVapidDetails(
+            vapidSubject,
+            VAPID_PUBLIC_KEY,
+            VAPID_PRIVATE_KEY,
+        );
     } catch (err) {
-        console.warn('Invalid VAPID configuration:', err?.message || err);
+        console.warn("Invalid VAPID configuration:", err?.message || err);
     }
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 const app = express();
 
-app.use('/api/auth', oauthHandler);
-
 // Middleware optimisé
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
-const allowedOrigins = APP_BASE_URL.split(',').map(v => v.trim()).filter(Boolean);
-app.use(cors({ origin: allowedOrigins, methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'] }));
+const allowedOrigins = [APP_BASE_URL, APP_FRONTEND_URL]
+    .flatMap((value) => String(value || "").split(","))
+    .map((v) => v.trim())
+    .filter(Boolean);
 
-const PRIMARY_ORIGIN = allowedOrigins[0] || APP_BASE_URL.split(',')[0] || 'http://localhost:3000';
+function isLocalDevelopmentOrigin(origin) {
+    const localHosts = new Set([
+        "localhost",
+        "127.0.0.1",
+        "0.0.0.0",
+        "[::1]",
+        "::1",
+    ]);
+    const hasProductionOrigin = allowedOrigins.some((configuredOrigin) => {
+        try {
+            const configuredUrl = new URL(configuredOrigin);
+            return (
+                configuredUrl.protocol === "https:" ||
+                !localHosts.has(configuredUrl.hostname)
+            );
+        } catch (_) {
+            return false;
+        }
+    });
+    if (process.env.NODE_ENV === "production" || hasProductionOrigin) {
+        return false;
+    }
+    try {
+        const url = new URL(origin);
+        return (
+            url.protocol === "http:" &&
+            localHosts.has(url.hostname)
+        );
+    } catch (_) {
+        return false;
+    }
+}
+
+app.use(
+    cors({
+        origin(origin, callback) {
+            callback(
+                null,
+                !origin ||
+                    allowedOrigins.includes(origin) ||
+                    isLocalDevelopmentOrigin(origin),
+            );
+        },
+        methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    }),
+);
+
+app.use("/api/auth", oauthHandler);
+app.use("/api/fata", createFataApiRouter(supabase));
+
+const PRIMARY_ORIGIN =
+    APP_FRONTEND_URL.split(",")[0]?.trim() ||
+    allowedOrigins[0] ||
+    APP_BASE_URL.split(",")[0] ||
+    "http://localhost:3000";
 
 // Configuration du cache et headers optimisés
 const CACHE_DURATION = 365 * 24 * 60 * 60; // 1 an en secondes
@@ -67,13 +132,13 @@ const activeSessions = new Map();
 function checkSessionTimeout(userId) {
     const session = activeSessions.get(userId);
     if (!session) return false;
-    
+
     const now = Date.now();
     if (now - session.lastActivity > SESSION_TIMEOUT_MS) {
         activeSessions.delete(userId);
         return false;
     }
-    
+
     session.lastActivity = now;
     return true;
 }
@@ -81,7 +146,7 @@ function checkSessionTimeout(userId) {
 function updateSessionActivity(userId) {
     activeSessions.set(userId, {
         lastActivity: Date.now(),
-        createdAt: activeSessions.get(userId)?.createdAt || Date.now()
+        createdAt: activeSessions.get(userId)?.createdAt || Date.now(),
     });
 }
 
@@ -89,10 +154,10 @@ function updateSessionActivity(userId) {
 function requireValidSession(req, res, next) {
     const token = getBearerToken(req);
     if (!token) {
-        return res.status(401).json({ 
-            error: 'Session expired. Please reconnect.',
-            code: 'SESSION_EXPIRED',
-            requireReconnect: true
+        return res.status(401).json({
+            error: "Session expired. Please reconnect.",
+            code: "SESSION_EXPIRED",
+            requireReconnect: true,
         });
     }
 
@@ -102,10 +167,10 @@ function requireValidSession(req, res, next) {
         if (authData?.user?.id) {
             const userId = authData.user.id;
             if (!checkSessionTimeout(userId)) {
-                return res.status(401).json({ 
-                    error: 'Session expired after 4h inactivity. Please reconnect.',
-                    code: 'SESSION_TIMEOUT',
-                    requireReconnect: true
+                return res.status(401).json({
+                    error: "Session expired after 4h inactivity. Please reconnect.",
+                    code: "SESSION_TIMEOUT",
+                    requireReconnect: true,
                 });
             }
             updateSessionActivity(userId);
@@ -113,7 +178,7 @@ function requireValidSession(req, res, next) {
     } catch (e) {
         // Continuer si la vérification échoue
     }
-    
+
     next();
 }
 
@@ -145,32 +210,182 @@ app.use(express.static(path.join(__dirname, '..', 'client', 'dist'), {
 
 // Compression pour les réponses
 app.use((req, res, next) => {
-    res.setHeader('Vary', 'Accept-Encoding');
+    res.setHeader("Vary", "Accept-Encoding");
     next();
 });
 
+// --- ROUTES SEO & MACHINE DISCOVERABILITY ---
+app.get("/llm.txt", (req, res) => {
+    const filePath = path.join(__dirname, "..", "llm.txt");
+    if (fs.existsSync(filePath)) {
+        res.setHeader("Content-Type", "text/plain; charset=utf-8");
+        res.setHeader("Cache-Control", "public, max-age=3600, stale-while-revalidate");
+        return res.sendFile(filePath);
+    }
+    return res.status(404).type("text/plain").send("llm.txt non trouvé");
+});
+
+app.get("/robots.txt", (req, res) => {
+    const filePath = path.join(__dirname, "..", "robots.txt");
+    if (fs.existsSync(filePath)) {
+        res.setHeader("Content-Type", "text/plain; charset=utf-8");
+        res.setHeader("Cache-Control", "public, max-age=86400");
+        return res.sendFile(filePath);
+    }
+    return res.status(200).type("text/plain").send("User-agent: *\nAllow: /\nSitemap: https://xera1.xyz/sitemap.xml\n");
+});
+
+app.get("/sitemap.xml", async (req, res) => {
+    try {
+        const sitemapHandler = require("../api/sitemap");
+        return await sitemapHandler(req, res);
+    } catch (e) {
+        console.error("Sitemap route error:", e);
+        return res.status(500).send("Erreur lors de la génération du sitemap");
+    }
+});
+
 // Health check
-app.get('/api/health', (req, res) => {
+app.get("/api/health", (req, res) => {
     res.json({
         ok: true,
-        server: 'optimized',
+        server: "optimized",
         push: Boolean(VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY),
-        sessionTimeout: '4h',
-        cache: 'enabled'
+        sessionTimeout: "4h",
+        cache: "enabled",
     });
 });
 
+// Fata linkage and challenge status for the authenticated XERA1 user.
+app.get("/api/fata/status", async (req, res) => {
+    res.setHeader("Cache-Control", "private, no-store, max-age=0");
+    const token = getBearerToken(req);
+    if (!token) {
+        return res.status(401).json({ error: "Utilisateur non identifié" });
+    }
+
+    try {
+        const {
+            data: { user },
+            error: authError,
+        } = await supabase.auth.getUser(token);
+        if (authError || !user) {
+            return res.status(401).json({ error: "Utilisateur non identifié" });
+        }
+
+        const realChallengeId = String(process.env.FATA_REAL_CHALLENGE_ID || "").trim();
+        const qualificationQuery = realChallengeId
+            ? supabase
+                  .from("fata_qualifications")
+                  .select("*")
+                  .eq("user_id", user.id)
+                  .eq("challenge_id", realChallengeId)
+                  .maybeSingle()
+            : Promise.resolve({ data: null, error: null });
+        const [linkageResult, pendingResult, qualificationResult] =
+            await Promise.all([
+                supabase
+                    .from("fata_linkages")
+                    .select("*")
+                    .eq("user_id", user.id)
+                    .maybeSingle(),
+                supabase
+                    .from("fata_pending_events")
+                    .select("*")
+                    .eq("user_id", user.id)
+                    .order("created_at", { ascending: false }),
+                qualificationQuery,
+            ]);
+
+        const queryError =
+            linkageResult.error ||
+            pendingResult.error ||
+            qualificationResult.error;
+        if (queryError) throw queryError;
+
+        const linkage = linkageResult.data || null;
+        const qualification = qualificationResult.data || null;
+        const { isFataCelebrationPending } = require("./fata-contract");
+        return res.json({
+            connected: Boolean(linkage),
+            linkage,
+            challengeId: realChallengeId || null,
+            qualification,
+            celebrationPending: isFataCelebrationPending(qualification),
+            pendingEvents: pendingResult.data || [],
+        });
+    } catch (error) {
+        console.error("Fata status error:", error?.message || "query failed");
+        return res.status(500).json({ error: "Failed to fetch Fata status" });
+    }
+});
+
+app.post("/api/fata/celebration/seen", async (req, res) => {
+    const token = getBearerToken(req);
+    if (!token) {
+        return res.status(401).json({ error: "Utilisateur non identifié" });
+    }
+
+    const challengeId = String(process.env.FATA_REAL_CHALLENGE_ID || "").trim();
+    if (!challengeId) {
+        return res.status(503).json({ error: "Fata challenge is not configured." });
+    }
+
+    try {
+        const {
+            data: { user },
+            error: authError,
+        } = await supabase.auth.getUser(token);
+        if (authError || !user) {
+            return res.status(401).json({ error: "Utilisateur non identifié" });
+        }
+
+        const { data, error } = await supabase.rpc("mark_fata_celebration_seen", {
+            p_user_id: user.id,
+            p_challenge_id: challengeId,
+        });
+        if (error) throw error;
+        return res.json({ ok: Boolean(data) });
+    } catch (error) {
+        console.error("Fata celebration acknowledgement error:", error?.message || error);
+        return res.status(500).json({ error: "Failed to acknowledge Fata celebration" });
+    }
+});
+
+app.all("/api/cron/fata-worker", async (req, res) => {
+    const configuredSecret = String(process.env.CRON_SECRET || "").trim();
+    if (!configuredSecret) {
+        return res.status(503).json({ error: "CRON_SECRET must be configured." });
+    }
+    const authorization = String(req.headers.authorization || "");
+    const providedSecret = authorization.startsWith("Bearer ")
+        ? authorization.slice(7).trim()
+        : String(req.headers["x-cron-secret"] || "").trim();
+    if (providedSecret !== configuredSecret) {
+        return res.status(401).json({ error: "Unauthorized cron request." });
+    }
+    try {
+        const { processActivityLog, processPendingEvents } = require("./fata-worker");
+        await processActivityLog();
+        await processPendingEvents();
+        return res.status(200).json({ ok: true, message: "Fata worker processed successfully" });
+    } catch (error) {
+        console.error("[Fata Cron Worker Error]:", error);
+        return res.status(500).json({ error: "Fata worker error" });
+    }
+});
+
 // Importer les fonctions du serveur original
-const REMINDER_HOURS = RETURN_REMINDER_HOURS.split(',')
-    .map(value => parseInt(value.trim(), 10))
-    .filter(hour => Number.isFinite(hour) && hour >= 0 && hour <= 23)
+const REMINDER_HOURS = RETURN_REMINDER_HOURS.split(",")
+    .map((value) => parseInt(value.trim(), 10))
+    .filter((hour) => Number.isFinite(hour) && hour >= 0 && hour <= 23)
     .sort((a, b) => a - b);
 
 function sanitizeTimeZone(value) {
-    const fallback = 'UTC';
-    if (!value || typeof value !== 'string') return fallback;
+    const fallback = "UTC";
+    if (!value || typeof value !== "string") return fallback;
     try {
-        Intl.DateTimeFormat('fr-FR', { timeZone: value }).format(new Date());
+        Intl.DateTimeFormat("fr-FR", { timeZone: value }).format(new Date());
         return value;
     } catch (e) {
         return fallback;
@@ -178,27 +393,27 @@ function sanitizeTimeZone(value) {
 }
 
 function isMissingColumnError(error) {
-    const message = String(error?.message || '').toLowerCase();
-    return message.includes('column') && message.includes('does not exist');
+    const message = String(error?.message || "").toLowerCase();
+    return message.includes("column") && message.includes("does not exist");
 }
 
 function getTimePartsInZone(date, timeZone) {
-    const formatter = new Intl.DateTimeFormat('en-CA', {
+    const formatter = new Intl.DateTimeFormat("en-CA", {
         timeZone,
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
         hour12: false,
     });
     const parts = formatter.formatToParts(date);
-    const pick = (type) => parts.find(p => p.type === type)?.value || '';
-   const year = pick('year');
-    const month = pick('month');
-    const day = pick('day');
-    const hour = parseInt(pick('hour'), 10);
-    const minute = parseInt(pick('minute'), 10);
+    const pick = (type) => parts.find((p) => p.type === type)?.value || "";
+    const year = pick("year");
+    const month = pick("month");
+    const day = pick("day");
+    const hour = parseInt(pick("hour"), 10);
+    const minute = parseInt(pick("minute"), 10);
     return {
         dateKey: `${year}-${month}-${day}`,
         hour,
@@ -209,11 +424,12 @@ function getTimePartsInZone(date, timeZone) {
 function resolveReminderSlot(now, timeZone) {
     if (REMINDER_HOURS.length === 0) return null;
     const parts = getTimePartsInZone(now, timeZone);
-    if (!Number.isFinite(parts.hour) || !Number.isFinite(parts.minute)) return null;
-    const slotHour = REMINDER_HOURS.find(h => h === parts.hour);
+    if (!Number.isFinite(parts.hour) || !Number.isFinite(parts.minute))
+        return null;
+    const slotHour = REMINDER_HOURS.find((h) => h === parts.hour);
     if (slotHour === undefined) return null;
     if (parts.minute < 0 || parts.minute >= 15) return null;
-    const hourKey = String(slotHour).padStart(2, '0');
+    const hourKey = String(slotHour).padStart(2, "0");
     return {
         hour: slotHour,
         dateKey: parts.dateKey,
@@ -222,28 +438,41 @@ function resolveReminderSlot(now, timeZone) {
 }
 
 function buildProfileRoute(userId, accountType) {
-    if (!userId) return '/profile';
+    if (!userId) return "/profile";
     const isPro = [
-        'community', 'enterprise', 'company', 'pro', 'communauté',
-        'entreprise', 'institution', 'organization', 'organisation', 'org', 'team',
-    ].includes(String(accountType || '').trim().toLowerCase());
-    const route = isPro ? '/pagepro' : '/profile';
+        "community",
+        "enterprise",
+        "company",
+        "pro",
+        "communauté",
+        "entreprise",
+        "institution",
+        "organization",
+        "organisation",
+        "org",
+        "team",
+    ].includes(
+        String(accountType || "")
+            .trim()
+            .toLowerCase(),
+    );
+    const route = isPro ? "/pagepro" : "/profile";
     return `${route}?user=${encodeURIComponent(userId)}`;
 }
 
 function buildReturnReminderPayload(userId, slot) {
     const isMorning = slot.hour < 14;
-    const title = isMorning ? 'Rappel XERA • 10h' : 'Rappel XERA • 18h';
+    const title = isMorning ? "Rappel XERA1 • 10h" : "Rappel XERA1 • 18h";
     const body = isMorning
-        ? 'Prends 2 minutes pour documenter ta progression ce matin.'
-        : 'Pense à documenter ta progression de la journée sur XERA.';
-    const icon = `${PRIMARY_ORIGIN.replace(/\/$/, '')}/icons/logo.png`;
+        ? "Prends 2 minutes pour documenter ta progression ce matin."
+        : "Pense à documenter ta progression de la journée sur XERA1.";
+    const icon = `${PRIMARY_ORIGIN.replace(/\/$/, "")}/icons/logo.png`;
     return {
         title,
         body,
         icon,
-        link: `${PRIMARY_ORIGIN.replace(/\/$/, '')}${buildProfileRoute(userId)}`,
-        tag: `xera-return-reminder-${slot.slotKey}`,
+        link: `${PRIMARY_ORIGIN.replace(/\/$/, "")}${buildProfileRoute(userId)}`,
+        tag: `xera1-return-reminder-${slot.slotKey}`,
         renotify: false,
         silent: false,
     };
@@ -252,15 +481,19 @@ function buildReturnReminderPayload(userId, slot) {
 async function purgeStaleSubscription(endpoint) {
     if (!endpoint) return;
     try {
-        await supabase.from('push_subscriptions').delete().eq('endpoint', endpoint);
-        console.log('Removed stale subscription', endpoint);
+        await supabase
+            .from("push_subscriptions")
+            .delete()
+            .eq("endpoint", endpoint);
+        logger.debug("Removed stale subscription", endpoint);
     } catch (error) {
-        console.error('Failed to remove stale subscription', endpoint, error);
+        console.error("Failed to remove stale subscription", endpoint, error);
     }
 }
 
 async function sendPushToSubscription(sub, payload) {
-    if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return { success: false, skipped: true };
+    if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY)
+        return { success: false, skipped: true };
     if (!sub?.endpoint || !sub?.keys) return { success: false, skipped: true };
 
     const payloadString = JSON.stringify(payload);
@@ -277,38 +510,42 @@ async function sendPushToSubscription(sub, payload) {
             await purgeStaleSubscription(sub.endpoint);
             return { success: false, stale: true };
         }
-        console.error('send push error', err);
+        console.error("send push error", err);
         return { success: false, error: err };
     }
 }
 
 function getBearerToken(req) {
     const authHeader = req.headers.authorization || req.headers.Authorization;
-    if (!authHeader || typeof authHeader !== 'string') return '';
-    const [scheme, token] = authHeader.split(' ');
-    if (!scheme || !token) return '';
-    if (scheme.toLowerCase() !== 'bearer') return '';
+    if (!authHeader || typeof authHeader !== "string") return "";
+    const [scheme, token] = authHeader.split(" ");
+    if (!scheme || !token) return "";
+    if (scheme.toLowerCase() !== "bearer") return "";
     return token.trim();
 }
 
 function getUserAccessState(profile, authUser) {
-    const normalizedRole = String(profile?.role || 'normal').toLowerCase();
-    const normalizedTier = String(profile?.subscription_tier || profile?.plan || 'normal')
+    const normalizedRole = String(profile?.role || "normal").toLowerCase();
+    const normalizedTier = String(
+        profile?.subscription_tier || profile?.plan || "normal",
+    )
         .toLowerCase()
         .trim();
-    const normalizedStatus = String(profile?.subscription_status || profile?.plan_status || 'inactive')
+    const normalizedStatus = String(
+        profile?.subscription_status || profile?.plan_status || "inactive",
+    )
         .toLowerCase()
         .trim();
 
-    const isProByRole = ['pro', 'admin'].includes(normalizedRole);
+    const isProByRole = ["pro", "admin"].includes(normalizedRole);
     const isProByTier =
-        normalizedTier === 'pro' &&
-        ['active', 'trialing', 'premium'].includes(normalizedStatus);
+        normalizedTier === "pro" &&
+        ["active", "trialing", "premium"].includes(normalizedStatus);
     const isPro = Boolean(
         profile?.is_pro ||
         isProByRole ||
         isProByTier ||
-        normalizedTier === 'pro',
+        normalizedTier === "pro",
     );
 
     return {
@@ -319,12 +556,12 @@ function getUserAccessState(profile, authUser) {
             authUser?.user_metadata?.full_name ||
             authUser?.email ||
             null,
-        role: isProByRole ? 'pro' : 'normal',
+        role: isProByRole ? "pro" : "normal",
         is_pro: isPro,
-        plan: profile?.plan || 'free',
-        plan_status: profile?.plan_status || 'inactive',
-        subscription_tier: isPro ? 'pro' : 'normal',
-        subscription_status: normalizedStatus || 'inactive',
+        plan: profile?.plan || "free",
+        plan_status: profile?.plan_status || "inactive",
+        subscription_tier: isPro ? "pro" : "normal",
+        subscription_status: normalizedStatus || "inactive",
         subscription_ends_at: profile?.subscription_ends_at || null,
     };
 }
@@ -334,16 +571,17 @@ async function attachAuthenticatedUser(req, res, next) {
         const token = getBearerToken(req);
         if (!token) {
             return res.status(401).json({
-                error: 'Missing authorization token',
-                code: 'AUTH_REQUIRED',
+                error: "Missing authorization token",
+                code: "AUTH_REQUIRED",
             });
         }
 
-        const { data: authData, error: authError } = await supabase.auth.getUser(token);
+        const { data: authData, error: authError } =
+            await supabase.auth.getUser(token);
         if (authError || !authData?.user?.id) {
             return res.status(401).json({
-                error: 'Invalid session token',
-                code: 'INVALID_TOKEN',
+                error: "Invalid session token",
+                code: "INVALID_TOKEN",
             });
         }
 
@@ -351,104 +589,113 @@ async function attachAuthenticatedUser(req, res, next) {
         const userId = authData.user.id;
         if (!checkSessionTimeout(userId)) {
             return res.status(401).json({
-                error: 'Session expired after 4h inactivity. Please reconnect.',
-                code: 'SESSION_TIMEOUT',
-                requireReconnect: true
+                error: "Session expired after 4h inactivity. Please reconnect.",
+                code: "SESSION_TIMEOUT",
+                requireReconnect: true,
             });
         }
-        
+
         updateSessionActivity(userId);
 
         const { data: profile, error: profileError } = await supabase
-            .from('users')
+            .from("users")
             .select(
-                'id, name, email, role, is_pro, plan, plan_status, subscription_tier, subscription_status, subscription_ends_at',
+                "id, name, email, role, is_pro, plan, plan_status, subscription_tier, subscription_status, subscription_ends_at",
             )
-            .eq('id', authData.user.id)
+            .eq("id", authData.user.id)
             .maybeSingle();
 
         if (profileError) {
-            console.warn('Failed to load user profile', profileError);
+            console.warn("Failed to load user profile", profileError);
         }
 
         req.authUser = authData.user;
         req.user = getUserAccessState(profile, authData.user);
         return next();
     } catch (error) {
-        console.error('attachAuthenticatedUser error', error);
+        console.error("attachAuthenticatedUser error", error);
         return res.status(500).json({
-            error: 'Unable to resolve authenticated user',
-            code: 'AUTH_RESOLUTION_FAILED',
+            error: "Unable to resolve authenticated user",
+            code: "AUTH_RESOLUTION_FAILED",
         });
     }
 }
 
 // API Routes
-app.get('/api/auth/me', attachAuthenticatedUser, (req, res) => {
+app.get("/api/auth/me", attachAuthenticatedUser, (req, res) => {
     res.json({ ok: true, user: req.user });
 });
 
-app.post('/api/subscriptions/upgrade', attachAuthenticatedUser, async (req, res) => {
-    try {
-        const userId = req.user?.id;
-        if (!userId) {
-            return res.status(401).json({
-                error: 'Authentication required',
-                code: 'AUTH_REQUIRED',
-            });
-        }
-
-        const { error: profileError } = await supabase
-            .from('users')
-            .update({
-                role: 'pro',
-                is_pro: true,
-                subscription_tier: 'pro',
-                subscription_status: 'active',
-                subscription_ends_at: null,
-            })
-            .eq('id', userId);
-
-        if (profileError) throw profileError;
-
+app.post(
+    "/api/subscriptions/upgrade",
+    attachAuthenticatedUser,
+    async (req, res) => {
         try {
-            await supabase.from('user_subscriptions').insert({
-                user_id: userId,
-                tier: 'pro',
-                status: 'active',
-                started_at: new Date().toISOString(),
-                ends_at: null,
+            const userId = req.user?.id;
+            if (!userId) {
+                return res.status(401).json({
+                    error: "Authentication required",
+                    code: "AUTH_REQUIRED",
+                });
+            }
+
+            const { error: profileError } = await supabase
+                .from("users")
+                .update({
+                    role: "pro",
+                    is_pro: true,
+                    subscription_tier: "pro",
+                    subscription_status: "active",
+                    subscription_ends_at: null,
+                })
+                .eq("id", userId);
+
+            if (profileError) throw profileError;
+
+            try {
+                await supabase.from("user_subscriptions").insert({
+                    user_id: userId,
+                    tier: "pro",
+                    status: "active",
+                    started_at: new Date().toISOString(),
+                    ends_at: null,
+                });
+            } catch (subscriptionError) {
+                console.warn(
+                    "Subscription insert skipped",
+                    subscriptionError?.message || subscriptionError,
+                );
+            }
+
+            return res.json({
+                ok: true,
+                user: {
+                    ...req.user,
+                    is_pro: true,
+                    role: "pro",
+                    subscription_tier: "pro",
+                    subscription_status: "active",
+                    subscription_ends_at: null,
+                },
             });
-        } catch (subscriptionError) {
-            console.warn('Subscription insert skipped', subscriptionError?.message || subscriptionError);
+        } catch (error) {
+            console.error("Upgrade error", error);
+            return res.status(500).json({
+                error: "Unable to activate Pro access",
+                code: "UPGRADE_FAILED",
+            });
         }
+    },
+);
 
-        return res.json({
-            ok: true,
-            user: {
-                ...req.user,
-                is_pro: true,
-                role: 'pro',
-                subscription_tier: 'pro',
-                subscription_status: 'active',
-                subscription_ends_at: null,
-            },
-        });
-    } catch (error) {
-        console.error('Upgrade error', error);
-        return res.status(500).json({
-            error: 'Unable to activate Pro access',
-            code: 'UPGRADE_FAILED',
-        });
-    }
-});
-
-app.post('/api/users/upsert', async (req, res) => {
+app.post("/api/users/upsert", async (req, res) => {
     try {
         const { id, email } = req.body;
-        if (!id) return res.status(400).json({ error: 'Missing user id' });
+        if (!id) return res.status(400).json({ error: "Missing user id" });
 
-        const { error } = await supabase.from('users').upsert({ id, email: email || null });
+        const { error } = await supabase
+            .from("users")
+            .upsert({ id, email: email || null });
 
         if (error) throw new Error(error.message);
         res.json({ ok: true });
@@ -457,11 +704,18 @@ app.post('/api/users/upsert', async (req, res) => {
     }
 });
 
-app.post('/api/push/subscribe', async (req, res) => {
+app.post("/api/push/subscribe", async (req, res) => {
     try {
-        const { userId, subscription, timezone, reminderEnabled = true } = req.body;
+        const {
+            userId,
+            subscription,
+            timezone,
+            reminderEnabled = true,
+        } = req.body;
         if (!userId || !subscription || !subscription.endpoint) {
-            return res.status(400).json({ error: 'Invalid subscription payload' });
+            return res
+                .status(400)
+                .json({ error: "Invalid subscription payload" });
         }
 
         const safeTimezone = sanitizeTimeZone(timezone);
@@ -477,43 +731,44 @@ app.post('/api/push/subscribe', async (req, res) => {
         };
 
         let { error } = await supabase
-            .from('push_subscriptions')
-            .upsert(extendedPayload, { onConflict: 'endpoint' });
+            .from("push_subscriptions")
+            .upsert(extendedPayload, { onConflict: "endpoint" });
 
         if (error && isMissingColumnError(error)) {
             ({ error } = await supabase
-                .from('push_subscriptions')
-                .upsert(basePayload, { onConflict: 'endpoint' }));
+                .from("push_subscriptions")
+                .upsert(basePayload, { onConflict: "endpoint" }));
         }
 
         if (error) throw error;
 
         res.json({ ok: true, timezone: safeTimezone });
     } catch (err) {
-        console.error('push subscribe error', err);
+        console.error("push subscribe error", err);
         res.status(400).json({ error: err.message });
     }
 });
 
-app.post('/api/push/test', attachAuthenticatedUser, async (req, res) => {
+app.post("/api/push/test", attachAuthenticatedUser, async (req, res) => {
     try {
         const userId = req.user?.id;
-        if (!userId) return res.status(401).json({ error: 'Auth required' });
+        if (!userId) return res.status(401).json({ error: "Auth required" });
 
         const { data: subs, error } = await supabase
-            .from('push_subscriptions')
-            .select('endpoint, keys')
-            .eq('user_id', userId);
+            .from("push_subscriptions")
+            .select("endpoint, keys")
+            .eq("user_id", userId);
 
         if (error) throw error;
-        if (!subs || subs.length === 0) return res.json({ ok: false, message: 'No subscriptions' });
+        if (!subs || subs.length === 0)
+            return res.json({ ok: false, message: "No subscriptions" });
 
         const payload = {
-            title: 'Test XERA • Notification',
-            body: 'Ceci est un test de notification Push. Si vous le voyez, les push fonctionnent.',
-            icon: `${PRIMARY_ORIGIN.replace(/\/$/, '')}/icons/logo.png`,
-            link: `${PRIMARY_ORIGIN.replace(/\/$/, '')}/index.html`,
-            tag: `xera-test-${Date.now()}`,
+            title: "Test XERA1 • Notification",
+            body: "Ceci est un test de notification Push. Si vous le voyez, les push fonctionnent.",
+            icon: `${PRIMARY_ORIGIN.replace(/\/$/, "")}/icons/logo.png`,
+            link: `${PRIMARY_ORIGIN.replace(/\/$/, "")}/index.html`,
+            tag: `xera1-test-${Date.now()}`,
             renotify: false,
             silent: false,
         };
@@ -526,33 +781,35 @@ app.post('/api/push/test', attachAuthenticatedUser, async (req, res) => {
 
         return res.json({ ok: true, results });
     } catch (err) {
-        console.error('push test error', err);
-        return res.status(500).json({ ok: false, error: err?.message || String(err) });
+        console.error("push test error", err);
+        return res
+            .status(500)
+            .json({ ok: false, error: err?.message || String(err) });
     }
 });
 
 // Push relay pour notifications
 function startNotificationPushRelay() {
-    const channel = supabase.channel('server-push-relay-notifications');
+    const channel = supabase.channel("server-push-relay-notifications");
     channel
         .on(
-            'postgres_changes',
+            "postgres_changes",
             {
-                event: 'INSERT',
-                schema: 'public',
-                table: 'notifications',
+                event: "INSERT",
+                schema: "public",
+                table: "notifications",
             },
             async (payload) => {
                 const notif = payload.new;
                 try {
                     await sendPushForNotification(notif);
                 } catch (err) {
-                    console.error('notification push relay error', err);
+                    console.error("notification push relay error", err);
                 }
             },
         )
         .subscribe((status) => {
-            console.log('Notification push relay status:', status);
+            logger.debug("Notification push relay status:", status);
         });
 }
 
@@ -560,9 +817,9 @@ async function sendPushForNotification(notification) {
     if (!notification?.user_id) return;
 
     const { data: subs, error } = await supabase
-        .from('push_subscriptions')
-        .select('endpoint, keys')
-        .eq('user_id', notification.user_id);
+        .from("push_subscriptions")
+        .select("endpoint, keys")
+        .eq("user_id", notification.user_id);
 
     if (error) throw error;
     if (!subs || subs.length === 0) return;
@@ -575,31 +832,31 @@ async function sendPushForNotification(notification) {
 
 function buildPushPayload(notification) {
     const typeTitleMap = {
-        support: 'Nouveau soutien',
-        follow: 'Nouvel abonné',
-        arc_follow: 'Nouveau follower de projet',
-        encouragement: 'Nouvel encouragement',
-        new_trace: 'Nouvelle trace',
-        new_arc: 'Nouvel ARC',
-        stream: 'Notification live',
-        live_start: 'Live en cours',
-        live_chat: 'Message du live',
-        collaboration: 'Demande de collaboration',
-        like: 'Nouveau like',
-        comment: 'Nouveau commentaire',
-        mention: 'Mention',
-        achievement: 'Succès débloqué',
+        support: "Nouveau soutien",
+        follow: "Nouvel abonné",
+        arc_follow: "Nouveau follower de projet",
+        encouragement: "Nouvel encouragement",
+        new_trace: "Nouvelle trace",
+        new_arc: "Nouvel ARC",
+        stream: "Notification live",
+        live_start: "Live en cours",
+        live_chat: "Message du live",
+        collaboration: "Demande de collaboration",
+        like: "Nouveau like",
+        comment: "Nouveau commentaire",
+        mention: "Mention",
+        achievement: "Succès débloqué",
     };
 
-    const title = typeTitleMap[notification.type] || 'Notification XERA';
-    const icon = `${PRIMARY_ORIGIN.replace(/\/$/, '')}/icons/logo.png`;
+    const title = typeTitleMap[notification.type] || "Notification XERA1";
+    const icon = `${PRIMARY_ORIGIN.replace(/\/$/, "")}/icons/logo.png`;
     const link =
         normalizeNotificationLink(notification) ||
-        `${PRIMARY_ORIGIN.replace(/\/$/, '')}${buildProfileRoute(notification.user_id, notification.account_type || notification.accountType)}`;
+        `${PRIMARY_ORIGIN.replace(/\/$/, "")}${buildProfileRoute(notification.user_id, notification.account_type || notification.accountType)}`;
 
     return {
         title,
-        body: notification.message || '',
+        body: notification.message || "",
         icon,
         link,
         tag: notification.id,
@@ -609,9 +866,9 @@ function buildPushPayload(notification) {
 }
 
 function normalizeNotificationLink(notification) {
-    const base = PRIMARY_ORIGIN.replace(/\/$/, '');
-    const raw = (notification && notification.link) || '';
-    if (!raw) return '';
+    const base = PRIMARY_ORIGIN.replace(/\/$/, "");
+    const raw = (notification && notification.link) || "";
+    if (!raw) return "";
     const streamMatch = raw.match(/\/stream\/?([\w-]{8,})/i);
     if (streamMatch) {
         return `${base}/stream.html?id=${streamMatch[1]}`;
@@ -624,8 +881,8 @@ function normalizeNotificationLink(notification) {
     if (profileMatch) {
         return `${base}/profile?user=${profileMatch[1]}`;
     }
-    if (raw.startsWith('http')) return raw;
-    if (raw.startsWith('/')) return `${base}${raw}`;
+    if (raw.startsWith("http")) return raw;
+    if (raw.startsWith("/")) return `${base}${raw}`;
     return `${base}/${raw}`;
 }
 
@@ -640,13 +897,15 @@ async function sendScheduledReturnReminders() {
 
     try {
         const { data: subs, error } = await supabase
-            .from('push_subscriptions')
-            .select('endpoint, keys, user_id, reminder_timezone, reminder_enabled, last_reminder_slot')
-            .eq('reminder_enabled', true);
+            .from("push_subscriptions")
+            .select(
+                "endpoint, keys, user_id, reminder_timezone, reminder_enabled, last_reminder_slot",
+            )
+            .eq("reminder_enabled", true);
 
         if (error) {
             if (isMissingColumnError(error)) {
-                console.warn('Reminder columns missing in push_subscriptions');
+                console.warn("Reminder columns missing in push_subscriptions");
                 return;
             }
             throw error;
@@ -656,7 +915,7 @@ async function sendScheduledReturnReminders() {
         const now = new Date();
         for (const sub of subs) {
             if (!sub?.endpoint || !sub?.keys || !sub?.user_id) continue;
-            const timeZone = sanitizeTimeZone(sub.reminder_timezone || 'UTC');
+            const timeZone = sanitizeTimeZone(sub.reminder_timezone || "UTC");
             const slot = resolveReminderSlot(now, timeZone);
             if (!slot) continue;
             if (sub.last_reminder_slot === slot.slotKey) continue;
@@ -666,21 +925,24 @@ async function sendScheduledReturnReminders() {
             if (!result.success) continue;
 
             const { error: updateError } = await supabase
-                .from('push_subscriptions')
+                .from("push_subscriptions")
                 .update({
                     reminder_timezone: timeZone,
                     last_reminder_slot: slot.slotKey,
                 })
-                .eq('endpoint', sub.endpoint);
+                .eq("endpoint", sub.endpoint);
 
             if (updateError) {
                 if (!isMissingColumnError(updateError)) {
-                    console.error('Failed to persist reminder slot', updateError);
+                    console.error(
+                        "Failed to persist reminder slot",
+                        updateError,
+                    );
                 }
             }
         }
     } catch (error) {
-        console.error('Reminder sweep error', error);
+        console.error("Reminder sweep error", error);
     } finally {
         reminderSweepInFlight = false;
     }
@@ -689,44 +951,53 @@ async function sendScheduledReturnReminders() {
 function startReminderScheduler() {
     if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return;
     if (REMINDER_HOURS.length === 0) return;
-    setInterval(() => {
-        sendScheduledReturnReminders().catch((error) => {
-            console.error('Reminder scheduler tick error', error);
-        });
-    }, parseInt(RETURN_REMINDER_SWEEP_MS) || 60000);
+    setInterval(
+        () => {
+            sendScheduledReturnReminders().catch((error) => {
+                console.error("Reminder scheduler tick error", error);
+            });
+        },
+        parseInt(RETURN_REMINDER_SWEEP_MS) || 60000,
+    );
     sendScheduledReturnReminders().catch((error) => {
-        console.error('Initial reminder sweep error', error);
+        console.error("Initial reminder sweep error", error);
     });
 }
 
 // Account deletion
-app.post('/api/account/delete', async (req, res) => {
+app.post("/api/account/delete", async (req, res) => {
     try {
         const token = getBearerToken(req);
         if (!token) {
-            return res.status(401).json({ error: 'Missing authorization token' });
+            return res
+                .status(401)
+                .json({ error: "Missing authorization token" });
         }
 
-        const { data: authData, error: authError } = await supabase.auth.getUser(token);
+        const { data: authData, error: authError } =
+            await supabase.auth.getUser(token);
 
         if (authError || !authData?.user?.id) {
-            return res.status(401).json({ error: 'Invalid session token' });
+            return res.status(401).json({ error: "Invalid session token" });
         }
 
         const authedUserId = authData.user.id;
-        const requestedUserId = String(req.body?.userId || '').trim();
+        const requestedUserId = String(req.body?.userId || "").trim();
         if (requestedUserId && requestedUserId !== authedUserId) {
-            return res.status(403).json({ error: 'Forbidden account deletion target' });
+            return res
+                .status(403)
+                .json({ error: "Forbidden account deletion target" });
         }
 
         const { error: profileDeleteError } = await supabase
-            .from('users')
+            .from("users")
             .delete()
-            .eq('id', authedUserId);
+            .eq("id", authedUserId);
 
         if (profileDeleteError) throw profileDeleteError;
 
-        const { error: authDeleteError } = await supabase.auth.admin.deleteUser(authedUserId);
+        const { error: authDeleteError } =
+            await supabase.auth.admin.deleteUser(authedUserId);
         if (authDeleteError) throw authDeleteError;
 
         // Nettoyer la session
@@ -734,29 +1005,32 @@ app.post('/api/account/delete', async (req, res) => {
 
         return res.json({ ok: true });
     } catch (error) {
-        console.error('Account delete error', error);
+        console.error("Account delete error", error);
         return res.status(500).json({
-            error: error?.message || 'Unable to delete account',
+            error: error?.message || "Unable to delete account",
         });
     }
 });
 
 // Session check endpoint
-app.get('/api/session/check', attachAuthenticatedUser, (req, res) => {
-    res.json({ 
-        ok: true, 
+app.get("/api/session/check", attachAuthenticatedUser, (req, res) => {
+    res.json({
+        ok: true,
         valid: true,
         userId: req.user?.id,
-        expiresIn: SESSION_TIMEOUT_MS - (Date.now() - (activeSessions.get(req.user?.id)?.lastActivity || Date.now()))
+        expiresIn:
+            SESSION_TIMEOUT_MS -
+            (Date.now() -
+                (activeSessions.get(req.user?.id)?.lastActivity || Date.now())),
     });
 });
 
 // Fallback route
 app.use((req, res) => {
     // Pour les routes API non définies
-    if (req.path.startsWith('/api/')) {
+    if (req.path.startsWith("/api/")) {
         return res.status(501).json({
-            error: 'Endpoint not implemented',
+            error: "Endpoint not implemented",
         });
     }
     
@@ -766,29 +1040,47 @@ app.use((req, res) => {
 
 // Démarrage du serveur
 app.listen(PORT, () => {
-    console.log(``);
-    console.log(`╔════════════════════════════════════════════════════════════╗`);
-    console.log(`║          XERA OPTIMIZED SERVER - PRODUCTION READY          ║`);
-    console.log(`╠════════════════════════════════════════════════════════════╣`);
-    console.log(`║  Server running on: http://localhost:${PORT}                   ║`);
-    console.log(`║  Environment: ${process.env.NODE_ENV || 'development'}                        ║`);
-    console.log(`║  Session timeout: 4 hours                                   ║`);
-    console.log(`║  Cache: Enabled (1 year for static assets)                   ║`);
-    console.log(`║  Hot-reload: DISABLED (manual restart required)              ║`);
-    console.log(`╚════════════════════════════════════════════════════════════╝`);
-    console.log(``);
-    
+    logger.debug(``);
+    logger.debug(
+        `╔════════════════════════════════════════════════════════════╗`,
+    );
+    logger.debug(
+        `║          XERA1 OPTIMIZED SERVER - PRODUCTION READY          ║`,
+    );
+    logger.debug(
+        `╠════════════════════════════════════════════════════════════╣`,
+    );
+    logger.debug(
+        `║  Server running on: http://localhost:${PORT}                   ║`,
+    );
+    logger.debug(
+        `║  Environment: ${process.env.NODE_ENV || "development"}                        ║`,
+    );
+    logger.debug(
+        `║  Session timeout: 4 hours                                   ║`,
+    );
+    console.log(
+        `║  Cache: Enabled (1 year for static assets)                   ║`,
+    );
+    console.log(
+        `║  Hot-reload: DISABLED (manual restart required)              ║`,
+    );
+    logger.debug(
+        `╚════════════════════════════════════════════════════════════╝`,
+    );
+    logger.debug(``);
+
     startNotificationPushRelay();
     startReminderScheduler();
 });
 
 // Gestion graceful shutdown
-process.on('SIGTERM', () => {
-    console.log('SIGTERM received, shutting down gracefully...');
+process.on("SIGTERM", () => {
+    logger.debug("SIGTERM received, shutting down gracefully...");
     process.exit(0);
 });
 
-process.on('SIGINT', () => {
-    console.log('SIGINT received, shutting down gracefully...');
+process.on("SIGINT", () => {
+    logger.debug("SIGINT received, shutting down gracefully...");
     process.exit(0);
 });

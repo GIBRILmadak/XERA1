@@ -82,7 +82,7 @@
             return true;
         } catch (error) {
             console.error(
-                `[xera-react-core] Echec du rendu de l'ile ${options.name || "default"}:`,
+                `[xera1-react-core] Echec du rendu de l'ile ${options.name || "default"}:`,
                 error,
             );
 

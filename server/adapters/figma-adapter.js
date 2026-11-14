@@ -1,3 +1,5 @@
+const { firstNonEmpty, imageFields } = require("./adapter-utils");
+
 async function fetchData(accessToken) {
     // Récupérer les fichiers récents
     const response = await fetch("https://api.figma.com/v1/me/files", {
@@ -11,20 +13,30 @@ async function fetchData(accessToken) {
 }
 
 function normalize(file, userId) {
+    const title = firstNonEmpty(file.name, "Fichier Figma");
+    const url = file.url || `https://www.figma.com/file/${file.key}`;
+    const image = imageFields(
+        file.thumbnail_url || file.thumbnailUrl,
+        "figma",
+        file.key,
+    );
+
     return {
         id: file.key,
         userId,
         source: "figma",
         type: "design_update",
         timestamp: file.updated_at || new Date().toISOString(),
-        title: `Design Update: ${file.name}`,
-        description: `Mise à jour du fichier Figma : ${file.name}.`,
+        title: `Design Update: ${title}`,
+        description: firstNonEmpty(
+            file.description,
+            `Mise à jour du fichier Figma : ${title}.`,
+        ),
         content: {
             fileId: file.key,
-            url: `https://www.figma.com/file/${file.key}`,
+            url,
         },
-        // Figma fournit bien des thumbnails
-        mediaUrl: file.thumbnail_url || null,
+        ...image,
         metadata: {
             skills: ["Figma", "UI/UX"],
             relevanceScore: 1,

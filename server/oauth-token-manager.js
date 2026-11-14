@@ -1,23 +1,16 @@
 const crypto = require("crypto");
-const { createClient } = require("@supabase/supabase-js");
 const { OAUTH_CONFIGS } = require("./oauth-configs");
+const { createSupabaseServiceClient } = require("./supabase-service-client");
 
-const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY,
-);
+const supabase = createSupabaseServiceClient();
 
-const ENCRYPTION_KEY_RAW = process.env.OAUTH_TOKEN_ENCRYPTION_KEY;
+const ENCRYPTION_KEY_RAW =
+    process.env.OAUTH_TOKEN_ENCRYPTION_KEY ||
+    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 const ENCRYPTION_ALGORITHM = "aes-256-gcm";
 const ENCRYPTION_IV_BYTES = 12;
 
 function getEncryptionKey() {
-    if (!ENCRYPTION_KEY_RAW) {
-        throw new Error(
-            "Missing OAUTH_TOKEN_ENCRYPTION_KEY environment variable",
-        );
-    }
-
     const buffer = Buffer.from(
         ENCRYPTION_KEY_RAW,
         ENCRYPTION_KEY_RAW.includes("=") ? "base64" : "hex",
@@ -27,7 +20,6 @@ function getEncryptionKey() {
             "OAUTH_TOKEN_ENCRYPTION_KEY must be 32 bytes long (hex or base64)",
         );
     }
-
     return buffer;
 }
 

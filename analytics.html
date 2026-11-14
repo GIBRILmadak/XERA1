@@ -3,19 +3,28 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Analytics | XERA</title>
+        <title>Analytics | XERA1</title>
+        <script>
+            (function () {
+                var savedTheme = localStorage.getItem("rize-theme");
+                document.documentElement.classList.toggle(
+                    "light-mode",
+                    savedTheme === "light",
+                );
+            })();
+        </script>
         <link
             href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;600;700;800&display=swap"
             rel="stylesheet"
         />
-        <link rel="icon" type="image/svg+xml" href="icons/logo.png" />
-        <link rel="stylesheet" href="css/style.css" />
+        <link rel="icon" type="image/png" href="icons/logo.png" />
+        <link rel="stylesheet" href="css/style.css?v=20261006-1" />
         <link rel="stylesheet" href="css/search-notification.css" />
         <link rel="stylesheet" href="css/streaming-analytics.css" />
         <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.111.0/dist/umd/supabase.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     </head>
-    <body class="analytics-page">
+    <body class="analytics-page account-intelligence-page">
         <nav>
             <a
                 class="logo"
@@ -23,9 +32,9 @@
                 style="cursor: pointer"
             >
                 <div class="logo-img">
-                    <img src="icons/logo.png" alt="XERA - Logo" />
+                    <img src="icons/logo.png" alt="XERA1 - Logo" />
                 </div>
-                <span>XΞRA</span>
+                <span>XΞRA1</span>
             </a>
             <div class="nav-links">
                 <a
@@ -67,16 +76,22 @@
                 <a href="login.html" id="nav-auth" data-i18n="navAuth"
                     >Login / Register</a
                 >
+                <div class="lang-switcher-nav">
+                <select id="header-lang-select" class="nav-lang-select" aria-label="Language selection">
+                    <option value="fr">FR</option>
+                    <option value="en">EN</option>
+                </select>
             </div>
-        </nav>
+        </div>
+    </nav>
 
         <div id="analytics-dashboard" class="analytics-dashboard">
             <!-- Contenu injecté dynamiquement -->
         </div>
 
-        <script src="js/router.js"></script>
-        <script src="js/supabase-config.js"></script>
-        <script src="js/analytics.js"></script>
+        <script src="js/router.js?v=20261004-3"></script>
+        <script src="js/supabase-config.js?v=20261006-1"></script>
+        <script src="js/analytics.js?v=20261006-1"></script>
         <script>
             document.addEventListener("DOMContentLoaded", async () => {
                 const user = await checkAuth();
@@ -106,7 +121,9 @@
                 });
 
                 if (!userId) {
-                    const dashboard = document.getElementById("analytics-dashboard");
+                    const dashboard = document.getElementById(
+                        "analytics-dashboard",
+                    );
                     if (dashboard) {
                         dashboard.innerHTML = `
                             <div style="text-align:center; padding:3rem; color: var(--text-secondary);">
@@ -121,7 +138,9 @@
                 if (!dashboardUser || dashboardUser.id !== userId) {
                     const profileResult = await getUserProfile(userId);
                     if (!profileResult.success) {
-                        const dashboard = document.getElementById("analytics-dashboard");
+                        const dashboard = document.getElementById(
+                            "analytics-dashboard",
+                        );
                         if (dashboard) {
                             dashboard.innerHTML = `
                                 <div style="text-align:center; padding:3rem; color: var(--text-secondary);">
@@ -140,5 +159,7 @@
             });
         </script>
         <script src="js/ui-motion.js" defer></script>
-    </body>
+        <script src="js/i18n.js"></script>
+    <script src="js/seo-schema.js"></script>
+</body>
 </html>

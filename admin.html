@@ -3,14 +3,15 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Administration | XERA</title>
+        <title>Administration | XERA1</title>
         <link
             href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;600;700;800&display=swap"
             rel="stylesheet"
         />
-        <link rel="icon" type="image/svg+xml" href="icons/logo.png" />
-        <link rel="stylesheet" href="css/style.css" />
+        <link rel="icon" type="image/png" href="icons/logo.png" />
+        <link rel="stylesheet" href="css/style.css?v=20261006-1" />
         <link rel="stylesheet" href="css/search-notification.css" />
+        <link rel="stylesheet" href="css/admin.css" />
         <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.111.0/dist/umd/supabase.js"></script>
     </head>
     <body class="has-mobile-nav">
@@ -23,9 +24,9 @@
                 style="cursor: pointer"
             >
                 <div class="logo-img">
-                    <img src="icons/logo.png" alt="XERA - Logo" />
+                    <img src="icons/logo.png" alt="XERA1 - Logo" />
                 </div>
-                <span>XΞRA</span>
+                <span>XΞRA1</span>
             </a>
             <div class="nav-links">
                 <a
@@ -49,17 +50,6 @@
                         <path d="M9 20v-6h6v6"></path>
                     </svg>
                 </a>
-                <button
-                    id="nav-super-admin-personal-profile"
-                    class="notification-button"
-                    type="button"
-                    onclick="window.navigateToPersonalProfile?.()"
-                    style="display: none"
-                    title="Accéder à mon profil personnel"
-                    aria-label="Accéder à mon profil personnel"
-                >
-                    <img src="icons/artist.svg" alt="" class="notification-icon" />
-                </button>
                 <div
                     class="notification-button profile-nav-button"
                     onclick="handleProfileNavigation()"
@@ -120,15 +110,21 @@
                 <a href="login.html" id="nav-auth" data-i18n="navAuth"
                     >Login / Register</a
                 >
+                <div class="lang-switcher-nav">
+                <select id="header-lang-select" class="nav-lang-select" aria-label="Language selection">
+                    <option value="fr">FR</option>
+                    <option value="en">EN</option>
+                </select>
             </div>
-        </nav>
+        </div>
+    </nav>
 
         <main id="admin-dashboard" class="settings-container admin-page"></main>
 
-        <script src="js/router.js"></script>
-        <script src="js/supabase-config.js"></script>
+        <script src="js/router.js?v=20261004-3"></script>
+        <script src="js/supabase-config.js?v=20261006-1"></script>
         <script src="js/monetization-utils.js"></script>
-        <script src="js/app-supabase.js?v=20260715-1"></script>
+        <script src="js/app-supabase.js?v=20261006-1"></script>
         <script>
             // If the frontend is served locally (live-server), point API calls
             // to the local backend by default for development.
@@ -143,19 +139,14 @@
                 } catch (e) {}
             })();
         </script>
-        <script src="js/admin-bots.js"></script>
         <script>
             document.addEventListener("DOMContentLoaded", async () => {
                 const user = await checkAuth();
                 const navAuth = document.getElementById("nav-auth");
                 const navProfile = document.getElementById("nav-profile");
-                const personalProfileNav = document.getElementById(
-                    "nav-super-admin-personal-profile",
-                );
                 if (!user) {
                     if (navAuth) navAuth.style.display = "block";
                     if (navProfile) navProfile.style.display = "none";
-                    if (personalProfileNav) personalProfileNav.style.display = "none";
                 } else {
                     if (navAuth) navAuth.style.display = "none";
                     if (navProfile) {
@@ -163,11 +154,6 @@
                             navProfile.classList.contains("notification-button")
                                 ? "flex"
                                 : "block";
-                    }
-                    if (personalProfileNav) {
-                        personalProfileNav.style.display = isSuperAdmin()
-                            ? "flex"
-                            : "none";
                     }
                 }
 
@@ -192,9 +178,8 @@
                     return;
                 }
 
-                if (typeof renderSuperAdminPage === "function") {
+                if (typeof renderSuperAdminPage === "function")
                     renderSuperAdminPage();
-                }
                 if (typeof fetchAdminAnnouncements === "function") {
                     fetchAdminAnnouncements();
                 }
@@ -204,5 +189,7 @@
             });
         </script>
         <script src="js/ui-motion.js" defer></script>
-    </body>
+        <script src="js/i18n.js"></script>
+    <script src="js/seo-schema.js"></script>
+</body>
 </html>

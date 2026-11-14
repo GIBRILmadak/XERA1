@@ -1,0 +1,338 @@
+/* XERA1 administration: focused operations-console layer */
+.admin-page {
+    --admin-ink: #f4f1e8;
+    --admin-muted: #a5a59d;
+    --admin-line: rgba(244, 241, 232, 0.12);
+    --admin-panel: #111310;
+    --admin-panel-strong: #171a16;
+    --admin-amber: #e8b86a;
+    --admin-green: #75d69b;
+    max-width: 1180px;
+    padding: 2.5rem 1.5rem 5rem;
+    color: var(--admin-ink);
+}
+
+.admin-console-shell,
+#badge-admin > .admin-console-shell {
+    margin-bottom: 1.5rem;
+}
+
+.admin-console-header {
+    border-bottom: 1px solid var(--admin-line);
+    padding: 0.5rem 0 1.75rem;
+}
+
+.admin-console-header h1,
+#badge-admin h1 {
+    margin: 0;
+    font-family: Outfit, sans-serif;
+    font-size: clamp(2rem, 4vw, 3.6rem);
+    letter-spacing: 0;
+    line-height: 0.98;
+}
+
+.admin-eyebrow {
+    margin: 0 0 0.6rem;
+    color: var(--admin-amber);
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+}
+
+.admin-console-intro,
+.admin-page .settings-header p {
+    max-width: 720px;
+    margin: 1rem 0 0;
+    color: var(--admin-muted);
+    line-height: 1.65;
+}
+
+.admin-status-pill,
+.admin-top-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 2.4rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--admin-line);
+    border-radius: 999px;
+    color: var(--admin-muted);
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.admin-status-pill span {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background: var(--admin-green);
+    box-shadow: 0 0 0 4px rgba(117, 214, 155, 0.12);
+}
+
+.admin-top-action {
+    border-color: rgba(232, 184, 106, 0.35);
+    color: var(--admin-amber);
+}
+
+.admin-top-action span {
+    font-size: 1.1rem;
+}
+
+.admin-page > .settings-section,
+.admin-page > .admin-console-shell + .settings-section {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    padding: 0;
+}
+
+.admin-page .verification-admin-block {
+    margin-top: 1rem !important;
+    padding: 1.25rem;
+    border: 1px solid var(--admin-line);
+    border-radius: 8px;
+    background: var(--admin-panel);
+    gap: 1rem;
+}
+
+.admin-page .verification-admin-block > h4,
+.admin-page .verification-admin-block h4 {
+    margin: 0;
+    color: var(--admin-ink);
+    font-family: Outfit, sans-serif;
+    font-size: 1.05rem;
+}
+
+.admin-page .admin-helper {
+    margin: -0.35rem 0 0;
+    color: var(--admin-muted);
+    font-size: 0.88rem;
+    line-height: 1.55;
+}
+
+.admin-section-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.admin-section-heading .admin-eyebrow {
+    margin-bottom: 0.4rem;
+}
+.admin-section-note {
+    color: var(--admin-muted);
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.admin-page-verification {
+    margin-top: 1.25rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--admin-line);
+}
+
+.admin-page-verification h4 {
+    margin-bottom: 0.65rem !important;
+}
+
+.admin-page .form-input,
+.admin-page input,
+.admin-page select,
+.admin-page textarea {
+    min-height: 2.75rem;
+    border-color: var(--admin-line);
+    border-radius: 5px;
+    background: #0b0d0b;
+    color: var(--admin-ink);
+}
+
+.admin-page .btn-verify,
+.admin-page .btn-cancel,
+.admin-page .btn-secondary {
+    min-height: 2.7rem;
+    border-radius: 5px;
+    font-weight: 800;
+}
+
+.admin-page .btn-verify {
+    background: var(--admin-amber);
+    color: #17130c;
+}
+.admin-page .btn-cancel {
+    border-color: rgba(240, 112, 96, 0.45);
+}
+
+#badge-admin > .settings-section {
+    padding: 0;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+}
+
+#badge-admin .settings-header {
+    padding: 0 0 1.75rem !important;
+    border-bottom: 1px solid var(--admin-line) !important;
+}
+
+#badge-admin .verification-admin-block {
+    margin-top: 1.25rem !important;
+    padding: 1.25rem;
+    border: 1px solid var(--admin-line);
+    border-radius: 8px;
+    background: var(--admin-panel);
+}
+
+#badge-admin .verification-admin-block:first-of-type {
+    background: var(--admin-panel-strong);
+}
+
+#badge-admin .verification-input-row {
+    display: grid !important;
+    grid-template-columns: minmax(220px, 1.5fr) minmax(150px, 0.7fr) auto auto;
+    align-items: center;
+}
+
+#badge-admin .verification-input-row > input,
+#badge-admin .verification-input-row > select {
+    width: 100%;
+}
+
+#badge-admin .verification-requests {
+    gap: 0.5rem;
+}
+#badge-admin .verification-request-item {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    min-height: 3.5rem;
+    padding: 0.8rem 0.9rem;
+    border-color: var(--admin-line);
+    border-radius: 5px;
+    background: #0b0d0b;
+}
+
+#badge-admin .verification-request-item > img {
+    grid-column: 1;
+}
+#badge-admin .verification-request-item > .verification-request-name {
+    grid-column: 2;
+}
+#badge-admin .verification-request-item > .verification-request-type,
+#badge-admin .verification-request-item > .verification-request-id,
+#badge-admin .verification-request-item > button {
+    grid-column: 3;
+}
+#badge-admin .verification-request-item input[type="checkbox"] {
+    accent-color: var(--admin-amber);
+}
+#badge-admin .verification-request-type {
+    color: var(--admin-amber);
+    font-weight: 700;
+}
+#badge-admin .verification-empty {
+    padding: 1.25rem 0;
+    color: var(--admin-muted);
+}
+#badge-admin .verify-suggestions {
+    max-height: 240px;
+    overflow: auto;
+}
+#badge-admin .verify-suggestions > * {
+    border-color: var(--admin-line) !important;
+    background: #0b0d0b !important;
+}
+
+.admin-page-search-result {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 0.65rem 0.75rem;
+    border: 1px solid var(--admin-line);
+    border-radius: 5px;
+    background: #0b0d0b;
+    color: var(--admin-ink);
+    text-align: left;
+    cursor: pointer;
+}
+
+.admin-page-search-result:hover,
+.admin-page-search-result:focus-visible {
+    border-color: rgba(232, 184, 106, 0.65);
+    background: var(--admin-panel-strong);
+    outline: none;
+}
+
+.admin-page-search-result img {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 5px;
+    object-fit: cover;
+}
+
+.admin-page-search-result span:not(.admin-page-search-arrow) {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+.admin-page-search-result strong,
+.admin-page-search-result small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-page-search-result small {
+    color: var(--admin-muted);
+}
+.admin-page-search-arrow {
+    color: var(--admin-amber);
+    font-size: 1.1rem;
+}
+
+@media (max-width: 720px) {
+    .admin-page {
+        padding: 1.5rem 1rem 4rem;
+    }
+    .admin-console-header > div > div,
+    #badge-admin .settings-header > div {
+        align-items: flex-start !important;
+        flex-direction: column;
+    }
+    #badge-admin .verification-input-row {
+        grid-template-columns: 1fr !important;
+    }
+    #badge-admin .verification-request-item {
+        grid-template-columns: auto minmax(0, 1fr) !important;
+    }
+    #badge-admin .verification-request-item > .verification-request-type,
+    #badge-admin .verification-request-item > .verification-request-id,
+    #badge-admin .verification-request-item > button {
+        grid-column: 2;
+        justify-self: start;
+    }
+}
+/* Immediate acknowledgement for every admin action while its request runs. */
+.admin-action-pending {
+    cursor: wait !important;
+    opacity: .72;
+    position: relative;
+}
+.admin-action-pending::before {
+    content: "";
+    display: inline-block;
+    width: .78em;
+    height: .78em;
+    margin-right: .45em;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    vertical-align: -.08em;
+    animation: xera-admin-spin .7s linear infinite;
+}
+@keyframes xera-admin-spin { to { transform: rotate(360deg); } }

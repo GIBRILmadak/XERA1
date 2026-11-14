@@ -1,0 +1,646 @@
+<!doctype html>
+<html lang="fr">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Politique de confidentialité – XERA1</title>
+        <meta
+            name="description"
+            content="Politique de confidentialité de XERA1 – traitements de données, sécurité, comptes, contenus, paiement et gestion des informations d’usage."
+        />
+        <link rel="canonical" href="https://xera1.xyz/privacy" />
+        <meta property="og:title" content="Politique de confidentialité – XERA1" />
+        <meta property="og:description" content="Politique de confidentialité de XERA1 – traitements de données, sécurité, comptes, contenus, paiement et gestion des informations d’usage." />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://xera1.xyz/privacy" />
+        <meta property="og:image" content="https://xera1.xyz/icons/logo.png" />
+        <link rel="icon" type="image/png" href="icons/logo.png" />
+        <link
+            rel="stylesheet"
+            href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+        />
+        <style>
+            :root {
+                --bg: #050505;
+                --panel: #0d0d12;
+                --panel-strong: #13131a;
+                --border: rgba(255, 255, 255, 0.1);
+                --text: #f5f5f7;
+                --muted: #b4b6c4;
+                --soft: #d9dbe3;
+                --violet: #7c3aed;
+                --violet-strong: #8b5cf6;
+                --glow: rgba(124, 58, 237, 0.26);
+                --green: #3ddc97;
+                --danger: #ff7a7a;
+                --shadow: 0 30px 80px rgba(0, 0, 0, 0.38);
+            }
+
+            * {
+                box-sizing: border-box;
+            }
+            html {
+                scroll-behavior: smooth;
+            }
+            body {
+                margin: 0;
+                background:
+                    radial-gradient(
+                        circle at top left,
+                        rgba(124, 58, 237, 0.14),
+                        transparent 28%
+                    ),
+                    linear-gradient(180deg, #050505 0%, #0d0d12 100%);
+                color: var(--text);
+                font-family: Inter, "Segoe UI", sans-serif;
+                line-height: 1.7;
+            }
+
+            a {
+                color: var(--violet-strong);
+                text-decoration: none;
+            }
+            a:hover {
+                text-decoration: underline;
+            }
+
+            .legal-shell {
+                max-width: 1260px;
+                margin: 0 auto;
+                padding: 32px 20px 80px;
+            }
+
+            .legal-header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 18px;
+                margin-bottom: 28px;
+                padding-bottom: 22px;
+                border-bottom: 1px solid var(--border);
+            }
+
+            .brand {
+                display: inline-flex;
+                align-items: center;
+                gap: 12px;
+                font-weight: 800;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+                color: var(--text);
+            }
+
+            .brand-mark {
+                width: 38px;
+                height: 38px;
+                border-radius: 12px;
+                display: grid;
+                place-items: center;
+                background: linear-gradient(135deg, var(--violet), #3b2a6a);
+                box-shadow: 0 12px 30px var(--glow);
+            }
+
+            .brand-mark img {
+                width: 22px;
+                height: 22px;
+                object-fit: contain;
+            }
+
+            .header-meta {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                font-size: 0.82rem;
+                color: var(--muted);
+                letter-spacing: 0.06em;
+                text-transform: uppercase;
+            }
+
+            .header-pill {
+                padding: 7px 12px;
+                border: 1px solid rgba(124, 58, 237, 0.4);
+                background: rgba(124, 58, 237, 0.08);
+                border-radius: 999px;
+                color: var(--soft);
+            }
+
+            .legal-grid {
+                display: grid;
+                grid-template-columns: 280px minmax(0, 1fr);
+                gap: 28px;
+                align-items: start;
+            }
+
+            .toc {
+                position: sticky;
+                top: 20px;
+            }
+
+            .toc-card {
+                background: rgba(15, 15, 20, 0.9);
+                border: 1px solid var(--border);
+                border-radius: 20px;
+                padding: 20px 18px;
+                box-shadow: var(--shadow);
+            }
+
+            .toc-title {
+                margin: 0 0 14px;
+                font-size: 0.78rem;
+                letter-spacing: 0.12em;
+                text-transform: uppercase;
+                color: var(--muted);
+            }
+
+            .toc-nav {
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+            }
+
+            .toc-nav a {
+                display: block;
+                padding: 9px 10px 9px 12px;
+                border-radius: 10px;
+                color: var(--soft);
+                font-size: 0.95rem;
+                border: 1px solid transparent;
+            }
+
+            .toc-nav a:hover {
+                background: rgba(124, 58, 237, 0.08);
+                border-color: rgba(124, 58, 237, 0.22);
+                text-decoration: none;
+            }
+
+            .legal-content {
+                background: rgba(15, 15, 20, 0.78);
+                border: 1px solid var(--border);
+                border-radius: 28px;
+                padding: 36px clamp(20px, 4vw, 52px);
+                box-shadow: var(--shadow);
+            }
+
+            .eyebrow {
+                margin: 0 0 16px;
+                color: var(--violet-strong);
+                font-size: 0.76rem;
+                letter-spacing: 0.15em;
+                text-transform: uppercase;
+                font-weight: 700;
+            }
+
+            h1 {
+                margin: 0 0 10px;
+                font-size: clamp(2.1rem, 4vw, 3.3rem);
+                line-height: 1.1;
+                letter-spacing: -0.06em;
+            }
+
+            .last-updated {
+                margin: 0 0 26px;
+                color: var(--muted);
+                font-size: 0.9rem;
+            }
+
+            .intro {
+                margin: 0 0 28px;
+                font-size: 1.04rem;
+                color: var(--soft);
+            }
+
+            section {
+                padding-top: 10px;
+                margin-top: 28px;
+                border-top: 1px solid var(--border);
+            }
+
+            section:first-of-type {
+                border-top: none;
+                margin-top: 0;
+                padding-top: 0;
+            }
+
+            h2 {
+                margin: 0 0 14px;
+                font-size: clamp(1.2rem, 2vw, 1.7rem);
+                letter-spacing: -0.04em;
+            }
+
+            p,
+            li {
+                color: var(--soft);
+                font-size: 1rem;
+            }
+            ul,
+            ol {
+                margin: 12px 0 14px 18px;
+                padding-left: 12px;
+            }
+            li + li {
+                margin-top: 8px;
+            }
+
+            .muted {
+                color: var(--muted);
+            }
+            .callout {
+                margin: 18px 0;
+                padding: 16px 18px;
+                border: 1px solid rgba(61, 220, 151, 0.26);
+                background: rgba(61, 220, 151, 0.05);
+                border-radius: 12px;
+                color: var(--soft);
+            }
+
+            .contact-box {
+                margin-top: 18px;
+                padding: 18px 20px;
+                border-radius: 16px;
+                background: rgba(124, 58, 237, 0.08);
+                border: 1px solid rgba(124, 58, 237, 0.2);
+            }
+
+            @media (max-width: 900px) {
+                .legal-grid {
+                    grid-template-columns: 1fr;
+                }
+                .toc {
+                    position: static;
+                }
+                .toc-nav {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+                    gap: 8px;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="legal-shell">
+            <header class="legal-header">
+                <div class="brand">
+                    <span class="brand-mark"
+                        ><img src="icons/logo.png" alt="Logo XERA1"
+                    /></span>
+                    <span>XΞRA1</span>
+                </div>
+                <div class="header-meta">
+                <div class="lang-switcher-nav">
+                <select id="header-lang-select" class="nav-lang-select" aria-label="Language selection">
+                    <option value="fr">FR</option>
+                    <option value="en">EN</option>
+                </select>
+            </div>
+                    <span class="header-pill"
+                        >Politique de confidentialité</span
+                    >
+                </div>
+            </header>
+
+            <main class="legal-grid">
+                <aside class="toc" aria-label="Sommaire de la confidentialité">
+                    <div class="toc-card">
+                        <p class="toc-title">Sommaire</p>
+                        <nav class="toc-nav">
+                            <a href="#objet">1. Objet</a>
+                            <a href="#donnees">2. Données collectées</a>
+                            <a href="#utilisation"
+                                >3. Utilisation des données</a
+                            >
+                            <a href="#partage">4. Partage</a>
+                            <a href="#securite">5. Sécurité</a>
+                            <a href="#droits">6. Droits</a>
+                            <a href="#cookies">7. Cookies / outils</a>
+                            <a href="#paiements"
+                                >8. Paiements et monétisation</a
+                            >
+                            <a href="#conservation">9. Conservation</a>
+                            <a href="#modifications">10. Modifications</a>
+                            <a href="#contact">11. Contact</a>
+                        </nav>
+                    </div>
+                </aside>
+
+                <article class="legal-content">
+                    <p class="eyebrow">XERA1</p>
+                    <h1>Politique de confidentialité</h1>
+                    <p class="last-updated">
+                        Dernière mise à jour : 1 septembre 2026
+                    </p>
+
+                    <p class="intro">
+                        XERA1 traite certaines informations nécessaires au
+                        fonctionnement du service, à la gestion des comptes, à
+                        la sécurité, à l’affichage des profils et aux
+                        interactions sur la plateforme. La présente politique
+                        décrit les données que XERA1 peut collecter, stocker et
+                        utiliser dans le cadre de l’application, de manière
+                        claire et cohérente avec le code réel du produit.
+                    </p>
+
+                    <section id="objet">
+                        <h2>1. Objet</h2>
+                        <p>
+                            La présente Politique de confidentialité décrit les
+                            informations traitées par XERA1 dans le cadre de la
+                            fourniture de son service. Elle complète les
+                            Conditions d’utilisation et doit être lue avec
+                            elles. Elle vise à refléter le fonctionnement réel
+                            de l’application et les outils techniques
+                            effectivement utilisés par la plateforme.
+                        </p>
+                    </section>
+
+                    <section id="donnees">
+                        <h2>2. Données collectées</h2>
+                        <p>
+                            Selon les fonctionnalités utilisées, XERA1 peut
+                            traiter les catégories de données suivantes :
+                        </p>
+                        <ul>
+                            <li>
+                                informations de compte et d’authentification,
+                                notamment email, identifiant de compte, nom
+                                d’utilisateur, type de compte et métadonnées de
+                                profil ;
+                            </li>
+                            <li>
+                                informations de profil, notamment nom public,
+                                avatar, bannière, bio, titre, liens sociaux,
+                                préférences de visibilité, paramètres de
+                                confidentialité et statut d’abonnement ;
+                            </li>
+                            <li>
+                                contenus publiés par l’utilisateur, notamment
+                                textes, images, vidéos, projets, mises à jour,
+                                contenus de progression, Arcs de Proof of
+                                Building et éléments de preuve publiés sur la
+                                plateforme ;
+                            </li>
+                            <li>
+                                contenus de Pages Professionnelles, y compris
+                                informations de page, description, statut,
+                                identifiant de propriétaire, éventuelles
+                                exigences de recrutement ou de partenariat ;
+                            </li>
+                            <li>
+                                données de sécurité et de session, notamment
+                                session d’authentification, informations de
+                                connexion, jetons liés à la session, journaux
+                                techniques et éléments nécessaires à la
+                                prévention des abus ;
+                            </li>
+                            <li>
+                                données liées aux abonnements, à la monétisation
+                                et aux paiements, notamment plan choisi, statut
+                                d’abonnement, historique de paiement, montant,
+                                devise, référence de transaction, compte de
+                                retrait, prestataire de paiement, et données
+                                nécessaires au suivi des paiements et des
+                                commissions ;
+                            </li>
+                            <li>
+                                données d’interaction et d’engagement, notamment
+                                abonnements, followers, likes, commentaires,
+                                messages, notifications, notifications push,
+                                signalements et statistiques associées à l’usage
+                                de la plateforme ;
+                            </li>
+                            <li>
+                                données techniques nécessaires au bon
+                                fonctionnement du service, à la mémorisation des
+                                préférences et à la sécurité du service.
+                            </li>
+                        </ul>
+                        <p>
+                            Les mots de passe ne sont pas stockés ni consultés
+                            par XERA1 en clair dans le code de l’application. La
+                            gestion de l’authentification est assurée par
+                            Supabase Auth, qui gère la vérification d’identités
+                            et la sécurisation des sessions.
+                        </p>
+                    </section>
+
+                    <section id="utilisation">
+                        <h2>3. Utilisation des données</h2>
+                        <p>XERA1 utilise ces données pour :</p>
+                        <ul>
+                            <li>créer et gérer les comptes utilisateurs ;</li>
+                            <li>
+                                afficher et personnaliser les profils et les
+                                pages utilisateur ;
+                            </li>
+                            <li>
+                                fournir les fonctionnalités de publication,
+                                d’édition de contenu, de projets et d’Arcs ;
+                            </li>
+                            <li>
+                                gérer la sécurité des comptes, la prévention des
+                                abus et les contrôles de qualité du service ;
+                            </li>
+                            <li>
+                                gérer les abonnements, les accès Pro et les
+                                conditions d’usage premium ;
+                            </li>
+                            <li>
+                                traiter les paiements, les soutiens financiers,
+                                les retraits et les commissions associées ;
+                            </li>
+                            <li>
+                                permettre la messagerie, les notifications, les
+                                rappels et les notifications push ;
+                            </li>
+                            <li>
+                                améliorer la qualité du service, la découverte,
+                                les recommandations et la fiabilité de la
+                                plateforme ;
+                            </li>
+                            <li>
+                                répondre à des obligations techniques, de
+                                sécurité ou légales applicables.
+                            </li>
+                        </ul>
+                        <p>
+                            Les utilisateurs restent responsables des données et
+                            contenus qu’ils publient volontairement sur la
+                            plateforme.
+                        </p>
+                    </section>
+
+                    <section id="partage">
+                        <h2>4. Partage des données</h2>
+                        <p>
+                            XERA1 peut transmettre certaines données à des
+                            prestataires techniques ou de service nécessaires au
+                            fonctionnement de l’application, notamment pour
+                            l’authentification, le stockage, les paiements, les
+                            notifications et l’analyse d’usage.
+                        </p>
+                        <p>
+                            Les données peuvent être traitées par des services
+                            tiers dans le cadre de l’exécution du service, selon
+                            les configurations réellement utilisées par XERA1.
+                            Les principaux services connus dans le code sont
+                            Supabase, KPay, et des outils d’analyse ou de
+                            notification si activés.
+                        </p>
+                        <p>
+                            XERA1 ne partage pas les données de manière gratuite
+                            ou arbitraire avec des tiers, et ne les transmet pas
+                            sans nécessité technique ou légale. Les données ne
+                            sont partagées qu’aux fins nécessaires au service, à
+                            la sécurité ou à la conformité applicable.
+                        </p>
+                    </section>
+
+                    <section id="securite">
+                        <h2>5. Sécurité</h2>
+                        <p>
+                            XERA1 met en œuvre des mesures raisonnables pour
+                            protéger les comptes, les données, les contenus et
+                            les transactions, notamment via des mécanismes
+                            d’authentification, de gestion de session, de
+                            sécurisation des accès et de contrôle des usages.
+                        </p>
+                        <p>
+                            Aucune plateforme ne peut garantir une sécurité
+                            absolue à 100 %. XERA1 s’efforce de protéger les
+                            informations avec les moyens raisonnables
+                            disponibles, mais il ne peut pas garantir l’absence
+                            totale de risque.
+                        </p>
+                    </section>
+
+                    <section id="droits">
+                        <h2>6. Droits et contrôle de l’utilisateur</h2>
+                        <p>
+                            Les utilisateurs peuvent, selon les fonctionnalités
+                            effectivement disponibles dans l’application, gérer
+                            certaines informations liées à leur profil, à leur
+                            visibilité, à leurs contenus et à leur compte.
+                        </p>
+                        <p>
+                            Les utilisateurs contrôlent les informations et les
+                            contenus qu’ils choisissent de rendre publics. Les
+                            contenus publiquement visibles peuvent être
+                            consultés par d’autres utilisateurs et visiteurs de
+                            la plateforme selon les réglages de visibilité et la
+                            nature du contenu publié.
+                        </p>
+                        <p>
+                            La possibilité effective de consultation, de
+                            modification ou de suppression d’une donnée dépend
+                            des fonctionnalités mises en place dans le produit
+                            et des contraintes techniques du système. XERA1 ne
+                            peut pas garantir la suppression immédiate et
+                            irréversible de toutes les informations dans tous
+                            les composants du système sans validation technique
+                            spécifique.
+                        </p>
+                    </section>
+
+                    <section id="cookies">
+                        <h2>7. Cookies, stockage local et outils techniques</h2>
+                        <p>
+                            XERA1 peut utiliser des cookies, du stockage local
+                            et des outils techniques du navigateur pour
+                            mémoriser des préférences, conserver une session,
+                            gérer la langue, améliorer la navigation et
+                            sécuriser l’usage du service.
+                        </p>
+                        <p>
+                            Le code de l’application utilise notamment des
+                            éléments de stockage local comme localStorage et
+                            sessionStorage, ainsi que des cookies de langue avec
+                            une durée indicative de 180 jours pour certaines
+                            préférences de langue. Ces données restent stockées
+                            sur le navigateur de l’utilisateur et ne sont pas
+                            nécessairement visibles à l’équipe XERA1.
+                        </p>
+                        <p>
+                            XERA1 peut également utiliser des services externes
+                            pour détecter la langue du navigateur ou la
+                            configuration de l’environnement. La collecte liée à
+                            ces outils dépend de la configuration effective de
+                            la plateforme et du navigateur de l’utilisateur.
+                        </p>
+                    </section>
+
+                    <section id="paiements">
+                        <h2>8. Paiements, dons et monétisation</h2>
+                        <p>
+                            XERA1 peut traiter des données liées aux
+                            abonnements, aux plans premium, aux paiements, aux
+                            dons et aux soutiens financiers. Ces données sont
+                            nécessaires à la gestion des cotisations, de la
+                            monétisation et du suivi des transactions.
+                        </p>
+                        <p>
+                            Les paiements sont traités via des prestataires de
+                            paiement, notamment KPay. XERA1 n’a pas pour
+                            finalité de stocker directement les données
+                            bancaires ou de carte dans son propre système
+                            lorsque ces données sont traitées par le prestataire
+                            de paiement.
+                        </p>
+                        <p>
+                            Les informations réellement conservées par XERA1
+                            peuvent inclure des références de paiement, le
+                            statut de la transaction, le montant, la devise, le
+                            plan, les références de transaction, les données de
+                            monétisation et les informations nécessaires au
+                            suivi des paiements et des retraits.
+                        </p>
+                    </section>
+
+                    <section id="conservation">
+                        <h2>9. Conservation</h2>
+                        <p>
+                            Les données sont conservées aussi longtemps que
+                            nécessaire au fonctionnement du service, à la
+                            sécurité, à la gestion des comptes, aux obligations
+                            techniques et aux usages autorisés par les règles
+                            applicables.
+                        </p>
+                        <p>
+                            La durée exacte de conservation dépend entièrement de l'utilisater, ce dernier peut supprimer ses messages quand  bon lui semble <br> 
+                            par contre les messages seront automatiquemennt supprimer si le compte est aussi supprimé
+                        </p>
+                    </section>
+
+                    <section id="modifications">
+                        <h2>10. Modifications</h2>
+                        <p>
+                            XERA1 peut modifier la présente Politique de
+                            confidentialité pour refléter les évolutions du
+                            service, des fonctionnalités, des outils techniques
+                            ou des exigences légales. Les changements importants
+                            seront communiqués de manière visible sur la
+                            plateforme.
+                        </p>
+                    </section>
+
+                    <section id="contact">
+                        <h2>11. Contact</h2>
+                        <p>
+                            Pour toute question relative à la confidentialité,
+                            aux données, à la sécurité, aux comptes, aux
+                            paiements ou à l’usage de la plateforme, vous pouvez
+                            contacter XERA1 à l’adresse suivante :
+                        </p>
+                        <div class="contact-box">
+                            <strong>Email officiel XERA1 :</strong>
+                            <br />
+                            <a href="mailto:hello@xera1.xyz">hello@xera1.xyz</a>
+                        </div>
+                    </section>
+                </article>
+            </main>
+        </div>
+
+        <script src="js/router.js?v=20261004-3"></script>
+        <script src="js/i18n.js"></script>
+    <script src="js/seo-schema.js"></script>
+</body>
+</html>

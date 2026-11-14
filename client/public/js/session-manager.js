@@ -1,5 +1,5 @@
 /**
- * XERA Session Manager
+ * XERA1 Session Manager
  * Gestion des sessions avec timeout de 4h d'inactivité
  * Demande de reconnexion automatique après 4h sans activité
  */
@@ -258,7 +258,7 @@
             updateActivity();
             setupActivityListeners();
             startSessionTimer();
-            console.log('XERA Session Manager started - 4h timeout');
+            console.log('XERA1 Session Manager started - 4h timeout');
         },
         
         stop: function() {

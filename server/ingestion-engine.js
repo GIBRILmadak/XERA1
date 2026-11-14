@@ -1,9 +1,6 @@
-const { createClient } = require("@supabase/supabase-js");
 const { getValidAccessToken } = require("./oauth-token-manager");
-const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY,
-);
+const { createSupabaseServiceClient } = require("./supabase-service-client");
+const supabase = createSupabaseServiceClient();
 
 // Adapteurs (implémentations spécifiques)
 const adapters = {
@@ -88,7 +85,7 @@ function aggregateWorkItems(items) {
  * Moteur d'ingestion central
  */
 async function runIngestion(userId, tool) {
-    console.log(`[Ingestion] Début de la synchro pour ${userId} via ${tool}`);
+    logger.debug(`[Ingestion] Début de la synchro pour ${userId} via ${tool}`);
 
     // 1. Récupérer un access token valide, avec refresh automatique si nécessaire
     const accessToken = await getValidAccessToken(userId, tool);
@@ -108,8 +105,11 @@ async function runIngestion(userId, tool) {
 
     // 3. Normaliser et insérer
     for (const item of itemsToInsert) {
-        await supabase.from("work_items").upsert(item, { onConflict: "id" });
-        console.log(`[Ingestion] WorkItem créé: ${item.id}`);
+        const { error } = await supabase
+            .from("work_items")
+            .upsert(item, { onConflict: "userId,id" });
+        if (error) throw error;
+        logger.debug(`[Ingestion] WorkItem créé: ${item.id}`);
     }
 }
 

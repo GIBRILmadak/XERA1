@@ -1,3 +1,5 @@
+const { imageFields } = require("./adapter-utils");
+
 async function fetchData(accessToken) {
     if (!accessToken) return [];
 
@@ -22,7 +24,7 @@ function normalize(project, userId) {
     // Génération d'une URL d'image dynamique et unique basée sur l'ID du projet
     // Utilisation d'un service d'avatars/formes aléatoires pour diversifier le feed
     const seed = project.projectId;
-    const dynamicMediaUrl = `https://api.dicebear.com/9.x/shapes/svg?seed=${encodeURIComponent(seed)}`;
+    const image = imageFields(null, "google-cloud", seed);
 
     return {
         id: project.projectId,
@@ -35,8 +37,7 @@ function normalize(project, userId) {
         content: {
             projectId: project.projectId,
         },
-        // Utilisation du visuel dynamique
-        mediaUrl: dynamicMediaUrl,
+        ...image,
         metadata: {
             skills: ["Google Cloud", "DevOps", "Infrastructure"],
             relevanceScore: 1,

@@ -59,9 +59,9 @@
 
 ### Palier Pro ($10.00/mois)
 - Tout le Medium +
-- Monétisation vidéo ($0.40/1000 vues)
 - Dashboard avancé
-- Nécessite 1000 abonnés
+- Badge Gold
+- Nécessite 1000 abonnés pour les soutiens/dons
 
 ## API Endpoints
 
@@ -124,10 +124,9 @@ Notes:
 
 ## Notes d'implémentation
 
-- Commission XERA fixée à 20% sur toutes les transactions
+- Commission XERA1 fixée à 20% sur toutes les transactions
 - Calcul automatique via triggers SQL
 - RLS activé sur toutes les tables sensibles
 - Notifications push pour nouveaux soutiens
-- Vérification des 1000 abonnés requise pour activation
-- Les revenus video ne comptent que pour les contenus de plus de 60 secondes
+- Vérification des 1000 abonnés requise pour l'activation des soutiens
 - Le solde retirable correspond uniquement aux revenus deja credites et non deja retires

@@ -30,7 +30,7 @@ const ARC_OPPORTUNITY_LABELS = {
 
 let hookInterval;
 
-const XERA_INSPIRED_ARC_KEY = "xera-inspired-arc-seed";
+const XERA_INSPIRED_ARC_KEY = "xera1-inspired-arc-seed";
 
 function xeraEscapeHtml(value) {
     return String(value ?? "")
@@ -67,7 +67,7 @@ function xeraIsOptionalGrowthSchemaError(error) {
     );
 }
 
-function xeraMakeToken(prefix = "xera") {
+function xeraMakeToken(prefix = "xera1") {
     return `${prefix}_${Date.now().toString(36)}_${Math.random()
         .toString(36)
         .slice(2, 10)}`;
@@ -90,7 +90,7 @@ async function xeraSafeInsert(table, payload, options = {}) {
     } catch (error) {
         if (xeraIsOptionalGrowthSchemaError(error)) {
             console.warn(
-                `[XERA growth] Optional table not ready: ${table}`,
+                `[XERA1 growth] Optional table not ready: ${table}`,
                 error,
             );
             return { data: null, skipped: true, error };
@@ -111,7 +111,7 @@ async function xeraTrackGrowthEvent(eventType, payload = {}) {
             metadata: payload.metadata || {},
         });
     } catch (error) {
-        console.warn("[XERA growth] Event tracking failed:", error);
+        console.warn("[XERA1 growth] Event tracking failed:", error);
     }
 }
 
@@ -120,7 +120,7 @@ function xeraGetContentId(content) {
 }
 
 function xeraGetContentTitle(content) {
-    return content?.title || "Trace XERA";
+    return content?.title || "Trace XERA1";
 }
 
 function xeraGetContentDescription(content) {
@@ -293,15 +293,24 @@ function isMissingArcMetadataColumnError(error) {
 
 // --- INITIALIZATION ---
 
-function renderArcCreationForm(arcToEdit = null) {
+function renderArcCreationForm(arcToEdit = null, fataContext = null) {
     const createContainer = document.querySelector(
         "#create-modal .create-container",
     );
     if (!createContainer) return;
 
     const isEdit = !!arcToEdit;
-    const title = isEdit ? "Modifier votre projet" : "Démarrez votre projet";
-    const btnText = isEdit ? "Mettre à jour" : "Lancer le projet";
+    const isFataChallenge = !isEdit && Boolean(fataContext?.connected);
+    const title = isEdit
+        ? "Modifier votre projet"
+        : isFataChallenge
+          ? "Présentez votre projet au challenge Fata"
+          : "Démarrez votre projet";
+    const btnText = isEdit
+        ? "Mettre à jour"
+        : isFataChallenge
+          ? "Présenter mon projet à Fata"
+          : "Lancer le projet";
     const inspiredSeed = !isEdit ? xeraGetInspiredArcSeed() : null;
     const defaultStageLevel = normalizeArcStageLevel(
         isEdit ? arcToEdit.stage_level : inspiredSeed?.stageLevel || "idee",
@@ -324,6 +333,14 @@ function renderArcCreationForm(arcToEdit = null) {
         : inspiredSeed?.description
           ? `Inspiré par "${inspiredSeed.title}".\n\n${inspiredSeed.description}`
           : "";
+    const defaultMilestonesValue = isEdit && Array.isArray(arcToEdit.milestones)
+        ? arcToEdit.milestones
+              .map((milestone) =>
+                  typeof milestone === "string" ? milestone : milestone?.title || "",
+              )
+              .filter(Boolean)
+              .join("\n")
+        : "";
 
     // Default dates
     const today = new Date().toISOString().split("T")[0];
@@ -348,7 +365,7 @@ function renderArcCreationForm(arcToEdit = null) {
     }
 
     createContainer.innerHTML = `
-        <div class="arc-create-card">
+        <div class="arc-create-card ${isFataChallenge ? "is-fata-challenge" : ""}">
             <div class="arc-creation-header arc-creation-header-inline">
                 <div>
                     <h2>${title}</h2>
@@ -357,7 +374,13 @@ function renderArcCreationForm(arcToEdit = null) {
                 <button type="button" class="cover-action" onclick="document.getElementById('arc-cover-file').click()">Ajouter une couverture</button>
             </div>
 
-            <form id="create-arc-form" class="arc-form">
+            ${isFataChallenge ? `<div class="fata-challenge-form-banner" role="note">
+                <strong>Challenge Fata × XERA1 · Présentation de projet</strong>
+                <span>Cette présentation sera confirmée auprès de Fata. Renseignez une description et au moins trois jalons nommés; votre projet doit rester personnel et visible.</span>
+            </div>
+            <input type="hidden" name="fata_challenge_id" value="${xeraEscapeHtml(fataContext.challengeId)}">` : ""}
+
+            <form id="create-arc-form" class="arc-form" ${isFataChallenge ? `data-fata-challenge-id="${xeraEscapeHtml(fataContext.challengeId)}"` : ""}>
                 ${isEdit ? `<input type="hidden" name="arc_id" value="${arcToEdit.id}">` : ""}
 
                 <div class="form-group form-group-title">
@@ -380,7 +403,7 @@ function renderArcCreationForm(arcToEdit = null) {
 
                 ${
                     inspiredSeed
-                        ? `<div class="xera-growth-seed">
+                        ? `<div class="xera1-growth-seed">
                             <strong>ARC inspiré</strong>
                             <span>Cette base vient d'une trajectoire existante. Ajustez-la pour construire votre version.</span>
                         </div>`
@@ -388,8 +411,14 @@ function renderArcCreationForm(arcToEdit = null) {
                 }
 
                 <div class="form-group">
-                    <label for="arc-description">Description</label>
-                    <textarea id="arc-description" name="description" placeholder="Détails supplémentaires..." rows="5" class="form-input large-textarea">${xeraEscapeHtml(defaultDescriptionValue)}</textarea>
+                    <label for="arc-description">${isFataChallenge ? "Description du projet *" : "Description"}</label>
+                    <textarea id="arc-description" name="description" placeholder="${isFataChallenge ? "Présentez le projet, son objectif et ce que vous construisez..." : "Détails supplémentaires..."}" rows="5" class="form-input large-textarea" ${isFataChallenge ? "required" : ""}>${xeraEscapeHtml(defaultDescriptionValue)}</textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="arc-milestones">${isFataChallenge ? "Jalons du challenge (3 minimum) *" : "Jalons du projet"}</label>
+                    <textarea id="arc-milestones" name="milestones" placeholder="Un jalon par ligne\nEx. Maquette terminée\nEx. Première version fonctionnelle\nEx. Mise en ligne" rows="4" class="form-input large-textarea" ${isFataChallenge ? "required" : ""}>${xeraEscapeHtml(defaultMilestonesValue)}</textarea>
+                    <p class="form-hint">${isFataChallenge ? "Fata exige au moins trois jalons avec un nom. Ils resteront modifiables dans votre projet." : "Pour le challenge Fata, l’ARC doit avoir au moins trois jalons nommés. Les jalons restent modifiables dans votre ARC."}</p>
                 </div>
 
                 <div class="form-group">
@@ -433,10 +462,10 @@ function renderArcCreationForm(arcToEdit = null) {
                             <div id="arc-cover-loader" class="upload-status" style="display: none;">
                                 <div class="loading-spinner"></div>
                                 <p>Upload en cours...</p>
-                                <div class="xera-upload-progress">
-                                    <div id="arc-cover-progress-bar" class="xera-upload-progress-bar is-indeterminate"></div>
+                                <div class="xera1-upload-progress">
+                                    <div id="arc-cover-progress-bar" class="xera1-upload-progress-bar is-indeterminate"></div>
                                 </div>
-                                <div id="arc-cover-progress-label" class="xera-upload-progress-label"></div>
+                                <div id="arc-cover-progress-label" class="xera1-upload-progress-label"></div>
                             </div>
                             <div id="arc-cover-placeholder" class="upload-placeholder" style="${isEdit && arcToEdit.media_url ? "display: none;" : ""}">
                                 <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -556,7 +585,7 @@ function renderArcCreationForm(arcToEdit = null) {
                         if (result.type === "image") {
                             previewContainer.innerHTML = `<img src="${result.url}" style="max-width: 100%; max-height: 200px; border-radius: 8px;">`;
                         } else {
-                            previewContainer.innerHTML = `<video src="${result.url}" controls style="max-width: 100%; max-height: 200px; border-radius: 8px;"></video>`;
+                            previewContainer.innerHTML = `<video src="${result.previewUrl || result.url}" controls style="max-width: 100%; max-height: 200px; border-radius: 8px;"></video>`;
                         }
                     } else {
                         placeholder.style.display = "block";
@@ -622,11 +651,60 @@ function stopHookAnimation() {
 
 // --- MODAL CONTROL ---
 
-function openCreateModal() {
-    // Ensure form is rendered (reset to create mode)
-    renderArcCreationForm();
+function renderFataChallengeGate(context) {
+    const createContainer = document.querySelector(
+        "#create-modal .create-container",
+    );
+    if (!createContainer) return;
+    const connected = Boolean(context?.connected);
+    const message = context?.error
+        ? xeraEscapeHtml(context.error)
+        : connected
+          ? "Le contexte Fata n’est pas prêt. Réessayez dans quelques instants."
+          : "Connectez votre compte Fata pour présenter ce projet dans le challenge.";
+    const buttonLabel = connected ? "Réessayer" : "Connecter mon compte Fata";
+    const buttonAction = connected
+        ? "window.openCreateModal()"
+        : "window.FataIntegration?.openPanel()";
+    createContainer.innerHTML = `
+        <section class="fata-challenge-gate">
+            <img src="icons/fata.webp" alt="Fata">
+            <h2>Challenge Fata × XERA1</h2>
+            <p>${message}</p>
+            <button type="button" class="btn btn-primary" onclick="${buttonAction}">${buttonLabel}</button>
+        </section>
+    `;
+}
 
+async function openCreateModal() {
     const modal = document.getElementById("create-modal");
+    if (modal) {
+        modal.classList.add("active");
+        const createContainer = modal.querySelector(".create-container");
+        if (createContainer) {
+            createContainer.innerHTML = '<div class="fata-challenge-gate"><p>Préparation du formulaire…</p></div>';
+        }
+    }
+
+    let fataContext = null;
+    try {
+        fataContext = await window.FataIntegration?.getChallengeFormContext?.();
+    } catch (error) {
+        fataContext = {
+            requested: true,
+            connected: true,
+            error: error?.message || "Le contexte du challenge Fata n’a pas pu être chargé.",
+        };
+    }
+
+    if (fataContext?.requested && (!fataContext.connected || fataContext.error)) {
+        renderFataChallengeGate(fataContext);
+        return;
+    }
+
+    // Ensure form is rendered (reset to create mode)
+    renderArcCreationForm(null, fataContext?.connected ? fataContext : null);
+
     if (modal) {
         modal.classList.add("active");
         startHookAnimation();
@@ -714,7 +792,7 @@ async function getArcAuthUser() {
     return null;
 }
 
-function buildArcLaunchTracePayload(arcData, authUserId, arcId) {
+function buildArcLaunchTracePayload(arcData, authUserId, arcId, options = {}) {
     const safeTitle = (arcData?.title || "").trim() || "Nouvel ARC";
     const goal = (arcData?.goal || "").trim();
     const details = (arcData?.description || "").trim();
@@ -724,7 +802,7 @@ function buildArcLaunchTracePayload(arcData, authUserId, arcId) {
     const baseDescription =
         descriptionParts.join("\n\n").trim() || "Début d'un nouveau projet.";
 
-    const hasMedia = !!arcData?.media_url;
+    const hasMedia = options.includeMedia !== false && !!arcData?.media_url;
     const mediaType = String(arcData?.media_type || "").toLowerCase();
     const contentType = hasMedia
         ? mediaType === "video"
@@ -746,9 +824,14 @@ function buildArcLaunchTracePayload(arcData, authUserId, arcId) {
     };
 }
 
-async function createArcLaunchTrace(arcRow, arcData, authUser) {
+async function createArcLaunchTrace(arcRow, arcData, authUser, options = {}) {
     if (!arcRow?.id || !authUser?.id) return null;
-    const payload = buildArcLaunchTracePayload(arcData, authUser.id, arcRow.id);
+    const payload = buildArcLaunchTracePayload(
+        arcData,
+        authUser.id,
+        arcRow.id,
+        options,
+    );
     try {
         if (typeof createContent === "function") {
             const result = await createContent(payload);
@@ -876,6 +959,9 @@ async function handleCreateArc(e) {
     const formData = new FormData(e.target);
     const arcId = formData.get("arc_id"); // If editing
     const inspiredSeed = !arcId ? xeraGetInspiredArcSeed() : null;
+    const fataChallengeId = !arcId
+        ? String(e.target.dataset.fataChallengeId || "").trim()
+        : "";
 
     // Calculate duration from dates
     const startDateVal = formData.get("start_date");
@@ -898,6 +984,11 @@ async function handleCreateArc(e) {
         title: formData.get("title"),
         goal: formData.get("goal"),
         description: formData.get("description"),
+        milestones: String(formData.get("milestones") || "")
+            .split(/\r?\n/)
+            .map((title) => title.trim())
+            .filter(Boolean)
+            .map((title) => ({ title })),
         stage_level: normalizeArcStageLevel(formData.get("stage_level")),
         opportunity_intents:
             selectedOpportunityIntents.length > 0
@@ -908,6 +999,27 @@ async function handleCreateArc(e) {
         media_url: formData.get("media_url") || null,
         media_type: formData.get("media_type") || null,
     };
+
+    if (fataChallengeId) {
+        if (window._pendingPageIdForArc) {
+            alert("Le challenge Fata demande un projet personnel, pas un projet de page professionnelle.");
+            btn.disabled = false;
+            btn.textContent = originalText;
+            return;
+        }
+        if (!String(arcData.description || "").trim()) {
+            alert("Pour le challenge Fata, ajoutez une description au projet.");
+            btn.disabled = false;
+            btn.textContent = originalText;
+            return;
+        }
+        if (arcData.milestones.length < 3) {
+            alert("Pour le challenge Fata, nommez au moins trois jalons.");
+            btn.disabled = false;
+            btn.textContent = originalText;
+            return;
+        }
+    }
 
     // Only set user_id and status on creation
     if (!arcId) {
@@ -993,7 +1105,60 @@ async function handleCreateArc(e) {
         if (error) throw error;
 
         if (!arcId && createdArc && createdArc.id) {
-            await createArcLaunchTrace(createdArc, arcData, authUser);
+            await createArcLaunchTrace(createdArc, arcData, authUser, {
+                includeMedia: !fataChallengeId,
+            });
+            if (typeof window.FataIntegration?.selectPublishedArc === "function") {
+                try {
+                    const fataSelection = await window.FataIntegration.selectPublishedArc(
+                        createdArc.id,
+                        fataChallengeId || undefined,
+                    );
+                    if (fataSelection?.selected) {
+                        if (fataSelection.delivery?.status === "delivered") {
+                            xeraToast(
+                                "success",
+                                "Projet confirmé par Fata",
+                                fataSelection.delivery.eventId
+                                    ? `Fata a reçu la présentation du projet (eventId ${fataSelection.delivery.eventId}).`
+                                    : "Fata a reçu la présentation du projet.",
+                            );
+                        } else if (fataSelection.delivery?.status === "failed") {
+                            xeraToast(
+                                "error",
+                                "Projet associé, confirmation refusée par Fata",
+                                fataSelection.delivery.error || "Vérifiez la liaison et les conditions du challenge.",
+                            );
+                        } else {
+                            xeraToast(
+                                "info",
+                                "Projet associé au challenge Fata",
+                                "La confirmation est en file et sera retentée automatiquement si nécessaire.",
+                            );
+                        }
+                    } else if (!fataSelection?.skipped) {
+                        console.warn(
+                            "New ARC could not be associated with the Fata challenge:",
+                            fataSelection?.error,
+                        );
+                        xeraToast(
+                            "warning",
+                            "Projet créé, étape Fata à vérifier",
+                            fataSelection?.error || "L’association au challenge n’a pas abouti.",
+                        );
+                    }
+                } catch (fataSelectionError) {
+                    console.warn(
+                        "New ARC could not be associated with the Fata challenge:",
+                        fataSelectionError,
+                    );
+                    xeraToast(
+                        "warning",
+                        "Projet créé, étape Fata à vérifier",
+                        fataSelectionError?.message || "L’association au challenge n’a pas abouti.",
+                    );
+                }
+            }
             if (inspiredSeed?.sourceArcId) {
                 await recordArcInspiration(
                     inspiredSeed.sourceArcId,
@@ -1101,7 +1266,7 @@ async function loadUserArcs(userId) {
         arcsSection.className = "arcs-section";
         // Insert after profile hero (banner/avatar) but before timeline
         const timeline = document.querySelector(".timeline");
-        if (timeline) {
+        if (timeline && timeline.parentNode === container) {
             container.insertBefore(arcsSection, timeline);
         } else {
             container.appendChild(arcsSection);
@@ -1453,7 +1618,7 @@ async function ensureProofCard(arc, content = null) {
         return data || { slug, ...payload };
     } catch (error) {
         if (xeraIsOptionalGrowthSchemaError(error)) {
-            console.warn("[XERA growth] proof_cards not ready:", error);
+            console.warn("[XERA1 growth] proof_cards not ready:", error);
             return { slug, ...payload };
         }
         throw error;
@@ -1479,7 +1644,7 @@ async function incrementProofCardShare(arcId, contentId) {
             .eq("id", data.id);
     } catch (error) {
         if (!xeraIsOptionalGrowthSchemaError(error)) {
-            console.warn("[XERA growth] share counter failed:", error);
+            console.warn("[XERA1 growth] share counter failed:", error);
         }
     }
 }
@@ -1491,22 +1656,22 @@ function renderProofCardMarkup(arc, content) {
             ? `Jour ${content.day_number}`
             : `J${calculateDaysSince(arc.start_date)}`;
     const description = xeraGetContentDescription(content) || arc.goal || "";
-    const author = arc.users?.name || "Builder XERA";
+    const author = arc.users?.name || "Builder XERA1";
     const mediaUrl = content?.media_url || arc.media_url;
     const mediaHtml = mediaUrl
-        ? `<div class="xera-proof-media" style="background-image:url('${xeraEscapeHtml(mediaUrl)}')"></div>`
+        ? `<div class="xera1-proof-media" style="background-image:url('${xeraEscapeHtml(mediaUrl)}')"></div>`
         : "";
 
     return `
-        <div class="xera-proof-card">
+        <div class="xera1-proof-card">
             ${mediaHtml}
-            <div class="xera-proof-topline">
+            <div class="xera1-proof-topline">
                 <span>${xeraEscapeHtml(dayLabel)}</span>
                 <span>${progress}%</span>
             </div>
             <h3>${xeraEscapeHtml(xeraGetContentTitle(content) || arc.title)}</h3>
             <p>${xeraEscapeHtml(description).slice(0, 260)}</p>
-            <div class="xera-proof-footer">
+            <div class="xera1-proof-footer">
                 <strong>${xeraEscapeHtml(arc.title || "ARC")}</strong>
                 <span>par ${xeraEscapeHtml(author)}</span>
             </div>
@@ -1526,21 +1691,21 @@ async function openProofCardModal(arcId, contentId = null) {
             ? `'${xeraGetContentId(content)}'`
             : "null";
         const modal = document.createElement("div");
-        modal.id = "xera-growth-modal";
-        modal.className = "xera-growth-modal";
+        modal.id = "xera1-growth-modal";
+        modal.className = "xera1-growth-modal";
         modal.innerHTML = `
-            <div class="xera-growth-dialog">
-                <button type="button" class="xera-growth-close" onclick="closeProofCardModal()">×</button>
-                <div class="xera-growth-kicker">Carte de preuve</div>
+            <div class="xera1-growth-dialog">
+                <button type="button" class="xera1-growth-close" onclick="closeProofCardModal()">×</button>
+                <div class="xera1-growth-kicker">Carte de preuve</div>
                 ${renderProofCardMarkup(arc, content)}
-                <div class="xera-growth-actions">
+                <div class="xera1-growth-actions">
                     <button type="button" class="btn btn-primary" onclick="shareProofCard('${arc.id}', ${safeContentArg})">Partager</button>
                     <button type="button" class="btn btn-ghost" onclick="requestArcWitness('${arc.id}', ${safeContentArg})">Demander un regard</button>
                     <button type="button" class="btn btn-ghost" onclick="shareWeeklyTrajectoryRecap('${arc.id}')">Récap semaine</button>
                 </div>
             </div>
         `;
-        document.getElementById("xera-growth-modal")?.remove();
+        document.getElementById("xera1-growth-modal")?.remove();
         document.body.appendChild(modal);
         await xeraTrackGrowthEvent("proof_card_opened", {
             targetUserId: arc.user_id,
@@ -1558,7 +1723,7 @@ async function openProofCardModal(arcId, contentId = null) {
 }
 
 function closeProofCardModal() {
-    document.getElementById("xera-growth-modal")?.remove();
+    document.getElementById("xera1-growth-modal")?.remove();
 }
 
 async function shareProofCard(arcId, contentId = null) {
@@ -1571,8 +1736,8 @@ async function shareProofCard(arcId, contentId = null) {
         await ensureProofCard(arc, content);
         const url = xeraBuildArcShareUrl(arc, content, { proof: "1" });
         const title = content
-            ? `${xeraGetContentTitle(content)} | XERA`
-            : `${arc.title} | XERA`;
+            ? `${xeraGetContentTitle(content)} | XERA1`
+            : `${arc.title} | XERA1`;
         const text = content
             ? `Preuve de progression: ${xeraGetContentTitle(content)}`
             : `Trajectoire en cours: ${arc.title}`;
@@ -1654,7 +1819,7 @@ async function requestArcWitness(arcId, contentId = null) {
             metadata: { witness: witness.trim() },
         });
         await xeraSharePayload({
-            title: `${arc.title} | XERA`,
+            title: `${arc.title} | XERA1`,
             text: `Regarde ce jalon et dis-moi si la progression est réelle: ${content ? xeraGetContentTitle(content) : arc.title}`,
             url,
         });
@@ -1684,29 +1849,140 @@ async function validateArcMilestone(arcId, contentId = null) {
             contentId,
         );
         if (!arc || !content) throw new Error("Jalon introuvable");
-        if (arc.user_id === window.currentUser.id) {
-            xeraToast(
-                "info",
-                "Déjà builder",
-                "La validation doit venir d'une autre personne.",
-            );
+        const isOwner = arc.user_id === window.currentUser.id;
+        if (isOwner && content.user_id !== window.currentUser.id) {
+            xeraToast("error", "Preuve invalide", "Choisissez une preuve publiée sur votre propre ARC.");
             return;
         }
 
-        const comment =
-            prompt("Ajouter un court retour de validation (optionnel).", "") ||
-            "";
+        let fataChallengeContext = null;
+        if (
+            isOwner &&
+            typeof window.FataIntegration?.getChallengeFormContext === "function"
+        ) {
+            try {
+                fataChallengeContext =
+                    await window.FataIntegration.getChallengeFormContext();
+            } catch (contextError) {
+                console.warn("Fata milestone context is unavailable:", contextError);
+            }
+        }
+        const inFataChallenge = Boolean(
+            fataChallengeContext?.requested && fataChallengeContext.connected,
+        );
+        if (inFataChallenge && fataChallengeContext.error) {
+            xeraToast(
+                "error",
+                "Challenge Fata indisponible",
+                fataChallengeContext.error,
+            );
+            return;
+        }
+        if (inFataChallenge) {
+            const existingSelection = fataChallengeContext.selection;
+            if (
+                existingSelection?.arc_id &&
+                String(existingSelection.arc_id) !== String(arc.id)
+            ) {
+                xeraToast(
+                    "error",
+                    "ARC différent du challenge",
+                    "Validez un jalon sur l’ARC déjà associé à ce challenge Fata.",
+                );
+                return;
+            }
+            if (!existingSelection?.arc_id) {
+                const eligible = (fataChallengeContext.arcs || []).some(
+                    (candidate) =>
+                        candidate.eligible && String(candidate.id) === String(arc.id),
+                );
+                if (!eligible) {
+                    xeraToast(
+                        "error",
+                        "ARC non conforme",
+                        "L’ARC doit être personnel, visible, décrit et avoir au moins trois jalons nommés.",
+                    );
+                    return;
+                }
+                const selectionResult =
+                    await window.FataIntegration.selectPublishedArc(
+                        arc.id,
+                        fataChallengeContext.challengeId,
+                    );
+                if (
+                    !selectionResult?.selected ||
+                    selectionResult.delivery?.status === "failed"
+                ) {
+                    xeraToast(
+                        "error",
+                        "ARC non confirmé par Fata",
+                        selectionResult?.delivery?.error ||
+                            selectionResult?.error ||
+                            "L’ARC doit être associé avant de valider un jalon.",
+                    );
+                    return;
+                }
+                fataChallengeContext.selection = selectionResult.selection;
+            }
+            const selectedAt = Date.parse(
+                fataChallengeContext.selection?.selected_at || "",
+            );
+            const proofCreatedAt = Date.parse(content.created_at || "");
+            const hasProofMedia = Boolean(
+                String(content.media_url || "").trim() ||
+                    (Array.isArray(content.media_urls) &&
+                        content.media_urls.some((url) => String(url || "").trim())),
+            );
+            if (
+                !hasProofMedia ||
+                !String(content.description || "").trim() ||
+                !Number.isFinite(selectedAt) ||
+                !Number.isFinite(proofCreatedAt) ||
+                proofCreatedAt < selectedAt
+            ) {
+                xeraToast(
+                    "error",
+                    "Publiez une preuve après l’association",
+                    "Le jalon Fata doit utiliser une preuve avec média et description, publiée sur cet ARC après sa sélection pour le challenge.",
+                );
+                return;
+            }
+        }
+
+        const comment = prompt(
+            isOwner
+                ? "Décrivez le résultat obtenu pour ce jalon. Ce texte sera envoyé à Fata comme description de validation."
+                : "Ajouter un court retour de validation (optionnel).",
+            "",
+        );
+        if (comment === null) return;
+        if (isOwner && !comment.trim()) {
+            xeraToast("info", "Description requise", "Décrivez le résultat obtenu avant de valider ce jalon.");
+            return;
+        }
         const contentKey = xeraGetContentId(content);
         const payload = {
             arc_id: arc.id,
             content_id: contentKey,
             validator_user_id: window.currentUser.id,
-            validation_type: "witnessed",
+            validation_type: isOwner ? "self_reported" : "witnessed",
             comment: comment.trim() || null,
         };
 
+        const confirmsFataMilestone = Boolean(
+            inFataChallenge &&
+                fataChallengeContext.selection?.arc_id &&
+                String(fataChallengeContext.selection.arc_id) === String(arc.id),
+        );
+
+        let validationRow = null;
         try {
-            await xeraSafeInsert("arc_milestone_validations", payload);
+            const validationResult = await xeraSafeInsert(
+                "arc_milestone_validations",
+                payload,
+                { select: "id,created_at", single: true },
+            );
+            validationRow = validationResult.data;
         } catch (error) {
             if (String(error?.code || "") === "23505") {
                 xeraToast(
@@ -1717,6 +1993,37 @@ async function validateArcMilestone(arcId, contentId = null) {
                 return;
             }
             throw error;
+        }
+
+        let fataMilestoneEvent = null;
+        if (
+            isOwner &&
+            typeof window.FataIntegration?.syncPendingActions === "function"
+        ) {
+            try {
+                const syncResult = await window.FataIntegration.syncPendingActions();
+                if (confirmsFataMilestone) {
+                    const milestoneEvents = (syncResult?.pendingEvents || [])
+                        .filter(
+                            (event) =>
+                                event.challenge_id === fataChallengeContext.challengeId &&
+                                event.requirement_id === fataChallengeContext.requirements?.milestone,
+                        )
+                        .sort(
+                            (left, right) =>
+                                Date.parse(right.updated_at || right.created_at || "") -
+                                Date.parse(left.updated_at || left.created_at || ""),
+                        );
+                    const validationCreatedAt = Date.parse(validationRow?.created_at || "");
+                    fataMilestoneEvent = milestoneEvents.find(
+                        (event) =>
+                            Number.isFinite(validationCreatedAt) &&
+                            Date.parse(event.occurred_at || "") === validationCreatedAt,
+                    ) || milestoneEvents[0] || null;
+                }
+            } catch (syncError) {
+                console.warn("Fata milestone delivery is still queued:", syncError);
+            }
         }
 
         if (typeof createNotification === "function") {
@@ -1741,11 +2048,37 @@ async function validateArcMilestone(arcId, contentId = null) {
             contentId: contentKey,
             metadata: { hasComment: !!comment.trim() },
         });
-        xeraToast(
-            "success",
-            "Jalon validé",
-            "Votre validation renforce la preuve de progression.",
-        );
+        if (confirmsFataMilestone && fataMilestoneEvent?.status === "delivered") {
+            xeraToast(
+                "success",
+                "Jalon confirmé par Fata",
+                fataMilestoneEvent.event_id
+                    ? `Fata a reçu la validation du premier jalon (eventId ${fataMilestoneEvent.event_id}).`
+                    : "Fata a reçu la validation du premier jalon.",
+            );
+        } else if (confirmsFataMilestone && fataMilestoneEvent?.status === "failed") {
+            xeraToast(
+                "error",
+                "Jalon publié · confirmation Fata refusée",
+                window.FataIntegration?.describeDeliveryFailure?.(
+                    fataMilestoneEvent.last_error,
+                ) || fataMilestoneEvent.last_error || "Fata a refusé la confirmation.",
+            );
+        } else if (confirmsFataMilestone) {
+            xeraToast(
+                "info",
+                "Jalon publié · confirmation Fata en attente",
+                "La confirmation du jalon est conservée dans la file XERA1 et sera retentée automatiquement.",
+            );
+        } else {
+            xeraToast(
+                "success",
+                isOwner ? "Résultat publié" : "Jalon validé",
+                isOwner
+                    ? "Votre résultat est publié sur cet ARC et peut être transmis au challenge Fata."
+                    : "Votre validation renforce la preuve de progression.",
+            );
+        }
     } catch (error) {
         console.error("validateArcMilestone error:", error);
         xeraToast(
@@ -1797,7 +2130,7 @@ async function openArcCoBuilderRole(arcId) {
             metadata: { role: role.trim() },
         });
         await xeraSharePayload({
-            title: `${arc.title} | XERA`,
+            title: `${arc.title} | XERA1`,
             text: `Rôle ouvert sur cet ARC: ${role.trim()}`,
             url: xeraBuildArcShareUrl(arc, null, { role: role.trim() }),
         });
@@ -1845,7 +2178,7 @@ async function shareWeeklyTrajectoryRecap(arcId) {
             metadata: { traceCount: traces.length },
         });
         await xeraSharePayload({
-            title: `Récap XERA: ${arc.title}`,
+            title: `Récap XERA1: ${arc.title}`,
             text: `Progression de la semaine:\n${recap}`,
             url: xeraBuildArcShareUrl(arc, traces[0] || null, {
                 recap: "week",
@@ -1931,7 +2264,7 @@ async function recordArcInspiration(
             metadata: { newArcId },
         });
     } catch (error) {
-        console.warn("[XERA growth] recordArcInspiration failed:", error);
+        console.warn("[XERA1 growth] recordArcInspiration failed:", error);
     }
 }
 
@@ -1942,12 +2275,13 @@ function renderArcGrowthPanel(arc, isOwner, content = []) {
 
     if (isOwner) {
         return `
-            <div class="xera-growth-panel">
+            <div class="xera1-growth-panel">
                 <div>
-                    <h3>Preuve sociale</h3>
-                    <p>Transformez une progression réelle en validation, retour ou collaboration.</p>
+                    <h3>Progression de l’ARC</h3>
+                    <p>Publiez le résultat d’un jalon et reliez-le à une preuve de cet ARC.</p>
                 </div>
-                <div class="xera-growth-action-grid">
+                <div class="xera1-growth-action-grid">
+                    <button type="button" class="btn btn-primary" onclick="validateArcMilestone('${arc.id}', ${contentArg})" ${latestContentId ? "" : "disabled"}>Publier un résultat</button>
                     <button type="button" class="btn btn-primary" onclick="openProofCardModal('${arc.id}', ${contentArg})" ${latestContentId ? "" : "disabled"}>Carte preuve</button>
                     <button type="button" class="btn btn-ghost" onclick="requestArcWitness('${arc.id}', ${contentArg})" ${latestContentId ? "" : "disabled"}>Ajouter un témoin</button>
                     <button type="button" class="btn btn-ghost" onclick="openArcCoBuilderRole('${arc.id}')">Ouvrir un rôle</button>
@@ -1958,12 +2292,12 @@ function renderArcGrowthPanel(arc, isOwner, content = []) {
     }
 
     return `
-        <div class="xera-growth-panel">
+        <div class="xera1-growth-panel">
             <div>
                 <h3>Construire autour de cette preuve</h3>
                 <p>Validez un jalon, proposez une contribution ou démarrez votre propre version.</p>
             </div>
-            <div class="xera-growth-action-grid">
+            <div class="xera1-growth-action-grid">
                 <button type="button" class="btn btn-primary" onclick="validateArcMilestone('${arc.id}', ${contentArg})" ${latestContentId ? "" : "disabled"}>Valider le jalon</button>
                 <button type="button" class="btn btn-ghost" onclick="requestArcCollaborationWithRole('${arc.id}', '${arc.user_id}', 'co-builder')">Contribuer</button>
                 <button type="button" class="btn btn-ghost" onclick="startInspiredArc('${arc.id}')">Construire ma version</button>
@@ -1987,21 +2321,21 @@ async function afterTracePublishedGrowthLoop({ content, contentData }) {
         });
 
         const nudge = document.createElement("div");
-        nudge.className = "xera-proof-nudge";
+        nudge.className = "xera1-proof-nudge";
         nudge.innerHTML = `
             <div>
                 <strong>Carte de preuve prête</strong>
                 <span>Cette trace peut recevoir un regard ou devenir une preuve partageable.</span>
             </div>
-            <button type="button" onclick="openProofCardModal('${arc.id}', '${content.id}'); this.closest('.xera-proof-nudge')?.remove();">Ouvrir</button>
-            <button type="button" class="ghost" onclick="this.closest('.xera-proof-nudge')?.remove();">Plus tard</button>
+            <button type="button" onclick="openProofCardModal('${arc.id}', '${content.id}'); this.closest('.xera1-proof-nudge')?.remove();">Ouvrir</button>
+            <button type="button" class="ghost" onclick="this.closest('.xera1-proof-nudge')?.remove();">Plus tard</button>
         `;
-        document.querySelector(".xera-proof-nudge")?.remove();
+        document.querySelector(".xera1-proof-nudge")?.remove();
         document.body.appendChild(nudge);
         setTimeout(() => nudge.remove(), 9000);
     } catch (error) {
         console.warn(
-            "[XERA growth] afterTracePublishedGrowthLoop failed:",
+            "[XERA1 growth] afterTracePublishedGrowthLoop failed:",
             error,
         );
     }
@@ -2086,7 +2420,7 @@ function renderArcDetails(arc, followersCount, isFollowing, content) {
 
     const coverHtml = arc.media_url
         ? arc.media_type === "video"
-            ? `<div class="arc-cover" style="width:100%; max-height:300px; overflow:hidden; border-radius:12px; margin-bottom:1.5rem;"><video src="${arc.media_url}" controls style="width:100%; height:100%; object-fit:cover;"></video></div>`
+            ? `<div class="arc-cover" style="width:100%; max-height:300px; overflow:hidden; border-radius:12px; margin-bottom:1.5rem;"><video src="${arc.media_url}" controls playsinline preload="metadata" style="width:100%; height:100%; object-fit:cover;"></video></div>`
             : `<div class="arc-cover" style="width:100%; height:250px; background-image:url('${arc.media_url}'); background-size:cover; background-position:center; border-radius:12px; margin-bottom:1.5rem;"></div>`
         : "";
 

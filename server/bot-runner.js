@@ -596,7 +596,8 @@ async function postAsBot(bot, options = {}) {
         const { count: todayCount } = await supabase
             .from("content")
             .select("*", { count: "exact", head: true })
-            .eq("user_id", bot.user_id)
+            .eq("author_type", "USER")
+            .eq("author_id", bot.user_id)
             .gte("created_at", todayStartIso)
             .lt("created_at", nextDayIso);
 
@@ -605,7 +606,8 @@ async function postAsBot(bot, options = {}) {
         const { data: recentPosts } = await supabase
             .from("content")
             .select("title, description, media_url")
-            .eq("user_id", bot.user_id)
+            .eq("author_type", "USER")
+            .eq("author_id", bot.user_id)
             .order("created_at", { ascending: false })
             .limit(20);
 
@@ -627,7 +629,8 @@ async function postAsBot(bot, options = {}) {
             const { data: lastRow, error: lastErr } = await supabase
                 .from("content")
                 .select("day_number")
-                .eq("user_id", bot.user_id)
+                .eq("author_type", "USER")
+                .eq("author_id", bot.user_id)
                 .order("day_number", { ascending: false })
                 .limit(1)
                 .maybeSingle();
@@ -803,7 +806,7 @@ async function encourageAsBot(bot) {
         // Notifications pour encouragements faits par de vrais utilisateurs
         // sont gérées côté client. Les bots n'envoient pas de notifications.
 
-        console.log(`Bot ${bot.user_id} encouraged content ${target.id}`);
+        logger.debug(`Bot ${bot.user_id} encouraged content ${target.id}`);
         return rpcData;
     } catch (e) {
         console.warn(
@@ -1024,10 +1027,10 @@ async function loopOnce() {
 }
 
 async function main() {
-    console.log(
+    logger.debug(
         "🛑 Bot runner is DISABLED. All existing bot posts remain in the database but no new activities will be generated.",
     );
-    console.log("To re-enable: uncomment the loop below and rebuild.");
+    logger.debug("To re-enable: uncomment the loop below and rebuild.");
     process.exit(0);
     /* DISABLED: Bot loop stopped to minimize Egress
     while (true) {

@@ -3,37 +3,38 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Live Stream | XERA</title>
+        <title>Live Stream | XERA1</title>
         <link
             href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;600;700;800&display=swap"
             rel="stylesheet"
         />
-        <link rel="icon" type="image/svg+xml" href="icons/logo.png" />
+        <link rel="icon" type="image/png" href="icons/logo.png" />
 
         <!-- Open Graph meta tags for link previews -->
-        <meta property="og:title" content="Live Stream | XERA" />
+        <meta property="og:site_name" content="XERA1" />
+        <meta property="og:title" content="Live Stream | XERA1" />
         <meta
             property="og:description"
-            content="Regardez le streaming en direct sur XERA"
+            content="Regardez le streaming en direct sur XERA1"
         />
         <meta property="og:type" content="website" />
-        <meta property="og:url" content="" />
-        <meta property="og:image" content="" />
+        <meta property="og:url" content="https://xera1.xyz/stream" />
+        <meta property="og:image" content="https://xera1.xyz/icons/logo.png" />
         <meta property="og:image:width" content="1200" />
         <meta property="og:image:height" content="630" />
 
         <!-- Twitter Card -->
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content="Live Stream | XERA" />
+        <meta name="twitter:title" content="Live Stream | XERA1" />
         <meta
             name="twitter:description"
-            content="Regardez le streaming en direct sur XERA"
+            content="Regardez le streaming en direct sur XERA1"
         />
-        <meta name="twitter:image" content="" />
+        <meta name="twitter:image" content="https://xera1.xyz/icons/logo.png" />
 
-        <link rel="stylesheet" href="css/style.css" />
+        <link rel="stylesheet" href="css/style.css?v=20261006-1" />
         <link rel="stylesheet" href="css/search-notification.css" />
-        <link rel="stylesheet" href="css/monetization.css" />
+        <link rel="stylesheet" href="css/monetization.css?v=20261004-2" />
         <link
             rel="stylesheet"
             href="css/streaming-analytics.css?v=20260424-2"
@@ -44,9 +45,9 @@
         <nav>
             <a class="logo" href="index.html">
                 <div class="logo-img">
-                    <img src="icons/logo.png" alt="XERA - Logo" />
+                    <img src="icons/logo.png" alt="XERA1 - Logo" />
                 </div>
-                <span>XΞRA</span>
+                <span>XΞRA1</span>
             </a>
             <div class="nav-links">
                 <a
@@ -84,8 +85,14 @@
                         alt="Avatar utilisateur"
                     />
                 </div>
+                <div class="lang-switcher-nav">
+                <select id="header-lang-select" class="nav-lang-select" aria-label="Language selection">
+                    <option value="fr">FR</option>
+                    <option value="en">EN</option>
+                </select>
             </div>
-        </nav>
+        </div>
+    </nav>
 
         <div class="stream-container">
             <div class="stream-main">
@@ -385,30 +392,33 @@
             </div>
         </div>
 
-        <script src="js/router.js"></script>
-        <script src="js/supabase-config.js"></script>
+        <script src="js/logger-client.js"></script>
+        <script src="js/router.js?v=20261004-3"></script>
+        <script src="js/supabase-config.js?v=20261006-1"></script>
         <script src="js/monetization-utils.js"></script>
-        <script src="js/app-supabase.js?v=20260715-1"></script>
-        <script src="js/monetization.js?v=20260319-1"></script>
-        <script src="js/monetization-ui.js?v=20260319-1"></script>
+        <script src="js/app-supabase.js?v=20261006-1"></script>
+        <script src="js/monetization.js?v=20261004-3"></script>
+        <script src="js/monetization-ui.js?v=20261006-1"></script>
         <script src="js/ux-enhancements.js"></script>
         <script src="js/stream-enhancements.js?v=20260203-1"></script>
-        <script src="js/xera-platform-bridge.js?v=20260424-1" defer></script>
+        <script src="js/xera-platform-bridge.js?v=20260828-1" defer></script>
         <!-- React runtime pour rendu temps réel du chat -->
         <script
-            src="https://unpkg.com/react@18/umd/react.production.min.js"
+            src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"
             crossorigin
             defer
         ></script>
         <script
-            src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"
+            src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"
             crossorigin
             defer
         ></script>
-        <script src="js/xera-react-core.js?v=20260424-1" defer></script>
+        <script src="js/xera-react-core.js?v=20260828-1" defer></script>
         <script src="js/react-live-chat.js?v=20260424-1" defer></script>
-        <script src="js/streaming.js?v=20260302-1"></script>
-        <script src="js/stream-page.js?v=20260302-1"></script>
+        <script src="js/streaming.js?v=20261004-2"></script>
+        <script src="js/stream-page.js?v=20261004-1"></script>
         <script src="js/ui-motion.js" defer></script>
-    </body>
+        <script src="js/i18n.js"></script>
+    <script src="js/seo-schema.js"></script>
+</body>
 </html>

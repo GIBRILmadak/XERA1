@@ -1,5 +1,5 @@
 /* ========================================
-   AMÉLIORATIONS GLOBALES APP - XERA
+   AMÉLIORATIONS GLOBALES APP - XERA1
    Navigation fluide, feedbacks visuels, interactions
    ======================================== */
 
@@ -10,123 +10,132 @@ class NavigationEnhancer {
         this.addScrollEffects();
         this.addPageTransitions();
     }
-    
+
     static enhanceNavigation() {
         // Améliorer tous les liens de navigation
-        const navLinks = document.querySelectorAll('nav a, .nav-links a');
-        navLinks.forEach(link => {
-            if (!link.onclick) { // Éviter de modifier les liens avec déjà une fonction onclick
-                link.addEventListener('click', this.handleNavClick.bind(this));
+        const navLinks = document.querySelectorAll("nav a, .nav-links a");
+        navLinks.forEach((link) => {
+            if (!link.onclick) {
+                // Éviter de modifier les liens avec déjà une fonction onclick
+                link.addEventListener("click", this.handleNavClick.bind(this));
             }
         });
-        
+
         // Observer les changements d'URL pour les animations de page
         this.currentPage = this.getCurrentPage();
         this.observePageChanges();
     }
-    
+
     static handleNavClick(e) {
         const link = e.currentTarget;
-        
+
         // Ajouter un effet de feedback visuel
         this.addClickFeedback(link);
-        
+
         // Animation de transition
-        const href = link.getAttribute('href');
-        if (href && href.startsWith('#')) {
+        const href = link.getAttribute("href");
+        if (href && href.startsWith("#")) {
             e.preventDefault();
             this.smoothScrollToSection(href.substring(1));
         }
     }
-    
+
     static addClickFeedback(element) {
-        element.style.transform = 'scale(0.95)';
-        element.style.transition = 'transform 0.1s ease';
-        
+        element.style.transform = "scale(0.95)";
+        element.style.transition = "transform 0.1s ease";
+
         setTimeout(() => {
-            element.style.transform = 'scale(1)';
-            element.style.transition = 'transform 0.2s cubic-bezier(0.23, 1, 0.32, 1)';
+            element.style.transform = "scale(1)";
+            element.style.transition =
+                "transform 0.2s cubic-bezier(0.23, 1, 0.32, 1)";
         }, 100);
     }
-    
+
     static smoothScrollToSection(sectionId) {
         const section = document.getElementById(sectionId);
         if (section) {
             // Masquer la section actuelle en fondu
-            const currentSection = document.querySelector('.page.active');
+            const currentSection = document.querySelector(".page.active");
             if (currentSection && currentSection !== section) {
-                currentSection.style.opacity = '0';
-                currentSection.style.transform = 'translateY(-20px)';
-                
+                currentSection.style.opacity = "0";
+                currentSection.style.transform = "translateY(-20px)";
+
                 setTimeout(() => {
-                    currentSection.classList.remove('active');
-                    section.classList.add('active');
-                    section.style.opacity = '0';
-                    section.style.transform = 'translateY(20px)';
-                    
+                    currentSection.classList.remove("active");
+                    section.classList.add("active");
+                    section.style.opacity = "0";
+                    section.style.transform = "translateY(20px)";
+
                     // Animation d'entrée
                     requestAnimationFrame(() => {
-                        section.style.transition = 'all 0.5s cubic-bezier(0.23, 1, 0.32, 1)';
-                        section.style.opacity = '1';
-                        section.style.transform = 'translateY(0)';
+                        section.style.transition =
+                            "all 0.5s cubic-bezier(0.23, 1, 0.32, 1)";
+                        section.style.opacity = "1";
+                        section.style.transform = "translateY(0)";
                     });
                 }, 200);
             } else if (!currentSection) {
-                section.classList.add('active');
+                section.classList.add("active");
                 AnimationManager.slideUp(section);
             }
         }
     }
-    
+
     static addScrollEffects() {
         // Parallax subtil pour les éléments
         let ticking = false;
-        
+
         function updateScrollEffects() {
             const scrollY = window.scrollY;
-            
+
             ticking = false;
         }
-        
-        window.addEventListener('scroll', () => {
+
+        window.addEventListener("scroll", () => {
             if (!ticking) {
                 requestAnimationFrame(updateScrollEffects);
                 ticking = true;
             }
         });
     }
-    
+
     static addPageTransitions() {
         // Intercepter les appels à navigateTo pour ajouter des transitions
         const originalNavigateTo = window.navigateTo;
-        
+
         window.navigateTo = (pageId, options) => {
-            const currentPage = document.querySelector('.page.active');
-            const nextPage = document.getElementById(pageId) || document.getElementById(pageId === 'pagepro' ? 'pro-page' : pageId);
-            
+            const currentPage = document.querySelector(".page.active");
+            const nextPage =
+                document.getElementById(pageId) ||
+                document.getElementById(
+                    pageId === "pagepro" ? "pro-page" : pageId,
+                );
+
             if (currentPage && nextPage && currentPage !== nextPage) {
                 // Animation de sortie
-                currentPage.style.transform = 'scale(0.98) translateX(-20px)';
-                currentPage.style.opacity = '0.8';
-                currentPage.style.transition = 'all 0.3s cubic-bezier(0.23, 1, 0.32, 1)';
-                
+                currentPage.style.transform = "scale(0.98) translateX(-20px)";
+                currentPage.style.opacity = "0.8";
+                currentPage.style.transition =
+                    "all 0.3s cubic-bezier(0.23, 1, 0.32, 1)";
+
                 setTimeout(() => {
                     if (originalNavigateTo) {
                         originalNavigateTo(pageId, options);
                     } else {
                         // Fallback simple
-                        currentPage.classList.remove('active');
-                        nextPage.classList.add('active');
+                        currentPage.classList.remove("active");
+                        nextPage.classList.add("active");
                     }
-                    
+
                     // Animation d'entrée
-                    nextPage.style.transform = 'scale(1.02) translateX(20px)';
-                    nextPage.style.opacity = '0.8';
-                    
+                    nextPage.style.transform = "scale(1.02) translateX(20px)";
+                    nextPage.style.opacity = "0.8";
+
                     requestAnimationFrame(() => {
-                        nextPage.style.transition = 'all 0.4s cubic-bezier(0.23, 1, 0.32, 1)';
-                        nextPage.style.transform = 'scale(1) translateX(0)';
-                        nextPage.style.opacity = '1';
+                        nextPage.style.transition =
+                            "all 0.4s cubic-bezier(0.23, 1, 0.32, 1)";
+                        nextPage.style.transform = "scale(1) translateX(0)";
+                        nextPage.style.opacity = "1";
                     });
                 }, 150);
             } else {
@@ -137,41 +146,46 @@ class NavigationEnhancer {
             }
         };
     }
-    
+
     static getCurrentPage() {
-        const activePage = document.querySelector('.page.active');
+        const activePage = document.querySelector(".page.active");
         return activePage ? activePage.id : null;
     }
-    
+
     static observePageChanges() {
         // Observer les changements de page active pour des animations
         const observer = new MutationObserver((mutations) => {
             mutations.forEach((mutation) => {
-                if (mutation.attributeName === 'class') {
+                if (mutation.attributeName === "class") {
                     const target = mutation.target;
-                    if (target.classList.contains('page') && target.classList.contains('active')) {
+                    if (
+                        target.classList.contains("page") &&
+                        target.classList.contains("active")
+                    ) {
                         this.onPageActivated(target);
                     }
                 }
             });
         });
-        
-        document.querySelectorAll('.page').forEach(page => {
+
+        document.querySelectorAll(".page").forEach((page) => {
             observer.observe(page, { attributes: true });
         });
     }
-    
+
     static onPageActivated(page) {
         // Animer les éléments de la page nouvellement activée
-        const cards = page.querySelectorAll('.discover-card');
-        const contentItems = page.querySelectorAll('.content-item, .timeline-item');
+        const cards = page.querySelectorAll(".discover-card");
+        const contentItems = page.querySelectorAll(
+            ".content-item, .timeline-item",
+        );
 
         LoadingFeedback.clearAll();
-        
+
         if (cards.length > 0) {
             AnimationManager.fadeInElements(cards, 100);
         }
-        
+
         if (contentItems.length > 0) {
             AnimationManager.fadeInElements(contentItems, 80);
         }
@@ -185,20 +199,21 @@ class InteractionEnhancer {
         this.addHoverEffects();
         this.addFocusManagement();
     }
-    
+
     static enhanceButtons() {
         // Intercepter tous les clics de boutons pour ajouter des feedbacks
         // MAIS ne pas interférer avec les fonctionnalités critiques
-        document.addEventListener('click', (e) => {
-            const button = e.target.closest('button, .btn');
+        document.addEventListener("click", (e) => {
+            const button = e.target.closest("button, .btn");
             if (button && !button.disabled) {
                 // Ne pas intercepter les boutons avec des onclick critiques
-                const onclick = button.getAttribute('onclick');
-                if (onclick && (
-                    onclick.includes('launchLive') || 
-                    onclick.includes('openSettings') || 
-                    onclick.includes('toggleFollow')
-                )) {
+                const onclick = button.getAttribute("onclick");
+                if (
+                    onclick &&
+                    (onclick.includes("launchLive") ||
+                        onclick.includes("openSettings") ||
+                        onclick.includes("toggleFollow"))
+                ) {
                     // Juste l'effet visuel, ne pas interférer
                     setTimeout(() => this.addButtonFeedback(button), 0);
                 } else {
@@ -206,42 +221,48 @@ class InteractionEnhancer {
                 }
             }
         });
-        
+
         // Ajouter des effets keyboard
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
+        document.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" || e.key === " ") {
                 const focused = document.activeElement;
-                if (focused && (focused.tagName === 'BUTTON' || focused.classList.contains('btn'))) {
+                if (
+                    focused &&
+                    (focused.tagName === "BUTTON" ||
+                        focused.classList.contains("btn"))
+                ) {
                     this.addButtonFeedback(focused);
                 }
             }
         });
     }
-    
+
     static addButtonFeedback(button) {
         // Éviter les feedbacks multiples
-        if (button.classList.contains('feedback-active')) return;
-        
-        button.classList.add('feedback-active');
-        
+        if (button.classList.contains("feedback-active")) return;
+
+        button.classList.add("feedback-active");
+
         // Effet de pression
         const originalTransform = button.style.transform;
-        button.style.transform = 'scale(0.95)';
-        button.style.transition = 'transform 0.1s cubic-bezier(0.34, 1.56, 0.64, 1)';
-        
+        button.style.transform = "scale(0.95)";
+        button.style.transition =
+            "transform 0.1s cubic-bezier(0.34, 1.56, 0.64, 1)";
+
         setTimeout(() => {
-            button.style.transform = originalTransform || 'scale(1)';
-            button.style.transition = 'transform 0.3s cubic-bezier(0.23, 1, 0.32, 1)';
-            
+            button.style.transform = originalTransform || "scale(1)";
+            button.style.transition =
+                "transform 0.3s cubic-bezier(0.23, 1, 0.32, 1)";
+
             setTimeout(() => {
-                button.classList.remove('feedback-active');
+                button.classList.remove("feedback-active");
             }, 300);
         }, 100);
     }
-    
+
     static addHoverEffects() {
         // Ajouter des effets de survol dynamiques
-        const style = document.createElement('style');
+        const style = document.createElement("style");
         style.textContent = `
             .discover-card {
                 transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
@@ -270,25 +291,25 @@ class InteractionEnhancer {
         `;
         document.head.appendChild(style);
     }
-    
+
     static addFocusManagement() {
         // Améliorer la gestion du focus pour l'accessibilité
         let isKeyboardUser = false;
-        
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Tab') {
+
+        document.addEventListener("keydown", (e) => {
+            if (e.key === "Tab") {
                 isKeyboardUser = true;
-                document.body.classList.add('keyboard-user');
+                document.body.classList.add("keyboard-user");
             }
         });
-        
-        document.addEventListener('mousedown', () => {
+
+        document.addEventListener("mousedown", () => {
             isKeyboardUser = false;
-            document.body.classList.remove('keyboard-user');
+            document.body.classList.remove("keyboard-user");
         });
-        
+
         // Focus visible only for keyboard users
-        const focusStyle = document.createElement('style');
+        const focusStyle = document.createElement("style");
         focusStyle.textContent = `
             body:not(.keyboard-user) button:focus,
             body:not(.keyboard-user) .btn:focus {
@@ -319,74 +340,95 @@ class LoadingFeedback {
     }
 
     static addNavigationClickFeedback() {
-        document.addEventListener('click', (e) => {
-            const onclickTarget = e.target.closest('[onclick*="navigateTo("], [onclick*="handleProfileNavigation"], [onclick*="navigateToUserProfile"], [onclick*="window.location"], [onclick*="location.href"]');
-            const link = e.target.closest('a[href]');
-            const href = link ? link.getAttribute('href') : null;
-            const isRealLink = href && href !== '#' && !href.startsWith('#') && !href.startsWith('javascript:');
+        document.addEventListener("click", (e) => {
+            const onclickTarget = e.target.closest(
+                '[onclick*="navigateTo("], [onclick*="handleProfileNavigation"], [onclick*="navigateToUserProfile"], [onclick*="window.location"], [onclick*="location.href"]',
+            );
+            const link = e.target.closest("a[href]");
+            const href = link ? link.getAttribute("href") : null;
+            const isRealLink =
+                href &&
+                href !== "#" &&
+                !href.startsWith("#") &&
+                !href.startsWith("javascript:");
             const target = onclickTarget || (isRealLink ? link : null);
 
             if (!target) return;
-            if (target.closest('button') || target.classList.contains('btn')) return;
+            if (target.closest("button") || target.classList.contains("btn"))
+                return;
 
             this.setLoading(target, {
                 persistent: true,
-                showSpinner: true
+                showSpinner: true,
             });
         });
     }
 
     static addUserProfileClickFeedback() {
-        document.addEventListener('click', (e) => {
-            const target = e.target.closest('[onclick*="navigateToUserProfile"]');
+        document.addEventListener("click", (e) => {
+            const target = e.target.closest(
+                '[onclick*="navigateToUserProfile"]',
+            );
             if (!target) return;
             this.setLoading(target, { persistent: true, showSpinner: true });
         });
     }
 
     static addButtonClickFeedback() {
-        document.addEventListener('click', (e) => {
-            const button = e.target.closest('button, .btn');
+        document.addEventListener("click", (e) => {
+            const button = e.target.closest("button, .btn");
             if (!button || button.disabled) return;
-            if (button.classList.contains('btn-loading')) return;
-            const onclick = button.getAttribute('onclick') || '';
-            const isNavigationAction = (
-                onclick.includes('navigateTo(') ||
-                onclick.includes('handleProfileNavigation') ||
-                onclick.includes('navigateToUserProfile') ||
-                onclick.includes('window.location') ||
-                onclick.includes('location.href')
-            );
+            if (button.classList.contains("btn-loading")) return;
+            const onclick = button.getAttribute("onclick") || "";
+            const isNavigationAction =
+                onclick.includes("navigateTo(") ||
+                onclick.includes("handleProfileNavigation") ||
+                onclick.includes("navigateToUserProfile") ||
+                onclick.includes("window.location") ||
+                onclick.includes("location.href");
             this.setLoading(button, {
                 persistent: isNavigationAction,
-                duration: isNavigationAction ? this.fallbackDuration : this.buttonDuration,
-                buttonSpinner: isNavigationAction
+                duration: isNavigationAction
+                    ? this.fallbackDuration
+                    : this.buttonDuration,
+                buttonSpinner: isNavigationAction,
             });
         });
     }
 
-    static setLoading(element, { persistent = false, duration = this.fallbackDuration, showSpinner = false, buttonSpinner = false } = {}) {
-        if (!element || element.classList.contains('click-loading')) return;
-        element.classList.add('click-loading');
+    static setLoading(
+        element,
+        {
+            persistent = false,
+            duration = this.fallbackDuration,
+            showSpinner = false,
+            buttonSpinner = false,
+        } = {},
+    ) {
+        if (!element || element.classList.contains("click-loading")) return;
+        element.classList.add("click-loading");
         if (showSpinner) {
-            element.classList.add('click-loading-indicator');
+            element.classList.add("click-loading-indicator");
         }
         if (buttonSpinner) {
             this.applyButtonSpinner(element);
         }
         this.activeElements.add(element);
 
-        const timeout = setTimeout(() => {
-            this.clearElement(element);
-        }, persistent ? this.fallbackDuration : duration);
+        const timeout = setTimeout(
+            () => {
+                this.clearElement(element);
+            },
+            persistent ? this.fallbackDuration : duration,
+        );
 
         this.timeouts.set(element, timeout);
     }
 
     static clearElement(element) {
         if (!element) return;
-        element.classList.remove('click-loading');
-        element.classList.remove('click-loading-indicator');
+        element.classList.remove("click-loading");
+        element.classList.remove("click-loading-indicator");
         this.removeButtonSpinner(element);
         this.activeElements.delete(element);
         const timeout = this.timeouts.get(element);
@@ -401,21 +443,21 @@ class LoadingFeedback {
     }
 
     static applyButtonSpinner(button) {
-        if (!button || button.classList.contains('btn-loading')) return;
-        button.classList.add('btn-loading');
+        if (!button || button.classList.contains("btn-loading")) return;
+        button.classList.add("btn-loading");
 
-        let spinner = button.querySelector('.loading-spinner');
+        let spinner = button.querySelector(".loading-spinner");
         if (!spinner) {
-            spinner = document.createElement('span');
-            spinner.className = 'loading-spinner temp-loading-spinner';
+            spinner = document.createElement("span");
+            spinner.className = "loading-spinner temp-loading-spinner";
             button.appendChild(spinner);
         }
     }
 
     static removeButtonSpinner(button) {
         if (!button) return;
-        button.classList.remove('btn-loading');
-        const tempSpinner = button.querySelector('.temp-loading-spinner');
+        button.classList.remove("btn-loading");
+        const tempSpinner = button.querySelector(".temp-loading-spinner");
         if (tempSpinner) {
             tempSpinner.remove();
         }
@@ -428,13 +470,15 @@ class PerformanceOptimizer {
         this.optimizeAnimations();
         this.manageResources();
     }
-    
+
     static optimizeAnimations() {
         // Réduire les animations si l'utilisateur préfère un mouvement réduit
-        const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        
+        const prefersReducedMotion = window.matchMedia(
+            "(prefers-reduced-motion: reduce)",
+        ).matches;
+
         if (prefersReducedMotion) {
-            const style = document.createElement('style');
+            const style = document.createElement("style");
             style.textContent = `
                 *, *::before, *::after {
                     animation-duration: 0.01ms !important;
@@ -445,25 +489,25 @@ class PerformanceOptimizer {
             document.head.appendChild(style);
         }
     }
-    
+
     static manageResources() {
         // Lazy loading des images
-        if ('IntersectionObserver' in window) {
+        if ("IntersectionObserver" in window) {
             const imageObserver = new IntersectionObserver((entries) => {
-                entries.forEach(entry => {
+                entries.forEach((entry) => {
                     if (entry.isIntersecting) {
                         const img = entry.target;
                         if (img.dataset.src) {
                             img.src = img.dataset.src;
-                            img.removeAttribute('data-src');
+                            img.removeAttribute("data-src");
                             imageObserver.unobserve(img);
                         }
                     }
                 });
             });
-            
+
             // Observer les images avec data-src
-            document.querySelectorAll('img[data-src]').forEach(img => {
+            document.querySelectorAll("img[data-src]").forEach((img) => {
                 imageObserver.observe(img);
             });
         }
@@ -477,7 +521,8 @@ class FeedbackWidget {
         this.initialized = true;
         this.storageKey = "rize_feedback_state";
         // Receiver for admin review (fallback to known super admin UUID)
-        this.receiverId = (typeof SUPER_ADMIN_ID !== "undefined" && SUPER_ADMIN_ID) ||
+        this.receiverId =
+            (typeof SUPER_ADMIN_ID !== "undefined" && SUPER_ADMIN_ID) ||
             "b0f9f893-1706-4721-899c-d26ad79afc86";
         this.actionCountKey = "rize_feedback_actions";
         this.threshold = 10;
@@ -501,17 +546,21 @@ class FeedbackWidget {
         this.modal.innerHTML = `
             <div class="feedback-header">
                 <p class="feedback-eyebrow">Quick pulse</p>
-                <h3>What do you think of XERA?</h3>
+                <h3>What do you think of XERA1?</h3>
                 <p class="feedback-sub">Your feedback helps us build faster.</p>
             </div>
             <form id="feedback-form" class="feedback-form">
                 <div class="feedback-emoji-row" role="radiogroup" aria-label="Satisfaction level">
-                    ${["😡","😕","😐","🙂","🤩"].map((emoji, idx) => `
+                    ${["😡", "😕", "😐", "🙂", "🤩"]
+                        .map(
+                            (emoji, idx) => `
                         <label class="feedback-emoji">
                             <input type="radio" name="feedback-mood" value="${idx - 2}" ${idx === 3 ? "checked" : ""}>
                             <span>${emoji}</span>
                         </label>
-                    `).join("")}
+                    `,
+                        )
+                        .join("")}
                 </div>
                 <label class="feedback-label" for="feedback-comment">Anything specific?</label>
                 <textarea id="feedback-comment" name="comment" rows="3" placeholder="Tell us what works, what doesn't, or what's missing."></textarea>
@@ -538,10 +587,19 @@ class FeedbackWidget {
         const closeBtn = this.modal.querySelector(".feedback-close");
         const form = this.modal.querySelector("#feedback-form");
 
-        this.backdrop.addEventListener("click", () => FeedbackWidget.collapse());
-        if (closeBtn) closeBtn.addEventListener("click", () => FeedbackWidget.collapse());
-        if (form) form.addEventListener("submit", FeedbackWidget.handleSubmit.bind(this));
-        this.toggleButton.addEventListener("click", () => FeedbackWidget.open());
+        this.backdrop.addEventListener("click", () =>
+            FeedbackWidget.collapse(),
+        );
+        if (closeBtn)
+            closeBtn.addEventListener("click", () => FeedbackWidget.collapse());
+        if (form)
+            form.addEventListener(
+                "submit",
+                FeedbackWidget.handleSubmit.bind(this),
+            );
+        this.toggleButton.addEventListener("click", () =>
+            FeedbackWidget.open(),
+        );
     }
 
     static async handleSubmit(event) {
@@ -661,8 +719,10 @@ class FeedbackWidget {
     static trackUserActions() {
         try {
             this.actionCount =
-                parseInt(sessionStorage.getItem(this.actionCountKey) || "0", 10) ||
-                0;
+                parseInt(
+                    sessionStorage.getItem(this.actionCountKey) || "0",
+                    10,
+                ) || 0;
         } catch (e) {
             this.actionCount = 0;
         }
@@ -682,7 +742,10 @@ class FeedbackWidget {
     static incrementActions() {
         this.actionCount = (this.actionCount || 0) + 1;
         try {
-            sessionStorage.setItem(this.actionCountKey, String(this.actionCount));
+            sessionStorage.setItem(
+                this.actionCountKey,
+                String(this.actionCount),
+            );
         } catch (e) {
             /* ignore */
         }
@@ -740,7 +803,9 @@ function lockPwaStandaloneZoom() {
     // iOS fallback for stubborn pinch gestures in standalone mode.
     const blockGesture = (e) => e.preventDefault();
     document.addEventListener("gesturestart", blockGesture, { passive: false });
-    document.addEventListener("gesturechange", blockGesture, { passive: false });
+    document.addEventListener("gesturechange", blockGesture, {
+        passive: false,
+    });
     document.addEventListener("gestureend", blockGesture, { passive: false });
     document.addEventListener(
         "touchmove",
@@ -754,20 +819,23 @@ function lockPwaStandaloneZoom() {
 }
 
 // Initialisation automatique
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener("DOMContentLoaded", () => {
     lockPwaStandaloneZoom();
     NavigationEnhancer.init();
     InteractionEnhancer.init();
     LoadingFeedback.init();
     PerformanceOptimizer.init();
     FeedbackWidget.init();
-    
+
     // Ajouter un délai pour s'assurer que tous les autres scripts sont chargés
     setTimeout(() => {
         // Animer la page initiale
-        const activePage = document.querySelector('.page.active');
+        const activePage = document.querySelector(".page.active");
         if (activePage) {
-            AnimationManager.fadeInElements('.page.active .discover-card, .page.active .content-item', 100);
+            AnimationManager.fadeInElements(
+                ".page.active .discover-card, .page.active .content-item",
+                100,
+            );
         }
     }, 500);
 });

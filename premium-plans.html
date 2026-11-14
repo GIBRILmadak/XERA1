@@ -3,10 +3,10 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Accès Elite - XERA Talent Explorer</title>
+        <title>Accès Elite - XERA1 Talent Explorer</title>
         <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.111.0/dist/umd/supabase.js"></script>
-        <link rel="stylesheet" href="css/style.css" />
-        <link rel="stylesheet" href="css/monetization.css" />
+        <link rel="stylesheet" href="css/style.css?v=20261006-1" />
+        <link rel="stylesheet" href="css/monetization.css?v=20261004-2" />
         <link rel="stylesheet" href="css/search-notification.css" />
         <link
             rel="stylesheet"
@@ -90,17 +90,23 @@
             <nav>
                 <a class="logo" href="index.html">
                     <div class="logo-img">
-                        <img src="icons/logo.png" alt="XERA - Logo" />
+                        <img src="icons/logo.png" alt="XERA1 - Logo" />
                     </div>
-                    <span>XΞRA</span>
+                    <span>XΞRA1</span>
                 </a>
                 <div class="nav-links">
                     <a href="index.html"><i class="fas fa-home"></i> Accueil</a>
                     <a href="#" onclick="history.back()"
                         ><i class="fas fa-arrow-left"></i> Retour</a
                     >
-                </div>
-            </nav>
+                    <div class="lang-switcher-nav">
+                <select id="header-lang-select" class="nav-lang-select" aria-label="Language selection">
+                    <option value="fr">FR</option>
+                    <option value="en">EN</option>
+                </select>
+            </div>
+        </div>
+    </nav>
 
             <section class="premium-hero">
                 <div style="max-width: 800px; margin: 0 auto">
@@ -115,7 +121,7 @@
                             font-size: 0.9rem;
                         "
                     >
-                        <i class="fas fa-crown"></i> XERA ELITE ACCESS
+                        <i class="fas fa-crown"></i> XERA1 ELITE ACCESS
                     </span>
                     <h1
                         style="
@@ -134,7 +140,7 @@
                         "
                     >
                         Débloquez l'accès illimité à la base de données
-                        certifiée XERA et au moteur de recherche de talents
+                        certifiée XERA1 et au moteur de recherche de talents
                         Elite.
                     </p>
                 </div>
@@ -147,7 +153,12 @@
                     role="button"
                     tabindex="0"
                     onclick="subscribeElite('monthly')"
-                    onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); subscribeElite('monthly'); }"
+                    onkeydown="
+                        if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            subscribeElite('monthly');
+                        }
+                    "
                 >
                     <h3>Plan Mensuel</h3>
                     <div class="price">40 USD <span>/ mois</span></div>
@@ -184,9 +195,13 @@
                             align-items: center;
                             justify-content: center;
                         "
-                        onclick="event.stopPropagation(); subscribeElite('monthly')"
-                        >CHOISIR LE MENSUEL</button
+                        onclick="
+                            event.stopPropagation();
+                            subscribeElite('monthly');
+                        "
                     >
+                        CHOISIR LE MENSUEL
+                    </button>
                 </div>
 
                 <!-- Annuel -->
@@ -195,7 +210,12 @@
                     role="button"
                     tabindex="0"
                     onclick="subscribeElite('annual')"
-                    onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); subscribeElite('annual'); }"
+                    onkeydown="
+                        if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            subscribeElite('annual');
+                        }
+                    "
                 >
                     <div class="discount-badge">-20% D'ÉCONOMIE</div>
                     <h3>Plan Annuel</h3>
@@ -233,9 +253,13 @@
                             align-items: center;
                             justify-content: center;
                         "
-                        onclick="event.stopPropagation(); subscribeElite('annual')"
-                        >CHOISIR L'ANNUEL (ÉLITE)</button
+                        onclick="
+                            event.stopPropagation();
+                            subscribeElite('annual');
+                        "
                     >
+                        CHOISIR L'ANNUEL (ÉLITE)
+                    </button>
                 </div>
             </div>
 
@@ -278,8 +302,8 @@
             </section>
         </div>
 
-        <script src="js/router.js"></script>
-        <script src="js/supabase-config.js"></script>
+        <script src="js/router.js?v=20261004-3"></script>
+        <script src="js/supabase-config.js?v=20261006-1"></script>
         <script src="js/mobile-money-modal.js"></script>
         <script>
             let eliteCheckoutInProgress = false;
@@ -338,5 +362,7 @@
             }
         </script>
         <script src="js/ui-motion.js" defer></script>
-    </body>
+        <script src="js/i18n.js"></script>
+    <script src="js/seo-schema.js"></script>
+</body>
 </html>

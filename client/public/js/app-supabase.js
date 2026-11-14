@@ -9,6 +9,9 @@ window.currentViewerId = null;
 window.allUsers = [];
 window.userContents = {};
 window.userProjects = {};
+const professionalPageContents = new Map();
+const professionalPagesById = new Map();
+let professionalPageDataLoaded = false;
 window.adminAnnouncements = [];
 window.adminSubscriptionPayments = [];
 window.adminWithdrawalRequests = [];
@@ -39,7 +42,6 @@ window.initialDataSlowMessage = "";
 let discoverDataRetryTimer = null;
 let discoverDataRetryInFlight = false;
 let firstProjectFeedPopupShown = false;
-
 function withTimeout(promise, timeoutMs, label = "Operation") {
     let timeoutId;
     const timeoutPromise = new Promise((_, reject) => {
@@ -118,6 +120,9 @@ let discoverPaginationState = {
     hasMore: false,
     isLoading: false,
     intersectionObserver: null,
+    sentinel: null,
+    status: null,
+    error: null,
 };
 
 /**
@@ -128,7 +133,7 @@ let discoverPaginationState = {
  * Convertir une image URL relative en URL absolue
  */
 function getAbsoluteImageUrl(imagePath) {
-    if (!imagePath) return `${window.location.origin}/icons/logo-192x192.png`;
+    if (!imagePath) return `${window.location.origin}/icons/logo.png`;
     if (imagePath.startsWith("http://") || imagePath.startsWith("https://")) {
         return imagePath;
     }
@@ -142,7 +147,7 @@ function updateOpenGraphTags(context = {}) {
         const pageUrl = window.location.href;
         let ogTitle = "XERA | Tracez votre progression";
         let ogDescription = "Découvrez les trajectoires créatives sur XERA";
-        let ogImage = getAbsoluteImageUrl("icons/logo-192x192.png");
+        let ogImage = getAbsoluteImageUrl("icons/logo.png");
         let ogType = "website";
 
         // Si contexte profil
@@ -151,9 +156,7 @@ function updateOpenGraphTags(context = {}) {
             ogTitle = `${profile.username || "Profil"} | XERA`;
             ogDescription = profile.bio || "Découvrez ce profil sur XERA";
             ogImage = getAbsoluteImageUrl(
-                profile.profileImage ||
-                    profile.avatar_url ||
-                    "icons/logo-192x192.png",
+                profile.profileImage || profile.avatar_url || "icons/logo.png",
             );
             ogType = "profile";
         }
@@ -238,13 +241,16 @@ function updateMetaTag(property, content) {
 async function initializeOpenGraphFromUrl() {
     try {
         const params = new URLSearchParams(window.location.search);
-        const contentId = params.get("content");
-        const userId = params.get("user");
+        const contentId = params.get("content") || null;
+        const userId = params.get("user") || null;
 
         // Si c'est un partage de contenu
         if (contentId) {
-            // Essayer de charger le contenu depuis le cache local d'abord
-            if (window.userContents) {
+            // Essayer de charger le contenu depuis le cache local d'abord, sinon charger depuis Supabase
+            if (
+                window.userContents &&
+                window.userContents[window.currentUserId]
+            ) {
                 for (const uid in window.userContents) {
                     const contents = window.userContents[uid];
                     if (Array.isArray(contents)) {
@@ -299,8 +305,12 @@ async function initializeOpenGraphFromUrl() {
 
         // Si c'est un partage de profil
         if (userId) {
-            // Essayer de charger l'utilisateur depuis le cache
-            if (window.allUsers && Array.isArray(window.allUsers)) {
+            // Essayer de charger l'utilisateur depuis le cache, sinon charger depuis Supabase
+            if (
+                window.allUsers &&
+                Array.isArray(window.allUsers) &&
+                window.allUsers.length > 0
+            ) {
                 const foundUser = window.allUsers.find(
                     (u) => u.id === userId || u.userId === userId,
                 );
@@ -490,7 +500,9 @@ async function getUserEngagementTotals(userId) {
         const { data, error } = await supabase
             .from("content")
             .select("views")
-            .eq("user_id", userId);
+            .eq("author_type", "USER")
+            .eq("author_id", userId)
+            .is("page_id", null);
         if (error) throw error;
         const totalViews = (data || []).reduce(
             (sum, item) => sum + (Number(item.views) || 0),
@@ -1283,11 +1295,17 @@ function navigateToPersonalProfile() {
         return;
     }
 
+    if (
+        String(window.location.pathname || "").endsWith("profile-personal.html")
+    ) {
+        return;
+    }
+
     const query = new URLSearchParams({
         user: String(userId),
         view: "personal",
     });
-    window.location.href = `profile.html?${query.toString()}`;
+    window.location.href = `profile-personal.html?${query.toString()}`;
 }
 
 window.navigateToPersonalProfile = navigateToPersonalProfile;
@@ -1366,10 +1384,10 @@ async function shareProfileLink(userId) {
     if (!userId) return;
     const user = getUser(userId);
     const url = buildProfileShareUrl(userId);
-    const title = user ? `Profil de ${user.name} | XERA` : "Profil XERA";
+    const title = user ? `Profil de ${user.name} | XERA1` : "Profil XERA1";
     const text = user
-        ? `Découvre le profil de ${user.name} sur XERA.`
-        : "Découvre ce profil sur XERA.";
+        ? `Découvre le profil de ${user.name} sur XERA1.`
+        : "Découvre ce profil sur XERA1.";
 
     if (navigator.share) {
         try {
@@ -1779,7 +1797,24 @@ async function fetchCollaboratorArcs(userId) {
 async function fetchWorkItems(userId) {
     if (!userId) return [];
     try {
-        const response = await fetch(`/api/work-items/${userId}`);
+        const client = window.supabaseClient || window.supabase;
+        let accessToken = "";
+        if (client?.auth?.getSession) {
+            try {
+                const { data, error } = await client.auth.getSession();
+                if (!error) accessToken = data?.session?.access_token || "";
+            } catch (_) {
+                // The endpoint still returns explicitly public work items.
+            }
+        }
+
+        const headers = accessToken
+            ? { Authorization: `Bearer ${accessToken}` }
+            : {};
+        const response = await fetch(
+            `/api/work-items/${encodeURIComponent(userId)}`,
+            { headers },
+        );
         if (!response.ok) return [];
         return await response.json();
     } catch (e) {
@@ -2297,6 +2332,12 @@ async function initializeApp() {
             window.currentUser = user;
             window.currentUserId = user.id;
             window.currentViewerId = user.id;
+            window.dispatchEvent(
+                new CustomEvent("xera:user-authenticated", {
+                    detail: { userId: user.id },
+                }),
+            );
+            trackPostPublishUpsellConversion(user);
 
             const isCurrentRoutePro = isPageProRoute();
 
@@ -2479,7 +2520,21 @@ async function initializeApp() {
         clearTimeout(safetyTimeout);
         window.userLoadError = error?.message || "Erreur de chargement";
         window.hasLoadedUsers = true;
-        await renderDiscoverGrid();
+        if (profileOnlyPage && (initialProfileId || window.currentUserId)) {
+            try {
+                await runInitialDataLoad(
+                    loadPublicData,
+                    "Fallback public profile load",
+                );
+                await renderProfileIntoContainer(
+                    initialProfileId || window.currentUserId,
+                );
+            } catch (profileError) {
+                console.error("Fallback profile render failed:", profileError);
+            }
+        } else {
+            await renderDiscoverGrid();
+        }
         if (typeof window.ToastManager !== "undefined") {
             window.ToastManager.success(
                 "XΞRA High-Signal",
@@ -2499,7 +2554,8 @@ function setNavProfileAvatar(rawAvatar, userId = null) {
         document.getElementById("nav-profile-avatar") ||
         document.getElementById("navAvatar") ||
         document.querySelector("#nav-profile .profile-nav-avatar") ||
-        document.querySelector("nav .profile-nav-avatar");
+        document.querySelector("nav .profile-nav-avatar") ||
+        document.getElementById("hub-user-avatar");
     if (!navAvatar) return;
     const resolvedUserId =
         userId || window.currentUser?.id || window.currentUserId || null;
@@ -3216,20 +3272,22 @@ function adjustNavForAccountType(user) {
     const accountSubtype =
         user?.account_subtype || user?.user_metadata?.account_subtype || "";
 
+    const isSuperAdmin = user?.id === "b0f9f893-1706-4721-899c-d26ad79afc86";
     const isPro =
-        [
-            "community",
-            "enterprise",
-            "company",
-            "pro",
-            "communauté",
-            "entreprise",
-            "institution",
-            "organization",
-            "organisation",
-            "org",
-            "team",
-        ].includes(accountType.toLowerCase()) ||
+        (!isSuperAdmin &&
+            [
+                "community",
+                "enterprise",
+                "company",
+                "pro",
+                "communauté",
+                "entreprise",
+                "institution",
+                "organization",
+                "organisation",
+                "org",
+                "team",
+            ].includes(accountType.toLowerCase())) ||
         [
             "community",
             "enterprise",
@@ -3258,6 +3316,9 @@ function adjustNavForAccountType(user) {
 function resetLoadedCollections() {
     Object.keys(userContents || {}).forEach((key) => delete userContents[key]);
     Object.keys(userProjects || {}).forEach((key) => delete userProjects[key]);
+    professionalPageContents.clear();
+    professionalPagesById.clear();
+    professionalPageDataLoaded = false;
 }
 
 function snapshotUserContents() {
@@ -3620,7 +3681,9 @@ async function preloadUserContents(
             const { data, error } = await supabase
                 .from("content")
                 .select(cleanColumns)
-                .in("user_id", userIds)
+                .eq("author_type", "USER")
+                .in("author_id", userIds)
+                .is("page_id", null)
                 .order("day_number", { ascending: false });
 
             if (error) throw error;
@@ -3628,7 +3691,7 @@ async function preloadUserContents(
             // Indexer par user_id
             const grouped = new Map();
             (data || []).forEach((row) => {
-                const uid = row.user_id;
+                const uid = row.author_id;
                 if (!grouped.has(uid)) grouped.set(uid, []);
                 grouped.get(uid).push(convertSupabaseContent(row));
             });
@@ -3641,7 +3704,9 @@ async function preloadUserContents(
             chunk.forEach((user) => {
                 const fallback = fallbackContentsByUser?.get?.(user.id);
                 userContents[user.id] = Array.isArray(fallback)
-                    ? [...fallback]
+                    ? fallback.filter((content) =>
+                          isUserAuthoredContent(content, user.id),
+                      )
                     : [];
             });
         }
@@ -3649,6 +3714,78 @@ async function preloadUserContents(
 
     // Keep a lightweight cache for instant discover/profile boot
     persistDiscoverCache();
+}
+
+async function preloadProfessionalPageData() {
+    professionalPageDataLoaded = true;
+    professionalPageContents.clear();
+    professionalPagesById.clear();
+
+    try {
+        const { data: pages, error: pagesError } = await supabase
+            .from("professional_pages")
+            .select("*");
+        if (pagesError) throw pagesError;
+
+        (pages || []).forEach((page) => {
+            if (!page?.id) return;
+            professionalPagesById.set(String(page.id), page);
+            window.professionalManager?.proPagesCache?.set(
+                String(page.id),
+                page,
+            );
+            professionalPageContents.set(String(page.id), []);
+        });
+
+        const pageIds = Array.from(professionalPagesById.keys());
+        if (pageIds.length === 0) return [];
+
+        const pagePostColumns = `
+            *,
+            arcs ( id, title, status, user_id ),
+            projects ( id, name )
+        `;
+        for (
+            let i = 0;
+            i < pageIds.length;
+            i += CONTENT_FETCH_BATCH_SIZE
+        ) {
+            const pageIdChunk = pageIds.slice(
+                i,
+                i + CONTENT_FETCH_BATCH_SIZE,
+            );
+            const { data: posts, error: postsError } = await supabase
+                .from("content")
+                .select(pagePostColumns)
+                .eq("author_type", "PAGE_PRO")
+                .in("author_id", pageIdChunk)
+                .not("page_id", "is", null)
+                .order("created_at", { ascending: false })
+                .limit(1000);
+            if (postsError) throw postsError;
+
+            (posts || []).forEach((row) => {
+                const pageId = String(row.author_id || row.page_id || "");
+                if (!pageId || !professionalPageContents.has(pageId)) return;
+                professionalPageContents.get(pageId).push(
+                    convertSupabaseContent(row),
+                );
+            });
+        }
+
+        return Array.from(professionalPagesById.values());
+    } catch (error) {
+        professionalPageDataLoaded = false;
+        console.warn("Impossible de charger les publications des Pages Pro:", error);
+        return [];
+    }
+}
+
+async function ensureProfessionalPageDataLoaded() {
+    if (!professionalPageDataLoaded) {
+        return preloadProfessionalPageData();
+    }
+    return Array.from(professionalPagesById.values());
 }
 
 async function ensureUserProjectsLoaded(userId) {
@@ -3761,6 +3898,7 @@ async function loadAllData() {
                 publicOnly: false,
                 fallbackContentsByUser,
             }),
+            preloadProfessionalPageData(),
             fetchAdminAnnouncements(),
         ]);
 
@@ -3802,6 +3940,7 @@ async function loadPublicData() {
                 publicOnly: true,
                 fallbackContentsByUser,
             }),
+            preloadProfessionalPageData(),
             fetchAdminAnnouncements(),
         ]);
 
@@ -3877,6 +4016,15 @@ function isAnnouncementContent(content) {
         content &&
         Array.isArray(content.tags) &&
         content.tags.includes("annonce")
+    );
+}
+
+function canReplyToContent(content) {
+    if (!content) return false;
+    return (
+        isAnnouncementContent(content) ||
+        content.type === "news" ||
+        content.type === "event"
     );
 }
 
@@ -3991,18 +4139,183 @@ function setAnnouncementReplyPanelState(contentId, isOpen) {
         });
 }
 
+function ensureImmersiveReplyDrawer() {
+    let drawer = document.getElementById("immersive-reply-drawer");
+    if (drawer) return drawer;
+
+    drawer = document.createElement("div");
+    drawer.id = "immersive-reply-drawer";
+    drawer.className = "immersive-reply-drawer";
+    drawer.setAttribute("aria-hidden", "true");
+    drawer.innerHTML = `
+        <div class="immersive-reply-drawer__backdrop" data-immersive-reply-close="true"></div>
+        <aside class="immersive-reply-drawer__sheet" role="dialog" aria-modal="true" aria-label="Réponses à l'annonce">
+            <div class="immersive-reply-drawer__header">
+                <div class="immersive-reply-drawer__meta">
+                    <span class="immersive-reply-drawer__eyebrow">Annonce</span>
+                    <h3 class="immersive-reply-drawer__title">Réponses</h3>
+                </div>
+                <button type="button" class="immersive-reply-drawer__close" aria-label="Fermer les réponses">✕</button>
+            </div>
+            <div class="immersive-reply-drawer__composer">
+                <textarea class="reply-input immersive-reply-drawer__input" placeholder="Votre réponse..."></textarea>
+                <div class="reply-actions">
+                    <button type="button" class="btn-primary immersive-reply-drawer__submit">Envoyer</button>
+                </div>
+            </div>
+            <div class="immersive-reply-drawer__list-header">
+                <strong>Réponses</strong>
+                <span class="reply-count immersive-reply-drawer__count" data-reply-count="">0</span>
+            </div>
+            <div class="immersive-reply-drawer__content" data-replies-container=""></div>
+        </aside>
+    `;
+
+    const closeButton = drawer.querySelector(".immersive-reply-drawer__close");
+    const backdrop = drawer.querySelector(".immersive-reply-drawer__backdrop");
+    const submitButton = drawer.querySelector(
+        ".immersive-reply-drawer__submit",
+    );
+    const input = drawer.querySelector(".immersive-reply-drawer__input");
+    const sheet = drawer.querySelector(".immersive-reply-drawer__sheet");
+
+    const closeDrawer = () => {
+        const contentId = drawer.dataset.contentId || "";
+        if (contentId) {
+            toggleProfileAnnouncementReplies(contentId, false);
+        }
+    };
+
+    let startY = 0;
+    let currentY = 0;
+    let dragging = false;
+    sheet?.addEventListener(
+        "touchstart",
+        (event) => {
+            if (
+                window.innerWidth > 767 ||
+                !drawer.classList.contains("is-open")
+            )
+                return;
+            const touch = event.touches[0];
+            startY = touch.clientY;
+            currentY = touch.clientY;
+            dragging = true;
+            sheet.style.transition = "none";
+        },
+        { passive: true },
+    );
+    sheet?.addEventListener(
+        "touchmove",
+        (event) => {
+            if (!dragging || window.innerWidth > 767) return;
+            const touch = event.touches[0];
+            currentY = touch.clientY;
+            const delta = currentY - startY;
+            if (delta > 0) {
+                sheet.style.transform = `translateY(${Math.min(delta, 260)}px)`;
+            }
+        },
+        { passive: true },
+    );
+    sheet?.addEventListener("touchend", () => {
+        if (!dragging || window.innerWidth > 767) return;
+        const delta = currentY - startY;
+        sheet.style.transition =
+            "transform 0.28s cubic-bezier(0.22, 1, 0.36, 1)";
+        if (delta > 130) {
+            closeDrawer();
+        } else {
+            sheet.style.transform = "";
+        }
+        dragging = false;
+    });
+
+    closeButton?.addEventListener("click", closeDrawer);
+    backdrop?.addEventListener("click", closeDrawer);
+    submitButton?.addEventListener("click", () => {
+        const contentId = drawer.dataset.contentId || "";
+        if (!contentId) return;
+        submitAnnouncementReply(
+            contentId,
+            drawer.querySelector(".immersive-reply-drawer__sheet"),
+            "",
+            drawer.dataset.title || "votre annonce",
+        );
+    });
+
+    input?.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+            event.preventDefault();
+            submitButton?.click();
+        }
+    });
+
+    document.body.appendChild(drawer);
+    return drawer;
+}
+
+function applyImmersiveReplyDrawerState(contentId, isOpen) {
+    if (!contentId) return;
+
+    const drawer = ensureImmersiveReplyDrawer();
+    drawer.dataset.contentId = contentId;
+    drawer.classList.toggle("is-open", isOpen);
+    drawer.setAttribute("aria-hidden", isOpen ? "false" : "true");
+
+    const contentMeta = findContentByReplyId(contentId) || {};
+    const title = contentMeta.title || "votre annonce";
+    const drawerTitle = drawer.querySelector(".immersive-reply-drawer__title");
+    const drawerInput = drawer.querySelector(".immersive-reply-drawer__input");
+    if (drawerTitle) {
+        drawerTitle.textContent = title;
+    }
+    drawer.dataset.title = title;
+    if (drawerInput && !isOpen) {
+        drawerInput.value = "";
+    }
+
+    if (isOpen) {
+        const count = getReplyCount(contentId);
+        const countLabel = drawer.querySelector(
+            ".immersive-reply-drawer__count",
+        );
+        if (countLabel) countLabel.textContent = count;
+        const container = drawer.querySelector(
+            ".immersive-reply-drawer__content",
+        );
+        if (container) {
+            container.innerHTML = renderAnnouncementReplies(contentId);
+        }
+        const replyButton = document.querySelector(
+            `[data-reply-toggle="${CSS.escape(String(contentId))}"]`,
+        );
+        if (replyButton) {
+            replyButton.classList.add("is-open");
+            replyButton.setAttribute("aria-expanded", "true");
+        }
+    } else {
+        const replyButton = document.querySelector(
+            `[data-reply-toggle="${CSS.escape(String(contentId))}"]`,
+        );
+        if (replyButton) {
+            replyButton.classList.remove("is-open");
+            replyButton.setAttribute("aria-expanded", "false");
+        }
+        const label = document.querySelector(
+            `[data-reply-toggle-label="${CSS.escape(String(contentId))}"]`,
+        );
+        if (label) label.textContent = "Répondre";
+    }
+}
+
 function toggleProfileAnnouncementReplies(contentId, forceOpen = null) {
     if (!contentId) return;
-    const panel = document.querySelector(
-        getReplySelector(contentId, "data-profile-reply-panel"),
-    );
-    const shouldOpen =
-        typeof forceOpen === "boolean"
-            ? forceOpen
-            : panel
-              ? panel.hidden
-              : true;
-    setAnnouncementReplyPanelState(contentId, shouldOpen);
+
+    const drawer = ensureImmersiveReplyDrawer();
+    const isOpened = drawer.classList.contains("is-open");
+    const shouldOpen = typeof forceOpen === "boolean" ? forceOpen : !isOpened;
+    applyImmersiveReplyDrawerState(contentId, shouldOpen);
     if (shouldOpen) refreshRepliesUI(contentId);
 }
 
@@ -4012,6 +4325,23 @@ function refreshRepliesUI(contentId) {
         .forEach((el) => {
             el.innerHTML = renderAnnouncementReplies(contentId);
         });
+
+    const drawer = document.getElementById("immersive-reply-drawer");
+    if (drawer && drawer.dataset.contentId === String(contentId)) {
+        const drawerContainer = drawer.querySelector(
+            ".immersive-reply-drawer__content",
+        );
+        if (drawerContainer) {
+            drawerContainer.innerHTML = renderAnnouncementReplies(contentId);
+        }
+        const countLabel = drawer.querySelector(
+            ".immersive-reply-drawer__count",
+        );
+        if (countLabel) {
+            countLabel.textContent = getReplyCount(contentId);
+        }
+    }
+
     const count = getReplyCount(contentId);
     document
         .querySelectorAll(getReplySelector(contentId, "data-reply-count"))
@@ -4080,6 +4410,12 @@ async function submitAnnouncementReply(
         inputRef && typeof inputRef !== "string" && inputRef.closest
             ? inputRef
                   .closest(".profile-update-reply-block")
+                  ?.querySelector(".reply-input") ||
+              inputRef
+                  .closest(".immersive-reply-drawer__sheet")
+                  ?.querySelector(".reply-input") ||
+              inputRef
+                  .closest(".immersive-reply-drawer__composer")
                   ?.querySelector(".reply-input")
             : document.getElementById(inputRef);
     const reply =
@@ -4124,17 +4460,64 @@ function openReplyPrompt(contentId) {
     submitAnnouncementReply(contentId);
 }
 
-// Récupérer le contenu d'un utilisateur
+// Récupérer le contenu personnel d'un utilisateur, sans les posts Page Pro.
+function getContentAuthorIdentity(content) {
+    const pageId = content?.pageId || content?.page_id || null;
+    const userId = content?.userId || content?.user_id || null;
+    const explicitType = content?.authorType || content?.author_type || "";
+    const type = String(explicitType || (pageId ? "PAGE_PRO" : "USER"))
+        .trim()
+        .toUpperCase();
+    const explicitId = content?.authorId || content?.author_id || null;
+    const id = explicitId || (type === "PAGE_PRO" ? pageId : userId);
+    return { type, id: id ? String(id) : null };
+}
+
+function isUserAuthoredContent(content, userId) {
+    const author = getContentAuthorIdentity(content);
+    return (
+        author.type === "USER" &&
+        author.id !== null &&
+        author.id === String(userId || "")
+    );
+}
+
+function isPageProAuthoredContent(content, pageId) {
+    const author = getContentAuthorIdentity(content);
+    return (
+        author.type === "PAGE_PRO" &&
+        author.id !== null &&
+        author.id === String(pageId || "")
+    );
+}
+
 function getUserContentLocal(userId) {
     const contents = userContents[userId] || [];
-    const visibleContents = isSuperAdmin()
-        ? contents
-        : contents.filter((c) => !c.isDeleted);
+    const visibleContents = contents.filter(
+        (content) =>
+            isUserAuthoredContent(content, userId) &&
+            (isSuperAdmin() || !content.isDeleted),
+    );
     // Sort by createdAt descending (newest first) instead of day_number
     // This ensures cards show the actual latest upload
     return visibleContents.sort(
         (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
     );
+}
+
+function getPageContentLocal(pageId) {
+    const contents = professionalPageContents.get(String(pageId || "")) || [];
+    return contents
+        .filter(
+            (content) =>
+                isPageProAuthoredContent(content, pageId) &&
+                (isSuperAdmin() || !content.isDeleted),
+        )
+        .sort(
+            (a, b) =>
+                new Date(b.createdAt || 0).getTime() -
+                new Date(a.createdAt || 0).getTime(),
+        );
 }
 
 // Récupérer le dernier contenu
@@ -4471,7 +4854,7 @@ function showMobileArcOnboardingNotification(userId) {
 </div>
 <div style="display:flex; gap:8px; margin-top:10px;">
             <button type="button" data-action="create" style="flex:1; border:none; border-radius:10px; padding:9px 10px; font-weight:700; font-size:0.86rem; background:#10b981; color:#072018; cursor:pointer;">
-                Créer un projet
+                nouveau projet
             </button>
             <button type="button" data-action="close" style="border:1px solid rgba(255,255,255,0.16); border-radius:10px; padding:9px 12px; font-weight:700; font-size:0.84rem; background:transparent; color:#f5f5f5; cursor:pointer;">
                 Fermer
@@ -4777,6 +5160,318 @@ function convertSupabaseUser(supabaseUser) {
     };
 }
 
+function getContentC2PAState(content) {
+    if (!content || typeof content !== "object") {
+        return { isAI: false, provenance: null, source: null, raw: null };
+    }
+
+    const metadata = content.metadata || {};
+    const c2paPayload =
+        metadata.c2pa ||
+        metadata.C2PA ||
+        metadata.c2pa_metadata ||
+        metadata.c2paMetadata ||
+        metadata.provenance ||
+        null;
+
+    const fallback =
+        typeof window !== "undefined" &&
+        typeof window.normalizeC2PAInspectionResult === "function" &&
+        c2paPayload
+            ? window.normalizeC2PAInspectionResult(
+                  typeof c2paPayload === "string"
+                      ? (() => {
+                            try {
+                                return JSON.parse(c2paPayload);
+                            } catch (e) {
+                                return null;
+                            }
+                        })()
+                      : c2paPayload,
+              )
+            : null;
+
+    const rawAI =
+        metadata.is_ai ??
+        metadata.isAI ??
+        metadata.ai_generated ??
+        metadata.aiGenerated ??
+        content.is_ai ??
+        content.isAI ??
+        false;
+
+    const normalized = fallback || {
+        isAI: !!rawAI,
+        provenance: null,
+        source: null,
+        raw: null,
+    };
+
+    return {
+        isAI: !!rawAI || !!normalized.isAI,
+        provenance: normalized.provenance || null,
+        source: normalized.source || null,
+        raw: normalized.raw || c2paPayload || null,
+    };
+}
+
+function renderC2PABadgeHtml(placement = "feed-card", content = null) {
+    const state = getContentC2PAState(content);
+    if (!state.isAI) return "";
+
+    const safePayload = JSON.stringify(state).replace(/'/g, "&#39;");
+    const placementClass =
+        {
+            "feed-card": "c2pa-badge--feed",
+            immersive: "c2pa-badge--immersive",
+            profile: "c2pa-badge--profile",
+        }[placement] || "c2pa-badge--feed";
+
+    return `
+        <button
+            type="button"
+            class="c2pa-badge ${placementClass}"
+            title="Contenu certifié C2PA / AI"
+            onclick="event.stopPropagation(); window.openC2PAModal(${safePayload});"
+            aria-label="Afficher les détails C2PA"
+        >
+            AI
+        </button>
+    `;
+}
+
+function ensureC2PAModal() {
+    let modal = document.getElementById("xera-c2pa-modal");
+    if (modal) return modal;
+
+    const html = `
+        <div id="xera-c2pa-modal" class="xera-c2pa-modal" aria-hidden="true" role="dialog" aria-modal="true">
+            <div class="xera-c2pa-modal__backdrop" data-close-c2pa-modal="1"></div>
+            <div class="xera-c2pa-modal__card" role="document">
+                <div class="xera-c2pa-modal__header">
+                    <div>
+                        <div class="xera-c2pa-modal__eyebrow">Content Credentials</div>
+                        <h3>Source & historique du média</h3>
+                    </div>
+                    <button type="button" class="xera-c2pa-modal__close" aria-label="Fermer" data-close-c2pa-modal="1">×</button>
+                </div>
+                <div id="xera-c2pa-modal__body" class="xera-c2pa-modal__body"></div>
+            </div>
+        </div>
+    `;
+
+    document.body.insertAdjacentHTML("beforeend", html);
+    modal = document.getElementById("xera-c2pa-modal");
+    modal.addEventListener("click", (event) => {
+        if (event.target && event.target.dataset.closeC2paModal === "1") {
+            modal.classList.remove("is-open");
+            modal.setAttribute("aria-hidden", "true");
+        }
+    });
+    document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+            const active = document.getElementById("xera-c2pa-modal");
+            if (active && active.classList.contains("is-open")) {
+                active.classList.remove("is-open");
+                active.setAttribute("aria-hidden", "true");
+            }
+        }
+    });
+    return modal;
+}
+
+window.openC2PAModal = function (payload) {
+    const modal = ensureC2PAModal();
+    const body = document.getElementById("xera-c2pa-modal__body");
+    const state =
+        payload && typeof payload === "object"
+            ? payload
+            : { isAI: false, provenance: null, source: null };
+    const provenance = state.provenance || {};
+    const source = state.source || {};
+    const history =
+        Array.isArray(provenance.actionHistory) &&
+        provenance.actionHistory.length > 0
+            ? provenance.actionHistory
+                  .map(
+                      (entry) =>
+                          `<li><strong>${escapeHtml(entry?.action || "Action")}</strong>${entry?.when ? ` <span>• ${escapeHtml(entry.when)}</span>` : ""}</li>`,
+                  )
+                  .join("")
+            : "<li>Aucune action C2PA détectée.</li>";
+
+    body.innerHTML = `
+        <div class="xera-c2pa-modal__content">
+            <div class="xera-c2pa-modal__summary">
+                <span class="xera-c2pa-modal__pill">AI detected</span>
+                <span class="xera-c2pa-modal__value">${state.isAI ? "Confirmé" : "Non confirmé"}</span>
+            </div>
+            <dl class="xera-c2pa-modal__list">
+                <div><dt>Émetteur</dt><dd>${escapeHtml(provenance.issuer || "Non disponible")}</dd></div>
+                <div><dt>Outil / API</dt><dd>${escapeHtml(provenance.tool || provenance.api || source.claimGenerator || "Non disponible")}</dd></div>
+                <div><dt>Date</dt><dd>${escapeHtml(provenance.createdAt || "Non disponible")}</dd></div>
+                <div><dt>Modèle</dt><dd>${escapeHtml(provenance.model || "Non disponible")}</dd></div>
+            </dl>
+            <div class="xera-c2pa-modal__history">
+                <h4>Historique</h4>
+                <ul>${history}</ul>
+            </div>
+        </div>
+    `;
+
+    modal.classList.add("is-open");
+    modal.setAttribute("aria-hidden", "false");
+};
+
+window.closeC2PAModal = function () {
+    const modal = document.getElementById("xera-c2pa-modal");
+    if (!modal) return;
+    modal.classList.remove("is-open");
+    modal.setAttribute("aria-hidden", "true");
+};
+
+if (
+    typeof document !== "undefined" &&
+    !document.getElementById("xera-c2pa-styles")
+) {
+    const c2paStyles = document.createElement("style");
+    c2paStyles.id = "xera-c2pa-styles";
+    c2paStyles.textContent = `
+        .c2pa-badge {
+            position: absolute;
+            z-index: 20;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 2.3rem;
+            height: 1.8rem;
+            padding: 0 0.6rem;
+            border: 1px solid rgba(148,163,184,0.6);
+            border-radius: 999px;
+            background: rgba(15,23,42,0.9);
+            color: #e2e8f0;
+            font-size: 0.62rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            box-shadow: 0 6px 18px rgba(15, 23, 42, 0.28);
+            cursor: pointer;
+        }
+        .c2pa-badge--feed { right: 10px; bottom: 10px; }
+        .c2pa-badge--immersive { top: 12px; right: 12px; }
+        .c2pa-badge--profile { top: 12px; right: 12px; }
+        .xera-c2pa-modal {
+            position: fixed;
+            inset: 0;
+            display: none;
+            z-index: 9999;
+        }
+        .xera-c2pa-modal.is-open { display: block; }
+        .xera-c2pa-modal__backdrop {
+            position: absolute;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.7);
+        }
+        .xera-c2pa-modal__card {
+            position: relative;
+            width: min(440px, calc(100vw - 28px));
+            margin: 10vh auto;
+            background: #0f172a;
+            border: 1px solid rgba(148,163,184,0.28);
+            border-radius: 18px;
+            box-shadow: 0 22px 60px rgba(15,23,42,0.35);
+            color: #f8fafc;
+            padding: 1.1rem 1.15rem 1.2rem;
+        }
+        .xera-c2pa-modal__header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            margin-bottom: 0.75rem;
+        }
+        .xera-c2pa-modal__eyebrow {
+            font-size: 0.68rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: #94a3b8;
+            margin-bottom: 0.2rem;
+        }
+        .xera-c2pa-modal__header h3 {
+            margin: 0;
+            font-size: 1.05rem;
+        }
+        .xera-c2pa-modal__close {
+            width: 2rem;
+            height: 2rem;
+            border-radius: 999px;
+            border: 1px solid rgba(148,163,184,0.3);
+            background: rgba(148,163,184,0.12);
+            color: #f8fafc;
+            font-size: 1.25rem;
+            cursor: pointer;
+        }
+        .xera-c2pa-modal__summary {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+            padding: 0.7rem 0.8rem;
+            background: rgba(59, 130, 246, 0.08);
+            border: 1px solid rgba(96,165,250,0.25);
+            border-radius: 12px;
+            margin-bottom: 0.75rem;
+        }
+        .xera-c2pa-modal__pill {
+            font-size: 0.62rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #93c5fd;
+        }
+        .xera-c2pa-modal__value {
+            color: #e2e8f0;
+            font-weight: 700;
+        }
+        .xera-c2pa-modal__list {
+            display: grid;
+            gap: 0.7rem;
+            margin: 0;
+        }
+        .xera-c2pa-modal__list div {
+            display: grid;
+            gap: 0.2rem;
+        }
+        .xera-c2pa-modal__list dt {
+            color: #94a3b8;
+            font-size: 0.66rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+        .xera-c2pa-modal__list dd {
+            margin: 0;
+            color: #e2e8f0;
+            line-height: 1.5;
+        }
+        .xera-c2pa-modal__history {
+            margin-top: 1rem;
+        }
+        .xera-c2pa-modal__history h4 {
+            margin: 0 0 0.5rem;
+            color: #f8fafc;
+            font-size: 0.92rem;
+        }
+        .xera-c2pa-modal__history ul {
+            margin: 0;
+            padding-left: 1.1rem;
+            color: #cbd5e1;
+        }
+        .xera-c2pa-modal__history li {
+            margin-bottom: 0.35rem;
+        }
+    `;
+    document.head.appendChild(c2paStyles);
+}
+
 function convertSupabaseContent(supabaseContent) {
     const arcOwner = supabaseContent.arcs?.user_id
         ? getUser(supabaseContent.arcs.user_id)
@@ -4785,16 +5480,25 @@ function convertSupabaseContent(supabaseContent) {
     const { tags, cleanDescription } =
         extractTagsFromDescription(rawDescription);
 
-    let mediaUrls = [];
-    // Resilience: use media_url if media_urls is missing in DB
     const mediaUrl = supabaseContent.media_url;
-    if (mediaUrl) {
+    let mediaUrls = Array.isArray(supabaseContent.media_urls)
+        ? supabaseContent.media_urls.filter(Boolean)
+        : [];
+    // Resilience: use media_url if media_urls is missing in DB
+    if (mediaUrls.length === 0 && mediaUrl) {
         mediaUrls = [mediaUrl];
     }
 
     return {
         contentId: supabaseContent.id,
         userId: supabaseContent.user_id,
+        authorType:
+            supabaseContent.author_type ||
+            (supabaseContent.page_id ? "PAGE_PRO" : "USER"),
+        authorId:
+            supabaseContent.author_id ||
+            supabaseContent.page_id ||
+            supabaseContent.user_id,
         projectId: supabaseContent.project_id,
         arcId: supabaseContent.arc_id,
         pageId: supabaseContent.page_id,
@@ -4810,6 +5514,7 @@ function convertSupabaseContent(supabaseContent) {
         tags,
         mediaUrl: mediaUrl,
         mediaUrls: mediaUrls,
+        posterUrl: supabaseContent.metadata?.poster_url || null,
         views: supabaseContent.views || 0,
         encouragementsCount: supabaseContent.encouragements_count || 0,
         createdAt: new Date(supabaseContent.created_at),
@@ -5514,6 +6219,7 @@ const VERIFICATION_ADMIN_IDS = new Set([SUPER_ADMIN_ID]);
 let verifiedCreatorUserIds = new Set();
 let verifiedStaffUserIds = new Set();
 let verifiedPageIds = new Set();
+let verifiedFataUserIds = new Set();
 let verificationRequests = [];
 
 function isSuperAdmin() {
@@ -5639,15 +6345,18 @@ async function fetchVerifiedBadges() {
         const creators = new Set();
         const staff = new Set();
         const pages = new Set();
+        const fata = new Set();
         (data || []).forEach((item) => {
             if (item.type === "staff") staff.add(item.user_id);
             if (item.type === "creator") creators.add(item.user_id);
             if (item.type === "page") pages.add(item.user_id);
+            if (item.type === "fata") fata.add(item.user_id);
         });
 
         verifiedCreatorUserIds = creators;
         verifiedStaffUserIds = staff;
         verifiedPageIds = pages;
+        verifiedFataUserIds = fata;
 
         // Fallback local: le super admin est toujours staff vérifié côté UI
         if (SUPER_ADMIN_ID) {
@@ -5657,6 +6366,8 @@ async function fetchVerifiedBadges() {
         console.error("Erreur récupération badges vérifiés:", error);
         verifiedCreatorUserIds = new Set();
         verifiedStaffUserIds = new Set();
+        verifiedPageIds = new Set();
+        verifiedFataUserIds = new Set();
         if (SUPER_ADMIN_ID) {
             verifiedStaffUserIds.add(SUPER_ADMIN_ID);
         }
@@ -5668,7 +6379,12 @@ function getVerifiedBadgeSets() {
         creators: new Set(verifiedCreatorUserIds || []),
         staff: new Set(verifiedStaffUserIds || []),
         pages: new Set(verifiedPageIds || []),
+        fata: new Set(verifiedFataUserIds || []),
     };
+}
+
+function isFataBadgeUserId(userId) {
+    return Boolean(userId && verifiedFataUserIds.has(userId));
 }
 
 function escapeHtml(value) {
@@ -5720,11 +6436,12 @@ function attachMentionAutocomplete(textarea) {
 
     let autocompleteList = null;
     let lastQuery = "";
+    let mentionSearchRequest = 0;
 
     const createList = () => {
         const list = document.createElement("div");
         list.className = "mention-autocomplete-list";
-        list.style.position = "absolute";
+        list.style.position = "fixed";
         list.style.zIndex = "20000";
         list.style.background = "var(--bg-secondary)";
         list.style.border = "1px solid var(--border-color)";
@@ -5740,14 +6457,23 @@ function attachMentionAutocomplete(textarea) {
     const updateListPosition = () => {
         if (!autocompleteList) return;
         const rect = textarea.getBoundingClientRect();
-        autocompleteList.style.top = `${rect.bottom + window.scrollY + 5}px`;
-        autocompleteList.style.left = `${rect.left + window.scrollX}px`;
-        autocompleteList.style.width = `${rect.width}px`;
+        autocompleteList.style.top = `${Math.min(rect.bottom + 5, window.innerHeight - 210)}px`;
+        autocompleteList.style.left = `${Math.max(8, rect.left)}px`;
+        autocompleteList.style.width = `${Math.min(rect.width, window.innerWidth - 16)}px`;
     };
 
     const performMentionSearch = async (query) => {
         if (query === lastQuery) return;
         lastQuery = query;
+        const requestId = ++mentionSearchRequest;
+        autocompleteList.innerHTML = `
+            <div class="mention-search-loading" role="status" aria-live="polite">
+                <span class="mention-search-spinner" aria-hidden="true"></span>
+                Recherche en cours...
+            </div>
+        `;
+        autocompleteList.style.display = "block";
+        updateListPosition();
 
         try {
             const [usersRes, pagesRes] = await Promise.all([
@@ -5765,6 +6491,7 @@ function attachMentionAutocomplete(textarea) {
 
             const users = (usersRes.data || []).filter((u) => u && u.name);
             const pages = (pagesRes.data || []).filter((p) => p && p.name);
+            if (requestId !== mentionSearchRequest) return;
             const results = [
                 ...users.map((u) => ({
                     id: u.id,
@@ -5787,10 +6514,15 @@ function attachMentionAutocomplete(textarea) {
             if (results.length > 0) {
                 renderResults(results);
             } else {
-                autocompleteList.style.display = "none";
+                autocompleteList.innerHTML = `<div class="mention-search-empty">Aucun résultat</div>`;
+                autocompleteList.style.display = "block";
+                updateListPosition();
             }
         } catch (err) {
             console.warn("Mention search error:", err);
+            autocompleteList.innerHTML = `<div class="mention-search-empty">Recherche indisponible</div>`;
+            autocompleteList.style.display = "block";
+            updateListPosition();
         }
     };
 
@@ -5841,10 +6573,16 @@ function attachMentionAutocomplete(textarea) {
 
         if (lastAt !== -1) {
             const query = textBefore.substring(lastAt + 1);
-            // On ne cherche que si l'at est collé à du texte ou si on vient de le taper
-            if (!query.includes(" ") && query.length >= 1) {
+            if (!query.includes(" ")) {
                 if (!autocompleteList) autocompleteList = createList();
-                performMentionSearch(query);
+                if (query.length === 0) {
+                    lastQuery = "";
+                    autocompleteList.innerHTML = `<div class="mention-search-hint">Tapez un nom après @ pour rechercher</div>`;
+                    autocompleteList.style.display = "block";
+                    updateListPosition();
+                } else {
+                    performMentionSearch(query);
+                }
                 return;
             }
         }
@@ -6213,18 +6951,26 @@ function getSuperAdminPanelHtml() {
             </div>
 
             <div class="verification-admin-block" style="margin-top: 1.5rem;">
-                <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem; flex-wrap:wrap;">
-                    <div>
-                        <h4 style="margin:0;">Retraits Mobile Money</h4>
-                        <p style="color: var(--text-secondary); font-size: 0.9rem; margin:0.35rem 0 0;">
-                            Traite ici les demandes de retrait envoyées depuis la page de monétisation.
-                        </p>
-                    </div>
-                    <button class="btn-verify" type="button" onclick="fetchAdminWithdrawalRequests()">
-                        Rafraîchir
-                    </button>
+                <h4>Codes de réduction abonnements</h4>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">Crée un code, sa période de validité et une réduction de 10 à 100 %.</p>
+                <div class="verification-input-row" style="flex-wrap: wrap; align-items: end;">
+                    <label>Code<input type="text" id="admin-discount-code" class="form-input" maxlength="40" placeholder="BIENVENUE10"></label>
+                    <label>Plan offert<select id="admin-discount-plan" class="form-input"><option value="standard">Standard</option><option value="medium">Medium</option><option value="pro">Pro</option><option value="elite">Elite</option><option value="page_verification">Page verification</option></select></label>
+                    <label>Réduction (%)<input type="number" id="admin-discount-percent" class="form-input" min="10" max="100" step="1" value="100"></label>
+                    <label>Avantages (jours)<input type="number" id="admin-discount-duration" class="form-input" min="1" step="1" placeholder="30"></label>
+                    <label>Limite utilisations<input type="number" id="admin-discount-max-uses" class="form-input" min="1" step="1" placeholder="Illimitée"></label>
+                    <label>Début<input type="datetime-local" id="admin-discount-from" class="form-input"></label>
+                    <label>Fin (optionnelle)<input type="datetime-local" id="admin-discount-until" class="form-input"></label>
+                    <button type="button" class="btn-verify" onclick="createAdminDiscountCode()">Créer le code</button>
                 </div>
-                <div id="admin-withdrawal-requests-list" style="margin-top:0.9rem; display:flex; flex-direction:column; gap:0.75rem;"></div>
+                <div id="admin-discount-codes-list" style="margin-top:0.9rem; display:flex; flex-direction:column; gap:0.5rem;"></div>
+            </div>
+
+            <div class="verification-admin-block" style="margin-top:1.5rem;">
+                <h4>Partenariats</h4>
+                <p style="color:var(--text-secondary);font-size:.9rem;">Définissez les deux codes et la période pendant laquelle le partenariat sera actif. Le code réduction est fixé à 20 %.</p>
+                <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:end"><label>Partenaire<input id="admin-partner-name" class="form-input" placeholder="Y Combinator"></label><label>Code partenaire<input id="admin-partner-access-code" class="form-input" maxlength="60" placeholder="YCOMBINATOR2026"></label><label>Code réduction 20 %<input id="admin-partner-discount-code" class="form-input" maxlength="60" placeholder="YCOMBINATOR"></label><label>Début du partenariat<input id="admin-partner-start-date" class="form-input" type="date"></label><label>Fin du partenariat<input id="admin-partner-end-date" class="form-input" type="date"></label><button class="btn-verify" type="button" onclick="createAdminPartner()">Créer partenaire</button><button class="btn-verify" type="button" onclick="fetchAdminPartners()">Rafraîchir</button></div>
+                <div id="admin-partners-list" style="margin-top:.9rem;display:flex;flex-direction:column;gap:.5rem"></div>
             </div>
 
             <div class="verification-admin-block" style="margin-top: 1.5rem;">
@@ -6459,8 +7205,42 @@ ${getSuperAdminPanelHtml()}
     `;
     // Précharge les stats temps réel si visible
     setTimeout(() => refreshAppPulse(), 150);
-    setTimeout(() => fetchAdminSubscriptionPayments(), 150);
-    setTimeout(() => fetchAdminWithdrawalRequests(), 150);
+    setTimeout(() => fetchAdminDiscountCodes(), 150);
+    setTimeout(() => fetchAdminPartners(), 150);
+    installAdminButtonFeedback(container);
+}
+
+function installAdminButtonFeedback(container) {
+    if (!container || container.dataset.feedbackInstalled) return;
+    container.dataset.feedbackInstalled = "true";
+    container.addEventListener("click", (event) => {
+        const button = event.target.closest("button");
+        if (
+            !button ||
+            button.disabled ||
+            button.dataset.noPendingFeedback === "true"
+        )
+            return;
+        const label = button.textContent.trim();
+        button.dataset.originalLabel = label;
+        button.disabled = true;
+        button.classList.add("admin-action-pending");
+        button.setAttribute("aria-busy", "true");
+        button.textContent = "Traitement…";
+        // Functions invoked by inline handlers are asynchronous. Restore if no
+        // navigation/re-render happened, while preserving immediate click feedback.
+        window.setTimeout(() => {
+            if (
+                !button.isConnected ||
+                !button.classList.contains("admin-action-pending")
+            )
+                return;
+            button.disabled = false;
+            button.classList.remove("admin-action-pending");
+            button.removeAttribute("aria-busy");
+            button.textContent = button.dataset.originalLabel || label;
+        }, 8000);
+    });
 }
 
 async function fetchSuperAdminJson(path, options = {}) {
@@ -6522,7 +7302,15 @@ async function fetchSuperAdminJson(path, options = {}) {
     }
 
     if (!response.ok) {
-        throw new Error(payload?.error || "Erreur API super-admin.");
+        const diagnosticCode = payload?.diagnostic?.code;
+        const diagnosticDetail =
+            payload?.diagnostic?.details || payload?.diagnostic?.hint;
+        const diagnostic = diagnosticCode
+            ? ` [diagnostic ${diagnosticCode}${diagnosticDetail ? `: ${diagnosticDetail}` : ""}]`
+            : "";
+        throw new Error(
+            `${payload?.error || `Erreur API super-admin (HTTP ${response.status}).`}${diagnostic}`,
+        );
     }
 
     return payload;
@@ -6637,6 +7425,8 @@ function renderAdminSubscriptionPaymentsList(items) {
         .join("");
 }
 
+
+
 async function refreshAdminSubscriptionRelatedViews(user) {
     if (!user?.id) return;
     applyUserUpdateToCache(user);
@@ -6692,6 +7482,194 @@ async function fetchAdminSubscriptionPayments() {
                 ${escapeHtml(error?.message || "Impossible de charger les paiements.")}
             </div>
 `;
+    }
+}
+
+function renderAdminDiscountCodes(items) {
+    const container = document.getElementById("admin-discount-codes-list");
+    if (!container) return;
+    container.innerHTML = !items.length
+        ? '<div class="verification-empty">Aucun code créé.</div>'
+        : items
+              .map(
+                  (item) => `
+            <div class="admin-card" style="display:flex;justify-content:space-between;gap:0.75rem;align-items:center;flex-wrap:wrap;border:1px solid var(--border-color);padding:0.7rem;border-radius:8px;">
+                <strong>${escapeHtml(item.code)} - ${escapeHtml(item.plan || "?")} - ${Number(item.discount_percent)}%</strong>
+                <span style="color:var(--text-secondary);font-size:0.85rem;">Code: ${formatAdminPaymentDate(item.valid_from)} → ${item.valid_until ? formatAdminPaymentDate(item.valid_until) : "Sans fin"} | Avantages: ${Number(item.benefit_duration_days)} jours | Usages: ${Number(item.uses_count || 0)}${item.max_uses ? `/${Number(item.max_uses)}` : ""}</span>
+                ${item.active ? `<button type="button" class="btn-cancel" onclick="deactivateAdminDiscountCode('${escapeHtml(item.id)}')">Désactiver</button>` : '<span class="admin-badge">Désactivé</span>'}
+            </div>`,
+              )
+              .join("");
+}
+
+async function fetchAdminPartners() {
+    const box = document.getElementById("admin-partners-list");
+    if (!box) return;
+    try {
+        const data = await fetchSuperAdminJson("/api/admin/partners");
+        box.innerHTML = !(data.partners || []).length
+            ? '<div class="verification-empty">Aucun partenaire.</div>'
+            : data.partners
+                  .map(
+                      (p) =>
+                          `<div class="admin-card" style="padding:.75rem;border:1px solid var(--border-color);border-radius:10px"><strong>${escapeHtml(p.name)}</strong> · ${escapeHtml(p.status)}<br><small>Partenaire: <b>${(p.partner_codes || []).map((c) => escapeHtml(c.code)).join(", ") || "—"}</b> · Réduction 20 %: <b>${(p.partner_discount_codes || []).map((c) => escapeHtml(c.code)).join(", ") || "—"}</b><br>Valide du ${formatAdminPaymentDate(p.start_date)} au ${formatAdminPaymentDate(p.end_date)}</small><div style="display:flex;gap:.4rem;margin-top:.5rem"><input id="partner-code-${p.id}" class="form-input" placeholder="Nouveau code"><button class="btn-verify" onclick="createAdminPartnerCode('${p.id}','partner')">Code partenaire</button><button class="btn-verify" onclick="createAdminPartnerCode('${p.id}','discount')">Code réduction 20%</button></div></div>`,
+                  )
+                  .join("");
+    } catch (e) {
+        box.textContent = e.message || "Impossible de charger les partenaires.";
+    }
+}
+async function createAdminPartner() {
+    try {
+        const input = document.getElementById("admin-partner-name");
+        const name = input?.value?.trim();
+        if (!name) throw new Error("Saisissez le nom du partenaire.");
+        const accessCode = document
+            .getElementById("admin-partner-access-code")
+            ?.value.trim();
+        const discountCode = document
+            .getElementById("admin-partner-discount-code")
+            ?.value.trim();
+        const startDate = document.getElementById(
+            "admin-partner-start-date",
+        )?.value;
+        const endDate = document.getElementById(
+            "admin-partner-end-date",
+        )?.value;
+        if (!accessCode || !discountCode || !startDate || !endDate) {
+            throw new Error(
+                "Saisissez les deux codes et les dates du partenariat.",
+            );
+        }
+        const startDateValue = new Date(`${startDate}T00:00:00`);
+        const endDateValue = new Date(`${endDate}T23:59:59`);
+        if (endDateValue <= startDateValue) {
+            throw new Error("La date de fin doit être après la date de début.");
+        }
+        await fetchSuperAdminJson("/api/admin/partners", {
+            method: "POST",
+            body: JSON.stringify({
+                name,
+                access_code: accessCode,
+                discount_code: discountCode,
+                start_date: startDateValue.toISOString(),
+                end_date: endDateValue.toISOString(),
+            }),
+        });
+        input.value = "";
+        [
+            "admin-partner-access-code",
+            "admin-partner-discount-code",
+            "admin-partner-start-date",
+            "admin-partner-end-date",
+        ].forEach((id) => {
+            const field = document.getElementById(id);
+            if (field) field.value = "";
+        });
+        window.ToastManager?.success?.(
+            "Partenaire créé",
+            "Le partenaire est maintenant disponible.",
+        );
+        window.showToast?.("Partenaire créé avec succès.", "success");
+        await fetchAdminPartners();
+    } catch (e) {
+        const partnersList = document.getElementById("admin-partners-list");
+        if (partnersList) {
+            partnersList.innerHTML = `<div class="verification-empty">${escapeHtml(e.message || "Création impossible.")}</div>`;
+        }
+        window.ToastManager?.error?.(
+            "Erreur",
+            e.message || "Création impossible.",
+        );
+        window.showToast?.(e.message || "Création impossible.", "error");
+    }
+}
+async function createAdminPartnerCode(id, kind) {
+    try {
+        const code = document.getElementById(`partner-code-${id}`).value;
+        await fetchSuperAdminJson(
+            `/api/admin/partners/${encodeURIComponent(id)}/codes`,
+            { method: "POST", body: JSON.stringify({ kind, code }) },
+        );
+        window.ToastManager?.success?.("Code créé", "Le code est actif.");
+        await fetchAdminPartners();
+    } catch (e) {
+        window.ToastManager?.error?.(
+            "Erreur",
+            e.message || "Création impossible.",
+        );
+        window.showToast?.(e.message || "Création impossible.", "error");
+    }
+}
+
+async function fetchAdminDiscountCodes() {
+    const container = document.getElementById("admin-discount-codes-list");
+    if (!container) return;
+    try {
+        const payload = await fetchSuperAdminJson("/api/admin/discount-codes");
+        renderAdminDiscountCodes(payload?.codes || []);
+    } catch (error) {
+        container.innerHTML = `<div class="verification-empty">${escapeHtml(error?.message || "Impossible de charger les codes.")}</div>`;
+    }
+}
+
+async function createAdminDiscountCode() {
+    const code = document.getElementById("admin-discount-code")?.value || "";
+    const percent =
+        document.getElementById("admin-discount-percent")?.value || "";
+    const plan =
+        document.getElementById("admin-discount-plan")?.value || "standard";
+    const duration =
+        document.getElementById("admin-discount-duration")?.value || "";
+    const maxUses =
+        document.getElementById("admin-discount-max-uses")?.value || "";
+    const from = document.getElementById("admin-discount-from")?.value || "";
+    const until = document.getElementById("admin-discount-until")?.value || "";
+    try {
+        await fetchSuperAdminJson("/api/admin/discount-codes", {
+            method: "POST",
+            body: JSON.stringify({
+                code,
+                plan,
+                discount_percent: percent,
+                benefit_duration_days: duration,
+                max_uses: maxUses || undefined,
+                valid_from: from || undefined,
+                valid_until: until || undefined,
+            }),
+        });
+        window.ToastManager?.success?.(
+            "Code créé",
+            "Le code de réduction est actif.",
+        );
+        window.showToast?.("Code de réduction créé avec succès.", "success");
+        document.getElementById("admin-discount-code").value = "";
+        document.getElementById("admin-discount-percent").value = "";
+        await fetchAdminDiscountCodes();
+    } catch (error) {
+        window.ToastManager?.error?.(
+            "Erreur",
+            error?.message || "Impossible de créer le code.",
+        );
+        window.showToast?.(
+            error?.message || "Impossible de créer le code.",
+            "error",
+        );
+    }
+}
+
+async function deactivateAdminDiscountCode(id) {
+    try {
+        await fetchSuperAdminJson(
+            `/api/admin/discount-codes/${encodeURIComponent(id)}`,
+            { method: "DELETE" },
+        );
+        await fetchAdminDiscountCodes();
+    } catch (error) {
+        ToastManager?.error(
+            "Erreur",
+            error?.message || "Impossible de désactiver le code.",
+        );
     }
 }
 
@@ -6943,8 +7921,9 @@ async function fetchFeedbackInbox() {
             .select("id, created_at, mood, comment, sender_user_id")
             .eq("receiver_id", SUPER_ADMIN_ID)
             .order("created_at", { ascending: false })
-            .limit(200);
+            .limit(1000);
         if (error) throw error;
+        container.dataset.feedbackExpanded = "false";
         renderFeedbackInboxList(data || []);
     } catch (err) {
         console.error("Erreur chargement feedback:", err);
@@ -6959,7 +7938,9 @@ function renderFeedbackInboxList(items) {
         container.innerHTML = `<p style="color: var(--text-secondary);">Aucun feedback pour le moment.</p>`;
         return;
     }
-    container.innerHTML = items
+    const isExpanded = container.dataset.feedbackExpanded === "true";
+    const visibleItems = isExpanded ? items : items.slice(0, 3);
+    const feedbackCards = visibleItems
         .map((fb) => {
             const mood = typeof fb.mood === "number" ? fb.mood : null;
             const moodLabel =
@@ -6996,6 +7977,23 @@ function renderFeedbackInboxList(items) {
             `;
         })
         .join("");
+    const remainingCount = items.length - visibleItems.length;
+    const toggleLabel = isExpanded
+        ? "Afficher seulement les 3 derniers"
+        : `Afficher les ${remainingCount} autres feedbacks`;
+    const toggleButton =
+        items.length > 3
+            ? `<button type="button" class="btn-verify admin-feedback-toggle" style="align-self:flex-start;">${toggleLabel}</button>`
+            : "";
+
+    container.innerHTML = feedbackCards + toggleButton;
+    const toggle = container.querySelector(".admin-feedback-toggle");
+    if (toggle) {
+        toggle.addEventListener("click", () => {
+            container.dataset.feedbackExpanded = String(!isExpanded);
+            renderFeedbackInboxList(items);
+        });
+    }
 }
 
 async function fetchVerificationRequests() {
@@ -7765,25 +8763,21 @@ async function applyGiftPlanToUser(userId, planValue) {
     ]);
 
     let badgeToApply = badgeValue;
-    let followersCount = 0;
     try {
         const { data: profile } = await supabase
             .from("users")
-            .select("badge, followers_count")
+            .select("badge")
             .eq("id", userId)
             .maybeSingle();
         const existingBadge = String(profile?.badge || "").toLowerCase();
-        if (protectedBadges.has(existingBadge)) {
+        if (plan !== "pro" && protectedBadges.has(existingBadge)) {
             badgeToApply = profile?.badge || badgeValue;
         }
-        followersCount = Number(profile?.followers_count || 0);
     } catch (e) {
         // Si la lecture échoue, garder le badge plan par défaut
-        followersCount = 0;
     }
 
-    const isMonetized =
-        (plan === "medium" || plan === "pro") && followersCount >= 1000;
+    const isMonetized = ["medium", "pro"].includes(plan);
     if (isSuperAdmin()) {
         try {
             const serverUser = await requestAdminGiftPlan(userId, plan);
@@ -7806,6 +8800,15 @@ async function applyGiftPlanToUser(userId, planValue) {
         badge: badgeToApply,
         is_monetized: isMonetized,
         updated_at: new Date().toISOString(),
+        advanced_profile_customization: false,
+        priority_recommendations: false,
+        full_profile_customization: false,
+        hd_streaming: false,
+        private_live: false,
+        advanced_collab_tools: false,
+        realtime_analytics: false,
+        data_export: false,
+        maximum_visibility: false,
     };
 
     // Application automatique des avantages locaux (fallback ou direct)
@@ -7984,15 +8987,40 @@ function renderVerificationBadgeById(userId) {
 }
 
 function renderVerificationBadgeOnly(userId) {
-    const verificationHtml = renderVerificationBadgeById(userId);
+    const verificationHtml =
+        renderVerificationBadgeById(userId) + renderFataBadgeById(userId);
     if (!verificationHtml) return "";
     return `<div class="badge-container">${verificationHtml}</div>`;
+}
+
+function renderVerifiedPageBadge(pageId) {
+    if (
+        !pageId ||
+        typeof window.isVerifiedPageId !== "function" ||
+        !window.isVerifiedPageId(pageId)
+    ) {
+        return "";
+    }
+    return `<img src="icons/verify_page.svg" alt="Page vérifiée" class="verification-badge page-verification-badge">`;
+}
+
+function renderFataBadgeById(userId) {
+    if (!isFataBadgeUserId(userId)) return "";
+    return `<img src="icons/fata.webp?v=${BADGE_ASSET_VERSION}" alt="Challenge Fata validé" title="Challenge Fata validé" class="fata-verification-badge">`;
+}
+
+function renderVerifiedPageName(nameHtml, pageId) {
+    if (!nameHtml) return "";
+    const badgeHtml = renderVerifiedPageBadge(pageId);
+    if (!badgeHtml) return nameHtml;
+    return `<span class="username-with-badge username-with-page-badge">${nameHtml}${badgeHtml}</span>`;
 }
 
 function renderUsernameForProfile(nameHtml, userId) {
     if (!nameHtml) return "";
     const labelHtml = wrapUsernameLabel(nameHtml);
-    const verificationHtml = renderVerificationBadgeById(userId);
+    const verificationHtml =
+        renderVerificationBadgeById(userId) + renderFataBadgeById(userId);
     if (verificationHtml) {
         return `<span class="username-with-badge">${labelHtml}${verificationHtml}</span>`;
     }
@@ -8018,7 +9046,7 @@ function renderCertificationsHtml(certs) {
                 <span style="font-size: 0.9rem; color: var(--text-secondary);">${label}</span>
                 <div class="pro-page-link" onclick="navigateToProPage('${page.slug}')" style="display: flex; align-items: center; gap: 6px; cursor: pointer; background: rgba(var(--primary-rgb), 0.05); padding: 4px 10px; border-radius: 20px; border: 1px solid rgba(var(--primary-rgb), 0.1); transition: all 0.2s;">
                     <img src="${logo}" style="width: 20px; height: 20px; border-radius: 4px; object-fit: cover; box-shadow: 0 1px 3px rgba(0,0,0,0.1);" alt="${page.name}">
-                    <span style="font-weight: 600; color: var(--primary-color); font-size: 0.9rem;">${page.name}</span>
+                    <span style="font-weight: 600; color: var(--primary-color); font-size: 0.9rem;">${renderVerifiedPageName(page.name, page.id)}</span>
                 </div>
             </div>
         `;
@@ -8062,10 +9090,11 @@ function renderUsernameWithBadge(nameHtml, userId, isPage = false) {
     const labelHtml = wrapUsernameLabel(nameHtml);
 
     if (isPage) {
-        return `<span class="username-with-badge">${labelHtml}<img src="icons/verify-com.svg" class="username-badge" title="Page Professionnelle Officielle"></span>`;
+        return renderVerifiedPageName(labelHtml, userId);
     }
 
-    const verificationHtml = renderVerificationBadgeById(userId);
+    const verificationHtml =
+        renderVerificationBadgeById(userId) + renderFataBadgeById(userId);
     if (verificationHtml) {
         return `<span class="username-with-badge">${labelHtml}${verificationHtml}</span>`;
     }
@@ -8156,6 +9185,16 @@ async function addVerifiedUserId(type, userId, planValue = null) {
     if (!cleanId) return;
 
     try {
+        const shouldApplyPlan = isSuperAdmin() && normalizeGiftPlan(planValue);
+        if (shouldApplyPlan) {
+            const giftedUser = await applyGiftPlanToUser(cleanId, planValue);
+            if (!giftedUser) {
+                throw new Error(
+                    "Le plan n'a pas pu être attribué au bénéficiaire.",
+                );
+            }
+        }
+
         const { error } = await supabase.from("verified_badges").upsert(
             {
                 user_id: cleanId,
@@ -8173,11 +9212,6 @@ async function addVerifiedUserId(type, userId, planValue = null) {
             .eq("type", type)
             .eq("status", "pending");
 
-        const shouldApplyPlan = isSuperAdmin() && normalizeGiftPlan(planValue);
-        if (shouldApplyPlan) {
-            await applyGiftPlanToUser(cleanId, planValue);
-        }
-
         await fetchVerifiedBadges();
         if (
             window.currentProfileViewed === cleanId &&
@@ -8188,8 +9222,10 @@ async function addVerifiedUserId(type, userId, planValue = null) {
 
         if (window.ToastManager) {
             ToastManager.success(
-                "Badge appliqué",
-                "La vérification a été accordée.",
+                shouldApplyPlan ? "Plan attribué" : "Badge appliqué",
+                shouldApplyPlan
+                    ? "Le plan et ses avantages ont été activés pour le bénéficiaire."
+                    : "La vérification a été accordée.",
             );
         }
     } catch (error) {
@@ -8915,7 +9951,7 @@ function generateBadge(badgeType, label) {
     }
 
     const svg = badgeSVGs[badgeType];
-    if (!svg) return "";
+    if (!svg && badgeType !== "ai") return "";
 
     let cssClass = "badge";
     if (badgeType.startsWith("consistency")) cssClass += "";
@@ -8924,11 +9960,16 @@ function generateBadge(badgeType, label) {
     else if (badgeType === "pause") cssClass += " badge-pause badge-filled";
     else if (badgeType === "empty") cssClass += "";
     else if (badgeType === "transparent") cssClass += " badge-success";
+    else if (badgeType === "ai") cssClass += " badge-success badge-filled";
     else cssClass += "";
+
+    const badgeContent = svg
+        ? `<div class="badge-icon">${svg}</div>`
+        : `<div class="badge-icon" aria-hidden="true">✦</div>`;
 
     return `
 <div class="${cssClass}" title="${label}">
-            <div class="badge-icon">${svg}</div>
+            ${badgeContent}
             <span>${label}</span>
 </div>
     `;
@@ -8988,10 +10029,27 @@ function getContentBadges(content) {
         empty: "Vide",
     };
 
-    badges.push({
-        type: content.state,
-        label: stateLabels[content.state],
-    });
+    if (content && content.state) {
+        badges.push({
+            type: content.state,
+            label: stateLabels[content.state],
+        });
+    }
+
+    if (window.resolveContentAIFlag && window.resolveContentAIFlag(content)) {
+        badges.push({ type: "ai", label: "IA" });
+    } else if (
+        typeof window !== "undefined" &&
+        window.extractAIFlagFromContent &&
+        window.extractAIFlagFromContent(content)
+    ) {
+        badges.push({ type: "ai", label: "IA" });
+    } else if (
+        typeof resolveContentAIFlag === "function" &&
+        resolveContentAIFlag(content)
+    ) {
+        badges.push({ type: "ai", label: "IA" });
+    }
 
     return badges;
 }
@@ -9007,7 +10065,8 @@ function renderBadges(badgesList) {
 }
 
 function renderUserBadges(userId) {
-    const verificationHtml = renderVerificationBadgeById(userId);
+    const verificationHtml =
+        renderVerificationBadgeById(userId) + renderFataBadgeById(userId);
     const contributorBadgeHtml = getContributorBadgeHtml(userId);
     const userBadges = getUserBadges(userId);
     if (!verificationHtml && !contributorBadgeHtml && userBadges.length === 0)
@@ -9194,12 +10253,18 @@ function getProfileContentTypeLabel(content) {
 
 function renderProfileContentMedia(content, options = {}) {
     const compact = options.compact === true;
+    const mediaContentId =
+        content?.contentId || content?.content_id || content?.id || "";
+    const mediaUserId =
+        options.profileUserId || content?.userId || content?.user_id || "";
+    const mediaContextAttrs = `data-profile-media-content-id="${escapeHtml(mediaContentId)}" data-profile-media-user-id="${escapeHtml(mediaUserId)}"`;
     const mediaUrls = Array.isArray(content?.mediaUrls)
         ? content.mediaUrls.filter(Boolean)
         : [];
     const primaryMediaUrl = mediaUrls[0] || content?.mediaUrl || "";
     if (!primaryMediaUrl) return "";
 
+    const c2paBadge = renderC2PABadgeHtml("profile", content);
     const extraCount =
         mediaUrls.length > 1
             ? `<span class="profile-update-media-count">+${mediaUrls.length - 1} media${mediaUrls.length - 1 > 1 ? "s" : ""}</span>`
@@ -9207,8 +10272,9 @@ function renderProfileContentMedia(content, options = {}) {
 
     if (content?.type === "video") {
         return `
-            <div class="timeline-media profile-update-media ${compact ? "is-compact" : ""}">
-                <video src="${primaryMediaUrl}" controls playsinline preload="metadata"></video>
+            <div class="timeline-media profile-update-media ${compact ? "is-compact" : ""}" ${mediaContextAttrs} style="position: relative;">
+                <video src="${primaryMediaUrl}"${content?.posterUrl ? ` poster="${escapeHtml(content.posterUrl)}" preload="none"` : ` preload="metadata"`} controls playsinline></video>
+                ${c2paBadge}
                 ${extraCount}
             </div>
 `;
@@ -9216,8 +10282,9 @@ function renderProfileContentMedia(content, options = {}) {
 
     if (content?.type === "image") {
         return `
-            <div class="timeline-media profile-update-media ${compact ? "is-compact" : ""}">
+            <div class="timeline-media profile-update-media ${compact ? "is-compact" : ""}" ${mediaContextAttrs} style="position: relative;">
                 <img src="${primaryMediaUrl}" alt="${escapeHtml(content?.title || "Media update")}" loading="lazy" decoding="async">
+                ${c2paBadge}
                 ${extraCount}
             </div>
 `;
@@ -9232,6 +10299,29 @@ function renderProfileContentMedia(content, options = {}) {
     }
 
     return "";
+}
+
+function bindProfileImmersiveMedia(container) {
+    if (!container || container.dataset.profileImmersiveMediaBound === "true") {
+        return;
+    }
+    container.dataset.profileImmersiveMediaBound = "true";
+    container.addEventListener("click", (event) => {
+        const target = event.target instanceof Element ? event.target : null;
+        const mediaTarget = target?.closest("img, video");
+        const mediaContext = target?.closest(
+            "[data-profile-media-content-id]",
+        );
+        if (!mediaTarget || !mediaContext) return;
+
+        event.preventDefault();
+        event.stopPropagation();
+        openImmersive(
+            mediaContext.dataset.profileMediaUserId,
+            mediaContext.dataset.profileMediaContentId,
+            { profileOnly: true },
+        );
+    });
 }
 
 function renderProfileUpdateCard(
@@ -9250,8 +10340,7 @@ function renderProfileUpdateCard(
 
     // GESTION DES TYPES PROFESSIONNELS (Actualités & Événements)
     if (content.type === "news" || content.type === "event") {
-        const typeLabel =
-            content.type === "news" ? "Actualité Officielle" : "Événement";
+        const typeLabel = content.type === "news" ? "Post" : "Événement";
         const accentColor = content.type === "news" ? "#f59e0b" : "#c084fc";
         const dateLabel = safeFormatDate(content.createdAt, {
             month: "long",
@@ -9303,9 +10392,9 @@ function renderProfileUpdateCard(
             `;
         }
 
-        const mediaHtml = content.media_url
+            const mediaHtml = content.media_url
             ? `
-            <div style="margin: 15px 0; border-radius: 12px; overflow: hidden; border: 1px solid var(--border-color);">
+                <div data-profile-media-content-id="${escapeHtml(content.contentId || content.content_id || content.id || "")}" data-profile-media-user-id="${escapeHtml(profileUserId)}" style="margin: 15px 0; border-radius: 12px; overflow: hidden; border: 1px solid var(--border-color);">
                 <img src="${content.media_url}" style="width: 100%; max-height: 400px; object-fit: cover;">
             </div>
         `
@@ -9319,12 +10408,13 @@ function renderProfileUpdateCard(
                         <h3 style="margin: 0; font-size: 1.5rem; line-height: 1.2; font-family: var(--font-heading); color: #fff;">${titleHtml}</h3>
                         <span style="font-size: 0.8rem; color: var(--text-secondary);">${dateLabel}</span>
                     </div>
-                    <p style="font-size: 1.05rem; line-height: 1.6; color: var(--text-secondary); margin-bottom: 15px;">${descriptionHtml}</p>
+                    <p class="pro-post-description" data-pro-post-id="${escapeHtml(content.id || "")}" onclick="toggleProPostDescription('${escapeHtml(content.id || "")}')">${descriptionHtml}</p>
                     ${proContextHtml}
                     ${mediaHtml}
                     <div class="pro-card-footer" style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--border-color);">
                          <div class="profile-update-stats">
                             <span style="color: var(--text-secondary); font-size: 0.85rem;">Publié officiellement</span>
+                            <button type="button" class="pro-post-expand-btn" onclick="event.stopPropagation(); toggleProPostDescription('${escapeHtml(content.id || "")}')">Lire la suite</button>
                          </div>
                          <div style="display: flex; gap: 10px;">
                             <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); shareContent('${content.id}')"><i class="fas fa-share"></i></button>
@@ -9355,7 +10445,10 @@ function renderProfileUpdateCard(
         content.description || content.title || "Nouvelle mise a jour";
     const descriptionHtml = renderRichDescription(descriptionSource);
     const titleHtml = escapeHtml(content.title || "Mise a jour");
-    const mediaHtml = renderProfileContentMedia(content, { compact });
+    const mediaHtml = renderProfileContentMedia(content, {
+        compact,
+        profileUserId,
+    });
     const contextItems = [];
 
     if (!selectedArcMode && content.arc?.title) {
@@ -9383,38 +10476,71 @@ function renderProfileUpdateCard(
         ? `<div class="timeline-context profile-update-context">${contextItems.join("")}</div>`
         : "";
 
+    const authorIdentity = getContentAuthorIdentity(content);
+    const pageId =
+        authorIdentity.type === "PAGE_PRO" ? authorIdentity.id : null;
+    const pageAuthor =
+        pageId &&
+        (professionalPagesById.get(String(pageId)) ||
+            window.professionalManager?.proPagesCache?.get(String(pageId)));
     const contentAuthor =
-        content.userId && content.userId !== profileUserId
+        authorIdentity.type === "USER" &&
+        content.userId &&
+        content.userId !== profileUserId
             ? getUser(content.userId)
             : null;
-    const authorHtml = contentAuthor
+    const authorHtml = pageId
         ? `
+            <div class="profile-update-author">
+                <span class="profile-update-author-label">par</span>
+                <button type="button" class="profile-update-author-name" style="border:0;background:transparent;padding:0;color:inherit;font:inherit;cursor:pointer" data-profile-author-type="PAGE_PRO" data-profile-page-id="${escapeHtml(pageId)}" onclick="event.stopPropagation(); window.openProfessionalPageById('${escapeHtml(pageId)}')" aria-label="Voir la Page Pro ${escapeHtml(pageAuthor?.name || "professionnelle")}">${renderUsernameWithBadge(pageAuthor?.name || "Page professionnelle", pageId, true)}</button>
+            </div>
+`
+        : contentAuthor
+          ? `
             <div class="profile-update-author">
                 <span class="profile-update-author-label">par</span>
                 <span class="profile-update-author-name">${renderUsernameWithBadge(contentAuthor.name, contentAuthor.id)}</span>
             </div>
 `
-        : "";
+          : "";
 
     const isAnnouncement = isAnnouncementContent(content);
+    const canReply = canReplyToContent(content);
     const replyContentId = content.contentId || content.id || "";
     const replyOwnerId = content.userId || profileUserId || "";
     const replyInputId = replyContentId
         ? `profile-reply-input-${replyContentId}`
         : "";
     const replyCount =
-        isAnnouncement && replyContentId ? getReplyCount(replyContentId) : 0;
+        canReply && replyContentId ? getReplyCount(replyContentId) : 0;
+    const replyPanelHtml =
+        canReply && replyContentId
+            ? `
+            <div class="profile-update-reply-block">
+                <button type="button" class="reply-btn" data-reply-toggle="${escapeHtml(replyContentId)}" aria-expanded="false" onclick="event.stopPropagation(); toggleProfileAnnouncementReplies(${inlineJsString(replyContentId)})">
+                    <span data-reply-toggle-label="${escapeHtml(replyContentId)}">Répondre</span>
+                    <span class="reply-count" data-reply-count="${escapeHtml(replyContentId)}">${replyCount}</span>
+                </button>
+            </div>
+`
+            : "";
+    const targetContentId = content.contentId || content.id || "";
+    const safeEncouragedSet =
+        encouragedContentIds && typeof encouragedContentIds.has === "function"
+            ? encouragedContentIds
+            : new Set();
     const viewerCanEncourage =
-        !!content.contentId &&
-        currentUserId &&
-        currentUserId !== content.userId;
-    const isEncouraged = encouragedContentIds.has(content.contentId);
+        !!targetContentId && currentUserId && currentUserId !== content.userId;
+    const isEncouraged = targetContentId
+        ? safeEncouragedSet.has(targetContentId)
+        : false;
     const courageIcon = isEncouraged
         ? "icons/courage-green.svg"
         : "icons/courage-blue.svg";
     const encourageButtonHtml = viewerCanEncourage
         ? `
-            <button class="btn btn-secondary courage-btn profile-encourage-btn ${isEncouraged ? "encouraged" : ""}" data-content-id="${content.contentId}" onclick="event.stopPropagation(); toggleCourage('${content.contentId}', this)">
+            <button class="btn btn-secondary courage-btn profile-encourage-btn ${isEncouraged ? "encouraged" : ""}" data-content-id="${escapeHtml(targetContentId)}" onclick="event.stopPropagation(); toggleCourage('${escapeHtml(targetContentId)}', this)">
                 <img src="${courageIcon}" width="16" height="16" alt="">
                 <span>Encourager</span>
                 <span class="courage-count profile-encourage-count" data-count="${Number(content.encouragementsCount) || 0}" title="${(Number(content.encouragementsCount) || 0).toLocaleString("fr-FR")}">${formatCompactCount(content.encouragementsCount || 0)}</span>
@@ -9426,33 +10552,6 @@ function renderProfileUpdateCard(
                 <span>${formatCompactCount(content.encouragementsCount || 0)} encouragement${Number(content.encouragementsCount || 0) > 1 ? "s" : ""}</span>
             </div>
 `;
-
-    const replyPanelHtml =
-        isAnnouncement && replyContentId
-            ? `
-            <div class="profile-update-reply-block">
-                <button type="button" class="reply-btn" data-reply-toggle="${escapeHtml(replyContentId)}" aria-expanded="false" onclick="event.stopPropagation(); toggleProfileAnnouncementReplies(${inlineJsString(replyContentId)})">
-                    <span data-reply-toggle-label="${escapeHtml(replyContentId)}">Répondre</span>
-                    <span class="reply-count" data-reply-count="${escapeHtml(replyContentId)}">${replyCount}</span>
-                </button>
-                <div class="profile-reply-panel" data-profile-reply-panel="${escapeHtml(replyContentId)}" aria-hidden="true" hidden>
-                    <div class="reply-panel-head">
-                        <strong>Réponses</strong>
-                        <button type="button" class="reply-close-btn" onclick="event.stopPropagation(); toggleProfileAnnouncementReplies(${inlineJsString(replyContentId)}, false)">Fermer</button>
-                    </div>
-                    <div class="reply-inline">
-                        <textarea id="${escapeHtml(replyInputId)}" class="reply-input" placeholder="Votre réponse..."></textarea>
-                        <div class="reply-actions">
-                            <button class="btn-primary" onclick="event.stopPropagation(); submitAnnouncementReply(${inlineJsString(replyContentId)}, this, ${inlineJsString(replyOwnerId)}, ${inlineJsString(content.title || "votre annonce")})">Envoyer</button>
-                        </div>
-                    </div>
-                    <div data-replies-container="${escapeHtml(replyContentId)}">
-                        ${renderAnnouncementReplies(replyContentId)}
-                    </div>
-                </div>
-            </div>
-`
-            : "";
 
     let managementHtml = "";
     if (currentUser && currentUser.id === profileUserId) {
@@ -9481,15 +10580,19 @@ function renderProfileUpdateCard(
                 const isValidatedByThisPage =
                     content.isValidatedPro &&
                     content.validatedByPageId === page.id;
+                const pageNameHtml = renderVerifiedPageName(
+                    escapeHtml(page.name),
+                    page.id,
+                );
                 managementHtml += `
                     <div class="profile-update-management pro-management">
                         ${
                             isValidatedByThisPage
                                 ? `
-                            <button class="btn-action" style="background: #ef4444; color: #fff;" onclick="event.stopPropagation(); window.professionalManager.invalidateTrace('${content.contentId}').then(() => renderProfileIntoContainer('${profileUserId}'))">Révoquer Validation (${page.name})</button>
+                            <button class="btn-action" style="background: #ef4444; color: #fff;" onclick="event.stopPropagation(); window.professionalManager.invalidateTrace('${content.contentId}').then(() => renderProfileIntoContainer('${profileUserId}'))">Révoquer Validation (${pageNameHtml})</button>
                         `
                                 : `
-                            <button class="btn-action" style="background: #000; color: #fff;" onclick="event.stopPropagation(); window.professionalManager.validateTrace('${content.contentId}', '${page.id}').then(() => renderProfileIntoContainer('${profileUserId}'))">Accorder Seal of Approval (${page.name})</button>
+                            <button class="btn-action" style="background: #000; color: #fff;" onclick="event.stopPropagation(); window.professionalManager.validateTrace('${content.contentId}', '${page.id}').then(() => renderProfileIntoContainer('${profileUserId}'))">Accorder Seal of Approval (${pageNameHtml})</button>
                         `
                         }
                     </div>
@@ -9519,6 +10622,10 @@ function renderProfileUpdateCard(
         .filter(Boolean)
         .join(" ");
 
+    const aiBadgeHtml = resolveContentAIFlag(content)
+        ? `<span class="profile-update-pill" style="background: rgba(34,197,94,0.15); color: #86efac; border-color: rgba(34,197,94,0.4);">IA</span>`
+        : "";
+
     return `
 <article class="${cardClasses}">
             <div class="profile-update-top">
@@ -9526,6 +10633,7 @@ function renderProfileUpdateCard(
                     <span class="profile-update-state" style="--profile-update-accent:${stateMeta.accent};">${stateMeta.label}</span>
                     <span class="profile-update-pill">${typeLabel}</span>
                     ${dayChip}
+                    ${aiBadgeHtml}
                 </div>
                 <div class="profile-update-meta">
                     <span>${dateLabel}</span>
@@ -9900,20 +11008,6 @@ function renderProfileProjectProgressBoard(arcs, contents, profileUserId) {
     const summaries = buildProfileArcProgressSummaries(arcs, contents);
     if (summaries.length === 0) return "";
 
-    const activeCount = summaries.filter(
-        (item) =>
-            item.arc?.status !== "completed" &&
-            item.arc?.status !== "abandoned",
-    ).length;
-    const totalUpdates = summaries.reduce(
-        (sum, item) => sum + Number(item.updates || 0),
-        0,
-    );
-    const averageProgress = Math.round(
-        summaries.reduce((sum, item) => sum + Number(item.progress || 0), 0) /
-            Math.max(1, summaries.length),
-    );
-
     const statusLabels = {
         in_progress: "En cours",
         completed: "Terminé",
@@ -9922,19 +11016,6 @@ function renderProfileProjectProgressBoard(arcs, contents, profileUserId) {
 
     return `
 <section class="profile-progress-board">
-            <div class="profile-progress-board-head">
-                <div>
-                    <span class="profile-section-kicker">Suivi de projet</span>
-                    <h3>Avancement visible</h3>
-                    <p>Un aperçu clair des projets, de leurs updates et de leur dernière activité.</p>
-                </div>
-                <div class="profile-progress-board-stats">
-                    <span>${activeCount} actif${activeCount > 1 ? "s" : ""}</span>
-                    <span>${totalUpdates} update${totalUpdates > 1 ? "s" : ""}</span>
-                    <span>${averageProgress}% moyen</span>
-                </div>
-            </div>
-
             <div class="profile-progress-board-grid">
                 ${summaries
                     .slice(0, 4)
@@ -9987,6 +11068,11 @@ function setDiscoverFilter(filter = "all", { render = true } = {}) {
     discoverPaginationState.allItems = [];
     discoverPaginationState.currentPage = 0;
     discoverPaginationState.hasMore = false;
+    discoverPaginationState.error = null;
+    discoverPaginationState.sentinel?.remove();
+    discoverPaginationState.status?.remove();
+    discoverPaginationState.sentinel = null;
+    discoverPaginationState.status = null;
     if (discoverPaginationState.intersectionObserver) {
         discoverPaginationState.intersectionObserver.disconnect();
         discoverPaginationState.intersectionObserver = null;
@@ -10194,19 +11280,21 @@ function getDiscoverContentTime(content) {
     return Number.isFinite(t) ? t : 0;
 }
 
-function buildDiscoverArcCardEntries(users) {
+function buildDiscoverArcCardEntries(users, pages = []) {
     const entries = [];
 
-    (users || []).forEach((user) => {
-        if (!user || !user.id) return;
-        const contents = getUserContentLocal(user.id);
-        if (!contents || contents.length === 0) return;
+    const appendAuthorEntries = (user, contents, authorType, authorId) => {
+        if (!user?.id || !Array.isArray(contents) || contents.length === 0) {
+            return;
+        }
 
         const latestByArc = new Map();
         contents.forEach((content) => {
             if (!content || !content.contentId) return;
             const arcId = content.arcId || content.arc?.id || null;
-            const arcKey = arcId ? `arc-${arcId}` : "no-arc";
+            const identityKey = authorType + ":" + authorId;
+            const arcKey =
+                identityKey + ":" + (arcId ? "arc-" + arcId : "no-arc");
             const existing = latestByArc.get(arcKey);
             if (
                 !existing ||
@@ -10222,12 +11310,41 @@ function buildDiscoverArcCardEntries(users) {
                 type: "arc",
                 user,
                 content,
+                authorType,
+                authorId,
                 arcId: content.arcId || content.arc?.id || null,
                 arcKey,
-                verified: isVerifiedDiscoverUser(user),
+                verified:
+                    authorType === "PAGE_PRO"
+                        ? isVerifiedProfessionalPagePost({ content })
+                        : isVerifiedDiscoverUser(user),
                 tags: Array.isArray(content.tags) ? content.tags : [],
             });
         });
+    };
+
+    (users || []).forEach((user) => {
+        if (!user || !user.id) return;
+        const contents = getUserContentLocal(user.id);
+        if (!contents || contents.length === 0) return;
+
+        appendAuthorEntries(user, contents, "USER", user.id);
+    });
+
+    (pages || []).forEach((page) => {
+        if (!page?.id) return;
+        const owner = getUser(page.owner_id) || {
+            id: page.owner_id || page.id,
+            name: page.name || "Page professionnelle",
+            avatar: page.avatar_url || "icons/enterprise.svg",
+            title: page.industry || "",
+        };
+        appendAuthorEntries(
+            owner,
+            getPageContentLocal(page.id),
+            "PAGE_PRO",
+            String(page.id),
+        );
     });
 
     return entries.sort(
@@ -10467,6 +11584,33 @@ async function handleDiscoverQuickAction(contentId, action, userId = null) {
 }
 window.handleDiscoverQuickAction = handleDiscoverQuickAction;
 
+async function getPublicProfessionalPageOwnerIds() {
+    try {
+        const { data, error } = await supabase
+            .from("professional_pages")
+            .select("owner_id")
+            .not("owner_id", "is", null);
+        if (error) throw error;
+        return new Set(
+            (data || []).map((page) => page.owner_id).filter(Boolean),
+        );
+    } catch (error) {
+        console.warn(
+            "Impossible de charger les propriétaires des Pages Pro publiques:",
+            error,
+        );
+        return new Set();
+    }
+}
+function isVerifiedProfessionalPagePost(item) {
+    const pageId = item?.content?.pageId || item?.content?.page_id;
+    return Boolean(
+        pageId &&
+        typeof window.isVerifiedPageId === "function" &&
+        window.isVerifiedPageId(pageId),
+    );
+}
+
 function buildMoodDiscoverMix(
     discoverArcCards,
     liveStreams = [],
@@ -10502,13 +11646,23 @@ function buildMoodDiscoverMix(
         content: entry.content,
         arcId: entry.arcId || null,
         arcKey: entry.arcKey || null,
-        verified: isVerifiedDiscoverUser(entry.user),
+        verified:
+            isVerifiedDiscoverUser(entry.user) ||
+            isVerifiedProfessionalPagePost({ content: entry.content }),
         tags: Array.isArray(entry.content.tags) ? entry.content.tags : [],
     }));
 
     allItems.push(...liveItems);
 
-    if (!currentUser || allItems.length < 3) return allItems;
+    if (!currentUser || allItems.length < 3) {
+        return [...allItems].sort(
+            (left, right) =>
+                (Number(isVerifiedProfessionalPagePost(right)) * 10 +
+                    Number(isFataBadgeUserId(right.content?.userId)) * 5) -
+                (Number(isVerifiedProfessionalPagePost(left)) * 10 +
+                    Number(isFataBadgeUserId(left.content?.userId)) * 5),
+        );
+    }
 
     const prefs = loadImmersivePrefs();
     const authorScoreMap = buildAuthorScoreMapFromContents();
@@ -10528,14 +11682,18 @@ function buildMoodDiscoverMix(
             isVerifiedUserId: (userId) =>
                 isVerifiedCreatorUserId(userId) ||
                 isVerifiedStaffUserId(userId),
+            isFataUserId: isFataBadgeUserId,
             now,
             topQueries,
             viewerRole,
         });
+        const weightedScore = isVerifiedProfessionalPagePost(item)
+            ? score * 10
+            : score;
         return {
             item,
             normalized,
-            score,
+            score: weightedScore,
             preferenceScore,
         };
     });
@@ -10552,6 +11710,29 @@ function buildMoodDiscoverMix(
     return interleaved.map((entry) => entry.item);
 }
 
+function renderPageFollowButtonHtml(pageId, page = null, ownerUserId = null) {
+    const viewerId = window.currentUser?.id || null;
+    const resolvedOwnerId = page?.owner_id || ownerUserId || null;
+    if (
+        !pageId ||
+        !window.professionalManager?.togglePageFollow ||
+        (viewerId && resolvedOwnerId && viewerId === resolvedOwnerId)
+    ) {
+        return "";
+    }
+
+    const followState =
+        window.professionalManager.getCachedPageFollowState?.(pageId) || {
+            isFollowing: false,
+        };
+    const isFollowingPage = Boolean(followState.isFollowing);
+    const label = isFollowingPage ? "Abonné" : "S'abonner";
+    const icon = isFollowingPage ? "subscribed" : "subscribe";
+    const safePageId = escapeHtml(pageId);
+
+    return `<button type="button" data-page-follow-id="${safePageId}" class="btn-pro-primary pro-page-follow-btn feed-page-follow-btn${isFollowingPage ? " is-following" : ""}" onclick="event.stopPropagation(); window.professionalManager.togglePageFollow('${safePageId}')" title="${label} à cette Page Pro" aria-label="${label} à ${escapeHtml(page?.name || "cette Page Pro")}"><img src="icons/${icon}.svg" class="btn-icon" style="width: 18px; height: 18px;" alt=""> <span>${label}</span></button>`;
+}
+
 function renderUserCard(
     userId,
     isFollowing = false,
@@ -10559,31 +11740,37 @@ function renderUserCard(
     latestContentOverride = null,
     layoutOptions = {},
 ) {
-    const user = getUser(userId);
-    if (!user) return "";
-
     const latestContent = latestContentOverride || getLatestContent(userId);
     if (!latestContent) return "";
 
-    // Gérer les pages pro
-    let displayUser = { ...user };
-    let isProPost = false;
-    if (latestContent.pageId && window.professionalManager) {
-        const page = window.professionalManager.proPagesCache.get(
-            latestContent.pageId,
-        );
-        if (page) {
-            isProPost = true;
-            displayUser = {
-                id: userId,
-                name: page.name,
-                avatar: page.avatar_url || "icons/enterprise.svg",
-                title: page.industry,
-                slug: page.slug,
-                isPage: true,
-            };
-        }
-    }
+    const author = getContentAuthorIdentity(latestContent);
+    const isProPost = author.type === "PAGE_PRO";
+    const pageId = isProPost ? author.id : null;
+    const page =
+        pageId &&
+        (professionalPagesById.get(pageId) ||
+            window.professionalManager?.proPagesCache?.get(pageId));
+    const user =
+        getUser(userId) ||
+        (isProPost
+            ? {
+                  id: latestContent.userId || userId,
+                  name: page?.name || "Page professionnelle",
+                  avatar: page?.avatar_url || "icons/enterprise.svg",
+              }
+            : null);
+    if (!user) return "";
+
+    const displayUser = isProPost
+        ? {
+              id: pageId,
+              name: page?.name || "Page professionnelle",
+              avatar: page?.avatar_url || "icons/enterprise.svg",
+              title: page?.industry || "",
+              slug: page?.slug || "",
+              isPage: true,
+          }
+        : { ...user, isPage: false };
 
     const proBadgeHtml = isProPost
         ? `<span class="pro-official-badge" style="background: #000; color: #fff; font-size: 0.65rem; padding: 2px 8px; border-radius: 4px; font-weight: 900; margin-left: 8px; border: 1px solid rgba(255,255,255,0.2); vertical-align: middle; display: inline-block;">PRO</span>`
@@ -10623,16 +11810,20 @@ function renderUserCard(
               ? "is-failure"
               : "is-paused";
 
-    const badgesHtml = renderUserBadges(userId);
+    const badgesHtml = isProPost
+        ? renderVerifiedPageBadge(pageId)
+        : renderUserBadges(userId);
     const monetizationBadgeHtml =
-        typeof window.generatePlanBadgeHTML === "function"
+        !isProPost && typeof window.generatePlanBadgeHTML === "function"
             ? window.generatePlanBadgeHTML(user, "feed")
             : "";
+    const supportCreator = getUser(latestContent.userId || userId) || user;
+    const supportCreatorId = supportCreator?.id || userId;
+    const supportViewerId = window.currentUser?.id || null;
     const supportButtonHtml =
-        currentUser &&
-        currentUser.id !== userId &&
+        (!supportViewerId || supportViewerId !== supportCreatorId) &&
         typeof window.generateSupportButtonHTML === "function"
-            ? window.generateSupportButtonHTML(user, "feed")
+            ? window.generateSupportButtonHTML(supportCreator, "feed")
             : "";
 
     const tags = Array.isArray(latestContent.tags) ? latestContent.tags : [];
@@ -10642,14 +11833,6 @@ function renderUserCard(
         className: "arc-collab-avatars--card-corner",
         fromImmersive: false,
     });
-    const supportOverlayHtml =
-        supportButtonHtml && latestContent?.type !== "text"
-            ? `<div class="support-overlay support-overlay--feed${collabCornerHtml ? " support-overlay--stacked" : ""}">${supportButtonHtml}</div>`
-            : "";
-    const supportInlineHtml =
-        !latestContent?.mediaUrl && !(latestContent?.mediaUrls || []).length
-            ? supportButtonHtml
-            : "";
     const mediaList = Array.isArray(latestContent.mediaUrls)
         ? latestContent.mediaUrls.filter(Boolean)
         : [];
@@ -10660,13 +11843,17 @@ function renderUserCard(
     const hasMultiImages =
         mediaList.length > 1 && latestContent.type !== "video";
     const primaryMediaUrl = hasMedia ? mediaList[0] : "";
+    const supportOverlayHtml =
+        supportButtonHtml && hasMedia
+            ? `<div class="support-overlay support-overlay--feed${collabCornerHtml ? " support-overlay--stacked" : ""}">${supportButtonHtml}</div>`
+            : "";
 
     let mediaHtml = "";
     if (hasMedia) {
         if (latestContent.type === "video") {
             mediaHtml = `
-                <div class="card-media-wrap card-media-wrap--editorial">
-                    <video id="video-${userId}" class="card-media" src="${primaryMediaUrl}" muted playsinline webkit-playsinline autoplay preload="metadata" tabindex="-1" data-user-id="${userId}" data-content-id="${latestContent.contentId}" disablePictureInPicture></video>
+                <div class="card-media-wrap card-media-wrap--editorial${latestContent.posterUrl ? " has-poster" : ""}">
+                    <video id="video-${userId}" class="card-media" data-src="${primaryMediaUrl}"${latestContent.posterUrl ? ` poster="${latestContent.posterUrl}"` : ""} muted playsinline webkit-playsinline preload="none" tabindex="-1" data-user-id="${userId}" data-content-id="${latestContent.contentId}" disablePictureInPicture></video>
                     <div class="video-fallback">
                         <img src="icons/play.svg" alt="Play" width="40" height="40">
                         <span>Vidéo</span>
@@ -10738,13 +11925,19 @@ function renderUserCard(
         }
     }
 
+    const supportInlineHtml =
+        supportButtonHtml && (!hasMedia || !mediaHtml)
+            ? supportButtonHtml
+            : "";
+
     const isAnnouncement = isAnnouncementContent(latestContent);
     const replyCount = isAnnouncement
         ? getReplyCount(latestContent.contentId)
         : 0;
 
-    const isVerifiedUser =
-        isVerifiedCreatorUserId(userId) || isVerifiedStaffUserId(userId);
+    const isVerifiedUser = isProPost
+        ? Boolean(window.isVerifiedPageId?.(pageId))
+        : isVerifiedCreatorUserId(userId) || isVerifiedStaffUserId(userId);
 
     const isTextContent =
         latestContent && (!hasMedia || latestContent.type === "text");
@@ -10798,7 +11991,13 @@ function renderUserCard(
 
     // Subscribe Button
     let subscribeBtn = "";
-    if (currentUser && currentUser.id !== userId) {
+    if (isProPost) {
+        subscribeBtn = renderPageFollowButtonHtml(
+            pageId,
+            page,
+            latestContent.userId || userId,
+        );
+    } else if (window.currentUser?.id && window.currentUser.id !== userId) {
         const btnClass = isFollowing
             ? "btn-follow-card unfollow"
             : "btn-follow-card";
@@ -10841,15 +12040,18 @@ function renderUserCard(
 
     // User Info (Name, Avatar, Subscribe) - Moved to bottom
     const profileOnClick = displayUser.isPage
-        ? `window.professionalManager.renderProPage('${displayUser.slug}')`
+        ? `window.openProfessionalPageById('${escapeHtml(pageId)}')`
         : `handleProfileClick('${userId}', this)`;
+    const profileIdentityAttribute = displayUser.isPage
+        ? `data-profile-page-id="${escapeHtml(pageId)}"`
+        : `data-profile-user-id="${escapeHtml(userId)}"`;
 
     const userInfoHtml = `
 <div class="card-user-bottom">
-            <button class="profile-link card-profile-link" data-profile-user-id="${userId}" onclick="event.preventDefault(); event.stopPropagation(); ${profileOnClick}" type="button" aria-label="Voir le profil de ${escapeHtml(displayUser.name || "cet utilisateur")}">
+            <button class="profile-link card-profile-link" data-profile-author-type="${displayUser.isPage ? "PAGE_PRO" : "USER"}" ${profileIdentityAttribute} onclick="event.preventDefault(); event.stopPropagation(); ${profileOnClick}" type="button" aria-label="Voir ${displayUser.isPage ? "la Page Pro" : "le profil"} de ${escapeHtml(displayUser.name || "cet utilisateur")}">
                 <img src="${displayUser.avatar || "https://placehold.co/40"}" class="card-avatar" loading="lazy" decoding="async">
                 <div class="profile-link-text">
-                    <h3 class="discover-user-name">${renderUsernameWithBadge(displayUser.name, userId)}${proBadgeHtml}${monetizationBadgeHtml}</h3>
+                    <h3 class="discover-user-name">${renderUsernameWithBadge(displayUser.name, displayUser.isPage ? pageId : userId, displayUser.isPage)}${proBadgeHtml}${monetizationBadgeHtml}</h3>
                     ${momentumBadgeHtml}
                     <div class="card-user-title">${displayUser.title || ""}</div>
                 </div>
@@ -11610,7 +12812,6 @@ function reconcileDiscoverGrid(grid, renderedItems, waitMessage) {
                     existing.dataset.contentId &&
                     existing.dataset.contentId !== contentId) ||
                 type === "live"; // live cards change often (viewers, status)
-
             const node = shouldReplace
                 ? createDiscoverElement(html, key, contentId, {
                       markAsNew: !existing,
@@ -11665,6 +12866,72 @@ function reconcileDiscoverGrid(grid, renderedItems, waitMessage) {
     }
 }
 
+function ensureDiscoverPaginationUi(grid) {
+    if (!grid?.parentElement) return null;
+    const parent = grid.parentElement;
+
+    if (!discoverPaginationState.status) {
+        const status = document.createElement("div");
+        status.className = "discover-pagination-status";
+        status.setAttribute("aria-live", "polite");
+        parent.appendChild(status);
+        discoverPaginationState.status = status;
+    }
+
+    if (!discoverPaginationState.sentinel) {
+        const sentinel = document.createElement("div");
+        sentinel.className = "discover-pagination-sentinel";
+        sentinel.setAttribute("aria-hidden", "true");
+        parent.appendChild(sentinel);
+        discoverPaginationState.sentinel = sentinel;
+    }
+
+    return discoverPaginationState.status;
+}
+
+function renderDiscoverPaginationStatus(kind = "idle") {
+    const status = discoverPaginationState.status;
+    if (!status) return;
+
+    if (kind === "loading") {
+        status.innerHTML = `
+            <div class="discover-pagination-loading">
+                <span class="discover-pagination-spinner" aria-hidden="true"></span>
+                <div class="discover-pagination-skeletons" aria-hidden="true">
+                    <span></span><span></span>
+                </div>
+            </div>
+        `;
+        status.classList.add("is-visible");
+        return;
+    }
+
+    if (kind === "error") {
+        status.innerHTML = `
+            <div class="discover-pagination-error">
+                <span>Impossible de charger la suite du feed.</span>
+                <button type="button" class="discover-pagination-retry">Réessayer de charger</button>
+            </div>
+        `;
+        status.querySelector("button")?.addEventListener("click", () => {
+            discoverPaginationState.error = null;
+            loadNextDiscoverPage();
+        });
+        status.classList.add("is-visible");
+        return;
+    }
+
+    if (kind === "end") {
+        status.innerHTML =
+            '<div class="discover-pagination-end">Vous êtes à jour — Fin du feed XERA1</div>';
+        status.classList.add("is-visible");
+        return;
+    }
+
+    status.innerHTML = "";
+    status.classList.remove("is-visible");
+}
+
 /**
  * Charge et affiche les prochains éléments du feed de manière progressive
  * Ajoute 20 éléments et les charge un par un
@@ -11704,54 +12971,71 @@ function showFirstProjectFeedPopup() {
         });
 }
 
-function loadNextDiscoverPage() {
-    if (discoverPaginationState.isLoading || !discoverPaginationState.hasMore)
+async function loadNextDiscoverPage() {
+    if (
+        discoverPaginationState.isLoading ||
+        !discoverPaginationState.hasMore ||
+        discoverPaginationState.error
+    )
         return;
 
-    discoverPaginationState.isLoading = true;
     const grid = document.querySelector(".discover-grid");
     if (!grid) return;
 
-    const startIdx =
-        (discoverPaginationState.currentPage + 1) * DISCOVER_ITEMS_PER_PAGE;
-    const endIdx = Math.min(
-        startIdx + DISCOVER_ITEMS_PER_PAGE,
-        discoverPaginationState.allItems.length,
-    );
+    discoverPaginationState.isLoading = true;
+    const status = ensureDiscoverPaginationUi(grid);
+    if (!status) {
+        discoverPaginationState.isLoading = false;
+        return;
+    }
+    renderDiscoverPaginationStatus("loading");
 
-    const itemsToAdd = discoverPaginationState.allItems.slice(startIdx, endIdx);
-    const fragment = document.createDocumentFragment();
+    try {
+        const startIdx =
+            (discoverPaginationState.currentPage + 1) * DISCOVER_ITEMS_PER_PAGE;
+        const endIdx = Math.min(
+            startIdx + DISCOVER_ITEMS_PER_PAGE,
+            discoverPaginationState.allItems.length,
+        );
+        const itemsToAdd = discoverPaginationState.allItems.slice(
+            startIdx,
+            endIdx,
+        );
+        const fragment = document.createDocumentFragment();
 
-    // Ajouter les nouveaux éléments au DOM
-    itemsToAdd.forEach((item, order) => {
-        const { html, key, contentId, type, rowSize, rowPosition } = item;
-        setTimeout(() => {
+        itemsToAdd.forEach((item) => {
+            const { html, key, contentId, type, rowSize, rowPosition } = item;
             const node = createDiscoverElement(html, key, contentId, {
                 markAsNew: false,
             });
             if (node && type) node.dataset.type = type;
             if (node && rowSize) node.dataset.rowSize = rowSize;
             if (node && rowPosition) node.dataset.rowPosition = rowPosition;
-            if (node) grid.appendChild(node);
+            if (node) fragment.appendChild(node);
+        });
 
-            // Initialiser les interactions pour le nouvel élément
-            if (typeof setupDiscoverVideoInteractions === "function") {
-                setupDiscoverVideoInteractions();
-            }
-            if (typeof initDiscoverMoodTracking === "function") {
-                initDiscoverMoodTracking();
-            }
-        }, order * 80); // Charger les éléments un par un avec 80ms d'intervalle
-    });
+        grid.appendChild(fragment);
+        discoverPaginationState.currentPage++;
+        discoverPaginationState.hasMore =
+            endIdx < discoverPaginationState.allItems.length;
+        discoverPaginationState.error = null;
 
-    discoverPaginationState.currentPage++;
-    discoverPaginationState.hasMore =
-        endIdx < discoverPaginationState.allItems.length;
-    discoverPaginationState.isLoading = false;
+        setupDiscoverVideoInteractions();
+        initDiscoverMoodTracking();
 
-    // Recréer l'intersection observer après avoir ajouté les éléments
-    if (discoverPaginationState.hasMore) {
-        setupDiscoverPaginationObserver();
+        if (discoverPaginationState.hasMore) {
+            renderDiscoverPaginationStatus("idle");
+            setupDiscoverPaginationObserver();
+        } else {
+            renderDiscoverPaginationStatus("end");
+            discoverPaginationState.intersectionObserver?.disconnect();
+        }
+    } catch (error) {
+        console.error("Erreur pagination discover:", error);
+        discoverPaginationState.error = error;
+        renderDiscoverPaginationStatus("error");
+    } finally {
+        discoverPaginationState.isLoading = false;
     }
 }
 
@@ -11761,6 +13045,8 @@ function loadNextDiscoverPage() {
 function setupDiscoverPaginationObserver() {
     const grid = document.querySelector(".discover-grid");
     if (!grid) return;
+
+    ensureDiscoverPaginationUi(grid);
 
     // Nettoyer l'ancien observateur
     if (discoverPaginationState.intersectionObserver) {
@@ -11790,9 +13076,10 @@ function setupDiscoverPaginationObserver() {
     );
 
     // Observer le dernier élément du grid
-    const lastChild = grid.lastElementChild;
-    if (lastChild) {
-        discoverPaginationState.intersectionObserver.observe(lastChild);
+    if (discoverPaginationState.sentinel) {
+        discoverPaginationState.intersectionObserver.observe(
+            discoverPaginationState.sentinel,
+        );
     }
 }
 
@@ -11902,7 +13189,11 @@ async function renderDiscoverGrid() {
         );
     });
 
-    const discoverArcCards = buildDiscoverArcCardEntries(usersToDisplay);
+    const professionalPages = await ensureProfessionalPageDataLoaded();
+    const discoverArcCards = buildDiscoverArcCardEntries(
+        usersToDisplay,
+        professionalPages,
+    );
     const arcIdsForDiscover = discoverArcCards
         .map((entry) => entry.arcId)
         .filter(Boolean);
@@ -11950,6 +13241,9 @@ async function renderDiscoverGrid() {
                     window.professionalManager.getPageInfo(id),
                 ),
             );
+            await window.professionalManager.preloadPageFollowStates?.(
+                Array.from(pageIds),
+            );
         }
     }
 
@@ -11963,9 +13257,13 @@ async function renderDiscoverGrid() {
         const content = item.content || null;
         if (!userId || !content) return "";
         const isFollowed = followedSet.has(userId);
-        const isEncouraged = content
-            ? encouragedContentIds.has(content.contentId)
-            : false;
+        const isEncouraged =
+            content &&
+            content.contentId &&
+            encouragedContentIds &&
+            typeof encouragedContentIds.has === "function"
+                ? encouragedContentIds.has(content.contentId)
+                : false;
         return renderUserCard(userId, isFollowed, isEncouraged, content, {
             isPreferred: Boolean(item.__discoverPreferred),
         });
@@ -12052,13 +13350,17 @@ async function renderDiscoverGrid() {
         // Afficher seulement les 20 premiers éléments
         const initialItems = renderedItems.slice(0, DISCOVER_ITEMS_PER_PAGE);
         reconcileDiscoverGrid(grid, initialItems, waitMessage);
+        ensureDiscoverPaginationUi(grid);
 
         setupDiscoverVideoInteractions();
         initDiscoverMoodTracking();
 
         // Initialiser l'observateur pour la pagination
         if (discoverPaginationState.hasMore) {
+            renderDiscoverPaginationStatus("idle");
             setupDiscoverPaginationObserver();
+        } else {
+            renderDiscoverPaginationStatus("end");
         }
         return;
     }
@@ -12079,15 +13381,33 @@ async function renderDiscoverGrid() {
 function getAllFeedContent() {
     let allContent = [];
     if (typeof userContents !== "undefined") {
-        Object.values(userContents).forEach((userContentList) => {
+        Object.entries(userContents).forEach(([userId, userContentList]) => {
             if (Array.isArray(userContentList)) {
-                allContent = allContent.concat(userContentList);
+                allContent = allContent.concat(
+                    userContentList.filter((content) =>
+                        isUserAuthoredContent(content, userId),
+                    ),
+                );
             }
         });
     }
+
+    professionalPageContents.forEach((_contents, pageId) => {
+        allContent = allContent.concat(getPageContentLocal(pageId));
+    });
+
+    const uniqueContent = new Map();
+    allContent.forEach((content, index) => {
+        const id = content?.contentId || content?.id || `feed-item-${index}`;
+        if (!uniqueContent.has(String(id))) {
+            uniqueContent.set(String(id), content);
+        }
+    });
+
     // Sort by createdAt descending (newest first)
-    return allContent.sort(
-        (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
+    return Array.from(uniqueContent.values()).sort(
+        (a, b) =>
+            getDiscoverContentTime(b) - getDiscoverContentTime(a),
     );
 }
 
@@ -12425,9 +13745,9 @@ window.recordSearchPreference = recordSearchPreference;
 /**
  * Retourne le multiplicateur de boost basé sur le plan du créateur
  * Free: 1.0 (pas de boost)
- * Standard: 1.125 (+12.5% en moyenne)
- * Medium: 1.275 (+27.5% en moyenne)
- * Pro: 1.50 (+50%)
+ * Standard: 1.125 (+12.5% du score)
+ * Medium: 1.5 (+50% du score)
+ * Pro: 5.0 (+400% du score)
  */
 function getPlanBoostMultiplier(userId) {
     if (!userId || typeof allUsers === "undefined") return 1.0;
@@ -12444,9 +13764,9 @@ function getPlanBoostMultiplier(userId) {
 
     switch (plan) {
         case "pro":
-            return 1.5; // +50%
+            return 5.0; // Score de visibilité multiplié par 5
         case "medium":
-            return 1.275; // +27.5%
+            return 1.5; // Score de visibilité multiplié par 1,5
         case "standard":
             return 1.125; // +12.5%
         default:
@@ -12836,7 +14156,12 @@ function scoreImmersiveContent(content, context) {
         roleOpportunityBoost +
         preferenceScore -
         seenPenalty;
-    const score = base + Math.random() * 0.08;
+    const fataMultiplier =
+        typeof context.isFataUserId === "function" &&
+        context.isFataUserId(content.userId)
+            ? 5
+            : 1;
+    const score = (base + Math.random() * 0.08) * fataMultiplier;
     return { score, preferenceScore };
 }
 
@@ -12861,8 +14186,15 @@ function interleaveByUser(contents) {
 }
 
 async function getPersonalizedFeed(contents) {
-    if (!currentUser || !Array.isArray(contents) || contents.length < 3)
-        return contents;
+    if (!Array.isArray(contents) || contents.length < 2) return contents;
+    if (!currentUser) {
+        return [...contents].sort(
+            (left, right) =>
+                Number(isFataBadgeUserId(right.userId)) -
+                Number(isFataBadgeUserId(left.userId)),
+        );
+    }
+    if (contents.length < 3) return contents;
     const prefs = loadImmersivePrefs();
     const followedSet = await getFollowedUserIdSet();
     const authorScoreMap = buildAuthorScoreMapFromContents();
@@ -12880,6 +14212,7 @@ async function getPersonalizedFeed(contents) {
             isVerifiedUserId: (userId) =>
                 isVerifiedCreatorUserId(userId) ||
                 isVerifiedStaffUserId(userId),
+            isFataUserId: isFataBadgeUserId,
             now,
             topQueries,
             viewerRole,
@@ -12947,17 +14280,22 @@ async function renderImmersiveHeader(user, pageId = null) {
         isPage: false,
     };
 
-    if (pageId && window.professionalManager) {
-        const page = window.professionalManager.proPagesCache.get(pageId);
-        if (page) {
-            displayUser = {
-                id: user.id,
-                name: page.name,
-                avatar: page.avatar_url || "icons/enterprise.svg",
-                slug: page.slug,
-                isPage: true,
-            };
-        }
+    if (pageId) {
+        const page =
+            professionalPagesById.get(String(pageId)) ||
+            window.professionalManager?.proPagesCache?.get(String(pageId));
+        displayUser = {
+            id: String(pageId),
+            name: page?.name || "Page professionnelle",
+            avatar: page?.avatar_url || "icons/enterprise.svg",
+            slug: page?.slug || "",
+            isPage: true,
+        };
+        subscribeBtnHtml = renderPageFollowButtonHtml(
+            pageId,
+            page,
+            page?.owner_id || user?.id,
+        );
     }
 
     if (
@@ -12983,19 +14321,19 @@ async function renderImmersiveHeader(user, pageId = null) {
         } catch (e) {
             console.error(e);
         }
-    } else if (!user) {
+    } else if (!user && !displayUser.isPage) {
         return "";
     }
 
     const profileOnClick = displayUser.isPage
-        ? `window.professionalManager.renderProPage('${displayUser.slug}')`
+        ? `window.openProfessionalPageById('${escapeHtml(pageId)}')`
         : `handleProfileClick('${user.id}', this, true)`;
 
     return `
 <div class="immersive-header" id="immersive-header-content">
             <button class="profile-link immersive-profile-link" onclick="event.stopPropagation(); ${profileOnClick}">
                 <img src="${displayUser.avatar}" class="immersive-user-avatar">
-                <span class="immersive-user-name">${renderUsernameWithBadge(displayUser.name, user.id)}</span>
+                <span class="immersive-user-name">${renderUsernameWithBadge(displayUser.name, displayUser.isPage ? pageId : user.id, displayUser.isPage)}</span>
             </button>
             ${subscribeBtnHtml}
 </div>
@@ -13025,6 +14363,9 @@ async function renderImmersiveFeed(contents) {
                 Array.from(pageIds).map((id) =>
                     window.professionalManager.getPageInfo(id),
                 ),
+            );
+            await window.professionalManager.preloadPageFollowStates?.(
+                Array.from(pageIds),
             );
         }
     }
@@ -13109,15 +14450,14 @@ async function renderImmersiveFeed(contents) {
                     ? liveStreamMap.get(content.userId) || null
                     : null;
             const isAnnouncement = isAnnouncementContent(content);
+            const canReply = canReplyToContent(content);
             const timeLabel = timeAgo(content.createdAt || content.created_at);
             const replyContentId = content.contentId || content.id || "";
             const replyInputId = replyContentId
                 ? `immersive-reply-input-${replyContentId}`
                 : "";
             const replyCount =
-                isAnnouncement && replyContentId
-                    ? getReplyCount(replyContentId)
-                    : 0;
+                canReply && replyContentId ? getReplyCount(replyContentId) : 0;
             // Defensive: some cached/local items may still carry the tag payload inside
             // `description` (e.g. "\n\n#hashtags: ..."). Keep immersive copy clean.
             const fullDescription = extractTagsFromDescription(
@@ -13135,55 +14475,68 @@ async function renderImmersiveFeed(contents) {
             const extractFirstTwoLines = (text) => {
                 if (!text) return { preview: "", full: text, hasMore: false };
                 const lines = text.split("\n").filter((line) => line.trim());
-                if (lines.length <= 2) {
+                const maxPreviewLength = 260;
+                if (lines.length <= 2 && text.length <= maxPreviewLength) {
                     return { preview: text, full: text, hasMore: false };
                 }
-                const preview = lines.slice(0, 2).join("\n");
-                return { preview, full: text, hasMore: true };
+                let preview = lines.slice(0, 2).join("\n");
+                if (preview.length > maxPreviewLength) {
+                    preview = preview.slice(0, maxPreviewLength);
+                }
+                if (preview.length < text.length && !/\s$/.test(preview)) {
+                    const lastSpace = preview.lastIndexOf(" ");
+                    if (lastSpace > maxPreviewLength * 0.7) {
+                        preview = preview.slice(0, lastSpace);
+                    }
+                }
+                const hasMore = text.trim().length > preview.trim().length;
+                return {
+                    preview: hasMore ? `${preview.trimEnd()}…` : text,
+                    full: text,
+                    hasMore,
+                };
             };
             const descriptionInfo = extractFirstTwoLines(fullDescription);
             const immersiveDescription = descriptionInfo.preview;
-            const hasMoreDescription =
-                descriptionInfo.hasMore &&
-                fullDescription &&
-                fullDescription.length > immersiveDescription.length;
+            const hasMoreDescription = descriptionInfo.hasMore;
 
+            const authorIdentity = getContentAuthorIdentity(content);
+            const isPageAuthor = authorIdentity.type === "PAGE_PRO";
+            const pageId = isPageAuthor ? authorIdentity.id : null;
             const contentBadges = getContentBadges(content);
-            // Include user badges as well (consistent with Discover cards)
             const contentBadgesHtml = renderBadges(contentBadges);
-            const userBadgesHtml = renderUserBadges(content.userId);
+            const userBadgesHtml = isPageAuthor
+                ? ""
+                : renderUserBadges(content.userId);
             const badgesHtml = contentBadgesHtml + userBadgesHtml;
             const contentUser = getUser(content.userId);
+            const supportViewerId = window.currentUser?.id || null;
 
-            // Gérer les pages pro
-            let displayUser = {
-                id: content.userId,
-                name: contentUser ? contentUser.name : "Utilisateur",
-                avatar:
-                    contentUser && contentUser.avatar
-                        ? contentUser.avatar
-                        : "https://placehold.co/40",
-                isPage: false,
-            };
-
-            if (content.pageId && window.professionalManager) {
-                const page = window.professionalManager.proPagesCache.get(
-                    content.pageId,
-                );
-                if (page) {
-                    displayUser = {
-                        id: content.userId,
-                        name: page.name,
-                        avatar: page.avatar_url || "icons/enterprise.svg",
-                        slug: page.slug,
-                        isPage: true,
-                    };
-                }
-            }
+            const page =
+                pageId &&
+                (professionalPagesById.get(String(pageId)) ||
+                    window.professionalManager?.proPagesCache?.get(
+                        String(pageId),
+                    ));
+            const displayUser = isPageAuthor
+                ? {
+                      id: String(pageId),
+                      name: page?.name || "Page professionnelle",
+                      avatar: page?.avatar_url || "icons/enterprise.svg",
+                      slug: page?.slug || "",
+                      isPage: true,
+                  }
+                : {
+                      id: content.userId,
+                      name: contentUser ? contentUser.name : "Utilisateur",
+                      avatar: contentUser?.avatar || "https://placehold.co/40",
+                      isPage: false,
+                  };
 
             const contentUserNameHtml = renderUsernameWithBadge(
                 displayUser.name,
-                displayUser.id,
+                displayUser.isPage ? pageId : displayUser.id,
+                displayUser.isPage,
             );
             const contentUserAvatar = displayUser.avatar;
 
@@ -13211,8 +14564,7 @@ async function renderImmersiveFeed(contents) {
                 },
             );
             const immersiveSupportButtonHtml =
-                currentUser &&
-                currentUser.id !== content.userId &&
+                (!supportViewerId || supportViewerId !== content.userId) &&
                 typeof window.generateSupportButtonHTML === "function"
                     ? window.generateSupportButtonHTML(contentUser, "feed")
                     : "";
@@ -13226,17 +14578,21 @@ async function renderImmersiveFeed(contents) {
                 : content.mediaUrl
                   ? [content.mediaUrl]
                   : [];
+            const c2paBadgeImmersive = renderC2PABadgeHtml(
+                "immersive",
+                content,
+            );
             if (mediaList.length > 0) {
                 if (content.type === "video") {
                     mediaHtml = `
-                    <div class="immersive-video-wrap" style="position: relative; width: 100%; height: 100%;">
+                    <div class="immersive-video-wrap${content.posterUrl ? " has-poster" : ""}" style="position: relative; width: 100%; height: 100%;">
                         <video
                             id="immersive-video-${content.contentId}"
                             class="immersive-video"
-                            data-src="${mediaList[0]}"
+                            data-src="${mediaList[0]}"${content.posterUrl ? `
+                            poster="${content.posterUrl}"` : ""}
                             playsinline
                             webkit-playsinline
-                            autoplay
                             muted
                             loop
                             preload="metadata"
@@ -13244,6 +14600,7 @@ async function renderImmersiveFeed(contents) {
                             data-content-id="${content.contentId}"
                             disablePictureInPicture
                         ></video>
+                        ${c2paBadgeImmersive}
                         <div class="video-buffering-spinner" aria-hidden="true">
                             <div class="spinner-ring"></div>
                         </div>
@@ -13270,7 +14627,8 @@ async function renderImmersiveFeed(contents) {
                             )
                             .join("")}</div>`;
                         mediaHtml = `
-                            <div class="immersive-image-wrap">
+                            <div class="immersive-image-wrap" style="position: relative;">
+                                ${c2paBadgeImmersive}
                                 <div class="xera-carousel xera-carousel--immersive" data-carousel>
                                     <div class="xera-carousel-track">${slides}</div>
                                     <button type="button" class="xera-carousel-arrow xera-carousel-arrow--prev" aria-label="Image précédente">&lsaquo;</button>
@@ -13284,7 +14642,7 @@ async function renderImmersiveFeed(contents) {
                             </div>
                         `;
                     } else {
-                        mediaHtml = `<div class="immersive-image-wrap"><img src="${mediaList[0]}" class="immersive-image" alt="${content.title || "Media"}">${collabCornerHtml}</div>`;
+                        mediaHtml = `<div class="immersive-image-wrap" style="position: relative;"><img src="${mediaList[0]}" class="immersive-image" alt="${content.title || "Media"}">${c2paBadgeImmersive}${collabCornerHtml}</div>`;
                     }
                 }
             } else {
@@ -13295,7 +14653,15 @@ async function renderImmersiveFeed(contents) {
                 mediaHtml = `<div class="immersive-text-card">${collabCornerHtml}<p>${textBody}</p></div>`;
             }
 
-            const isEncouraged = encouragedContentIds.has(content.contentId);
+            const targetContentId = content.contentId || content.id || "";
+            const safeEncouragedSet =
+                encouragedContentIds &&
+                typeof encouragedContentIds.has === "function"
+                    ? encouragedContentIds
+                    : new Set();
+            const isEncouraged = targetContentId
+                ? safeEncouragedSet.has(targetContentId)
+                : false;
             const courageIcon = isEncouraged
                 ? "icons/courage-green.svg"
                 : "icons/courage-blue.svg";
@@ -13327,31 +14693,27 @@ async function renderImmersiveFeed(contents) {
                 : liveJoinHtml;
 
             const immersiveReplyHtml =
-                isAnnouncement && replyContentId
+                canReply && replyContentId
                     ? `
                 <div class="profile-update-reply-block immersive-reply-block">
                     <button type="button" class="reply-btn reply-btn-immersive" data-reply-toggle="${escapeHtml(replyContentId)}" aria-expanded="false" onclick="event.stopPropagation(); toggleProfileAnnouncementReplies(${inlineJsString(replyContentId)})">
                         <span data-reply-toggle-label="${escapeHtml(replyContentId)}">Répondre</span>
                         <span class="reply-count" data-reply-count="${escapeHtml(replyContentId)}">${replyCount}</span>
                     </button>
-                    <div class="profile-reply-panel" data-profile-reply-panel="${escapeHtml(replyContentId)}" aria-hidden="true" hidden>
-                        <div class="reply-panel-head">
-                            <strong>Réponses</strong>
-                            <button type="button" class="reply-close-btn" onclick="event.stopPropagation(); toggleProfileAnnouncementReplies(${inlineJsString(replyContentId)}, false)">Fermer</button>
-                        </div>
-                        <div class="reply-inline">
-                            <textarea id="${escapeHtml(replyInputId)}" class="reply-input" placeholder="Votre réponse..."></textarea>
-                            <div class="reply-actions">
-                                <button class="btn-primary" onclick="event.stopPropagation(); submitAnnouncementReply(${inlineJsString(replyContentId)}, this, ${inlineJsString(content.userId || "")}, ${inlineJsString(content.title || "votre annonce")})">Envoyer</button>
-                            </div>
-                        </div>
-                        <div data-replies-container="${escapeHtml(replyContentId)}">
-                            ${renderAnnouncementReplies(replyContentId)}
-                        </div>
-                    </div>
                 </div>
             `
                     : "";
+
+            const immersiveFollowButtonHtml = isPageAuthor
+                ? renderPageFollowButtonHtml(pageId, page, content.userId)
+                : window.currentUser?.id &&
+                    window.currentUser.id !== content.userId
+                  ? `
+                    <button class="${followBtnClass}" data-follow-user="${escapeHtml(content.userId)}" onclick="event.stopPropagation(); toggleFollow('${escapeHtml(window.currentUser.id)}', '${escapeHtml(content.userId)}')" aria-label="${isFollowingUser ? "Ne plus suivre cet utilisateur" : "Suivre cet utilisateur"}">
+                        <img src="${followIconSrc}" class="btn-icon" style="width: 20px; height: 20px;">
+                    </button>
+                `
+                  : "";
 
             return `
             <div class="immersive-post" data-content-id="${content.contentId}" data-user-id="${content.userId}">
@@ -13362,7 +14724,15 @@ async function renderImmersiveFeed(contents) {
                         <div class="immersive-meta-row">
                             ${dayPill}
                             <span class="state-tag">${stateLabel}</span>
-                            ${isAnnouncement ? '<span class="announcement-chip">Annonce</span>' : ""}
+                            ${
+                                isAnnouncement
+                                    ? '<span class="announcement-chip">Annonce</span>'
+                                    : content.type === "news"
+                                      ? '<span class="announcement-chip">Actualité</span>'
+                                      : content.type === "event"
+                                        ? '<span class="announcement-chip">Événement</span>'
+                                        : ""
+                            }
                             ${
                                 timeLabel
                                     ? `<span class="time-ago-label">${timeLabel}</span>`
@@ -13380,33 +14750,26 @@ async function renderImmersiveFeed(contents) {
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                                     <span title="${(Number(content.views) || 0).toLocaleString("fr-FR")}">${formatCompactCount(content.views || 0)}</span>
                                 </div>
-                                <button class="${courageClass}" data-content-id="${content.contentId}" onclick="event.stopPropagation(); toggleCourage('${content.contentId}', this)" title="Encourager">
-                                    <img src="${courageIcon}" width="16" height="16">
+                                <button type="button" class="${courageClass} immersive-courage-btn" data-content-id="${content.contentId}" aria-label="Encourager cette publication" onclick="event.stopPropagation(); toggleCourage('${content.contentId}', this)">
+                                    <img class="immersive-courage-icon" src="${courageIcon}" width="18" height="18" alt="" aria-hidden="true">
                                     <span class="courage-count" data-count="${Number(content.encouragementsCount) || 0}" title="${(Number(content.encouragementsCount) || 0).toLocaleString("fr-FR")}">${formatCompactCount(content.encouragementsCount || 0)}</span>
                                 </button>
                             </div>
                         </div>
                         
                         <div class="immersive-description-wrapper" data-content-id="${content.contentId}">
-                            <p class="immersive-description" onclick="event.stopPropagation(); expandImmersiveDescription('${content.contentId}', ${inlineJsString(fullDescription)})">${immersiveDescription}</p>
+                            <p class="immersive-description" onclick="event.stopPropagation(); expandImmersiveDescription('${content.contentId}')">${renderRichDescription(immersiveDescription)}</p>
+                            ${hasMoreDescription ? `<button type="button" class="immersive-description-more" onclick="event.stopPropagation(); expandImmersiveDescription('${content.contentId}')">Lire la suite</button>` : ""}
                         </div>
                         ${moodActionsHtml}
                         ${immersiveReplyHtml}
                         <div class="immersive-post-user">
-                            <button class="profile-link immersive-profile-link" onclick="event.stopPropagation(); ${displayUser.isPage ? `window.professionalManager.renderProPage('${displayUser.slug}')` : `handleProfileClick('${content.userId}', this, true)`}">
+                            <button class="profile-link immersive-profile-link" data-profile-author-type="${displayUser.isPage ? "PAGE_PRO" : "USER"}" data-profile-${displayUser.isPage ? "page" : "user"}-id="${escapeHtml(displayUser.isPage ? pageId : content.userId)}" onclick="event.stopPropagation(); ${displayUser.isPage ? `window.openProfessionalPageById('${escapeHtml(pageId)}')` : `handleProfileClick('${content.userId}', this, true)`}">
                                 <img src="${contentUserAvatar}" alt="Avatar de ${displayUser.name}" class="immersive-post-user-avatar">
                                 <span class="immersive-post-user-name">${contentUserNameHtml}</span>
                             </button>
                             ${collabAvatarsHtml}
-                            ${
-                                currentUser && currentUser.id !== content.userId
-                                    ? `
-                                <button class="${followBtnClass}" data-follow-user="${content.userId}" onclick="event.stopPropagation(); toggleFollow('${currentUser.id}', '${content.userId}')">
-                                    <img src="${followIconSrc}" class="btn-icon" style="width: 20px; height: 20px;">
-                                </button>
-                            `
-                                    : ""
-                            }
+                            ${immersiveFollowButtonHtml}
                         </div>
                         <div class="badges-immersive">
                             ${badgesHtml}
@@ -13444,7 +14807,11 @@ async function renderImmersiveContent(userId) {
     return renderImmersiveFeed(contents);
 }
 
-async function openImmersive(startUserId, startContentId = null) {
+async function openImmersive(
+    startUserId,
+    startContentId = null,
+    options = {},
+) {
     console.log("Opening immersive for user:", startUserId);
 
     // Vérifier si les données sont chargées
@@ -13484,34 +14851,93 @@ async function openImmersive(startUserId, startContentId = null) {
     }
 
     try {
-        // Get ALL content sorted by date, then personalize
-        let allContents = await waitForImmersiveFeedContent();
-        if (!window.__immersiveOpen || allContents.length === 0) return;
-        console.log("All contents found:", allContents.length);
-
-        // Ensure the clicked content is first in the personalized feed
         let startIndex = -1;
-        if (startContentId) {
-            startIndex = allContents.findIndex(
-                (c) => c.contentId === startContentId,
+        let allContents = [];
+        const profileOnlyUserId = options.profileOnly
+            ? String(options.userId || startUserId || "")
+            : "";
+
+        if (profileOnlyUserId) {
+            allContents = getUserContentLocal(profileOnlyUserId)
+                .filter((content) => {
+                    const authorId = String(
+                        content.userId || content.user_id || profileOnlyUserId,
+                    );
+                    const mediaUrls = [
+                        ...(Array.isArray(content.mediaUrls)
+                            ? content.mediaUrls
+                            : []),
+                        ...(Array.isArray(content.media_urls)
+                            ? content.media_urls
+                            : []),
+                        content.mediaUrl,
+                        content.media_url,
+                    ];
+                    return (
+                        authorId === profileOnlyUserId &&
+                        String(content.type || "").toLowerCase() !== "live" &&
+                        mediaUrls.some((url) => String(url || "").trim())
+                    );
+                })
+                .sort(
+                    (left, right) =>
+                        new Date(
+                            right.createdAt || right.created_at || 0,
+                        ).getTime() -
+                        new Date(
+                            left.createdAt || left.created_at || 0,
+                        ).getTime(),
+                );
+
+            const clickedIndex = allContents.findIndex(
+                (content) =>
+                    String(content.contentId || content.content_id || content.id) ===
+                    String(startContentId || ""),
             );
-        } else {
-            const latest = getLatestContent(startUserId);
-            startIndex = latest
-                ? allContents.findIndex((c) => c.contentId === latest.contentId)
-                : -1;
-        }
-        if (startIndex > 0) {
-            const [pinned] = allContents.splice(startIndex, 1);
-            allContents.unshift(pinned);
+            if (clickedIndex < 0) {
+                closeImmersive();
+                return;
+            }
+
+            allContents = allContents.slice(clickedIndex);
             startIndex = 0;
-            if (pinned && pinned.userId) {
-                startUserId = pinned.userId;
+            startUserId = profileOnlyUserId;
+        } else {
+            // Global feed remains personalized; only profile entry points pass profileOnly.
+            allContents = await waitForImmersiveFeedContent();
+            if (!window.__immersiveOpen) return;
+            console.log("All contents found:", allContents.length);
+
+            if (startContentId) {
+                startIndex = allContents.findIndex(
+                    (content) => content.contentId === startContentId,
+                );
+            } else {
+                const latest = getLatestContent(startUserId);
+                startIndex = latest
+                    ? allContents.findIndex(
+                          (content) => content.contentId === latest.contentId,
+                      )
+                    : -1;
+            }
+            if (startIndex > 0) {
+                const [pinned] = allContents.splice(startIndex, 1);
+                allContents.unshift(pinned);
+                startIndex = 0;
+                if (pinned && pinned.userId) {
+                    startUserId = pinned.userId;
+                }
+            }
+            if (startIndex < 0 && allContents[0]) {
+                startIndex = 0;
+                startUserId = allContents[0].userId || startUserId;
             }
         }
-        if (startIndex < 0 && allContents[0]) {
-            startIndex = 0;
-            startUserId = allContents[0].userId || startUserId;
+
+        if (!window.__immersiveOpen) return;
+        if (allContents.length === 0) {
+            closeImmersive();
+            return;
         }
         console.log(
             "Start index:",
@@ -13763,6 +15189,11 @@ async function openImmersive(startUserId, startContentId = null) {
 
 function closeImmersive() {
     const overlay = document.getElementById("immersive-overlay");
+    if (!overlay) return;
+    overlay.querySelectorAll("video.immersive-video").forEach((video) => {
+        video.pause();
+        video.muted = true;
+    });
     overlay.style.display = "none";
     overlay.classList.remove("immersive-clean-mode");
     document.body.style.overflow = "auto";
@@ -13798,7 +15229,7 @@ function closeImmersive() {
     }
 }
 
-let currentImmersiveUser = null;
+let currentImmersiveAuthorKey = null;
 
 // Désactive le son et met en pause toutes les vidéos immersives sauf celle passée
 function muteOtherImmersiveVideos(activeVideo) {
@@ -13899,13 +15330,23 @@ function setupImmersiveObserver() {
                         }
 
                         // Update Header si nécessaire
-                        if (userId && userId !== currentImmersiveUser) {
-                            currentImmersiveUser = userId;
+                        const pageAuthorLink = entry.target.querySelector(
+                            "[data-profile-page-id]",
+                        );
+                        const pageId =
+                            pageAuthorLink?.dataset.profilePageId || null;
+                        const authorKey = pageId
+                            ? `page:${pageId}`
+                            : userId
+                              ? `user:${userId}`
+                              : null;
+                        if (authorKey && authorKey !== currentImmersiveAuthorKey) {
+                            currentImmersiveAuthorKey = authorKey;
                             const user = getUser(userId);
                             const headerContainer = document.getElementById(
                                 "immersive-header-container",
                             );
-                            renderImmersiveHeader(user).then((html) => {
+                            renderImmersiveHeader(user, pageId).then((html) => {
                                 if (headerContainer)
                                     headerContainer.innerHTML = html;
                             });
@@ -14703,6 +16144,9 @@ async function renderProfileTimeline(userId) {
                 `,
                     )
                     .eq("arc_id", window.selectedArcId)
+                    .eq("author_type", "USER")
+                    .eq("author_id", userId)
+                    .is("page_id", null)
                     .order("created_at", { ascending: false });
             if (arcContentsError) throw arcContentsError;
             if (arcContentsData) {
@@ -14910,12 +16354,24 @@ async function renderProfileTimeline(userId) {
             : false;
 
     // ... Boutons existants ...
+    const canAccessMonetizationDashboard =
+        isOwnProfile && hasMonetizationDashboardAccess(user);
     const settingsButtonHtml = isOwnProfile
         ? `
 <button class="badge settings-badge" onclick="window.launchLive('${userId}')" title="Lancer un live">
             <div class="badge-icon"><img src="icons/live.svg" alt="Live" style="width:100%;height:100%;"></div>
             <span>Live</span>
 </button>
+${
+    canAccessMonetizationDashboard
+        ? `
+<button class="badge settings-badge" onclick="window.location.href='creator-dashboard.html'" title="Monétisation">
+            <div class="badge-icon"><i class="fas fa-wallet" aria-hidden="true"></i></div>
+            <span>Monétisation</span>
+</button>
+`
+        : ""
+}
 ${
     !window.userHasProPage
         ? `
@@ -15123,6 +16579,28 @@ ${
         ? `${profileSignalStatsHtml}${progressSnapshotHtml}`
         : renderProfileHiddenSection("stats");
 
+    const workspaceContentsById = new Map();
+    const addWorkspaceContents = (items, source) => {
+        (items || []).forEach((content, index) => {
+            if (!content) return;
+            const contentId =
+                content.contentId || content.content_id || content.id;
+            const key = contentId
+                ? String(contentId)
+                : String(source) + ":" + String(index);
+            workspaceContentsById.set(key, content);
+        });
+    };
+    addWorkspaceContents(contents, "cache");
+    addWorkspaceContents(displayContents, "rendered");
+    window.profileWorkspaceContext = {
+        profileUserId: userId,
+        contents: showPublicActivity
+            ? Array.from(workspaceContentsById.values())
+            : [],
+        arcs: allArcs,
+    };
+
     const timelinesHtml =
         window.selectedArcId && selectedArc
             ? renderProfileSelectedArcContent(selectedArc, displayContents, {
@@ -15164,17 +16642,28 @@ ${
         ? `
 <div class="projects-grid">
             ${projects
-                .map(
-                    (p) => `
-                <div class="project-card">
-                    <img src="${p.cover || user.banner || user.avatar}" class="project-cover" alt="Cover">
+                .map((p) => {
+                    const projectState = getContentC2PAState({
+                        metadata: p?.metadata || {},
+                    });
+                    const projectBadge = projectState.isAI
+                        ? renderC2PABadgeHtml("profile", {
+                              metadata: p?.metadata || {},
+                          })
+                        : "";
+                    return `
+                <div class="project-card" style="position: relative;">
+                    <div style="position: relative; display: block;">
+                        <img src="${p.cover || user.banner || user.avatar}" class="project-cover" alt="Cover">
+                        ${projectBadge}
+                    </div>
                     <div class="project-meta">
                         <h4>${p.name}</h4>
                         <p>${p.description || ""}</p>
                     </div>
                 </div>
-            `,
-                )
+            `;
+                })
                 .join("")}
 </div>
     `
@@ -15220,7 +16709,7 @@ ${
 
     const projectOnboardingBannerHtml =
         isOwnProfile && projects.length === 0
-            ? `\n${onboardingStyles}<div class="project-onboarding-banner" role="region" aria-label="Créer votre premier projet">\n    <div class="project-onboarding-copy">\n        <strong>Commencez par créer votre premier projet</strong>\n        <div style="color:var(--text-secondary); margin-top:4px;">Transformez vos idées en objectifs publiables — créez un projet pour publier votre première mise à jour.</div>\n    </div>\n    <div style="display:flex;align-items:center;gap:0.6rem;">\n        <button class="project-onboarding-cta ${createCtaClass}" onclick="window.openCreateModal && window.openCreateModal()">\n            <svg width=16 height=16 viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" style=\"margin-right:6px;\"><path d=\"M12 5v14M5 12h14\" stroke=\"currentColor\"></path></svg>\n            Créer un projet\n        </button>\n    </div>\n</div>\n`
+            ? `\n${onboardingStyles}<div class="project-onboarding-banner" role="region" aria-label="Créer votre premier projet">\n    <div class="project-onboarding-copy">\n        <strong>Commencez par créer votre premier projet</strong>\n        <div style="color:var(--text-secondary); margin-top:4px;">Transformez vos idées en objectifs publiables — créez un projet pour publier votre première mise à jour.</div>\n    </div>\n    <div style="display:flex;align-items:center;gap:0.6rem;">\n        <button class="project-onboarding-cta ${createCtaClass}" onclick="window.openCreateModal && window.openCreateModal()">\n            <svg width=16 height=16 viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" style=\"margin-right:6px;\"><path d=\"M12 5v14M5 12h14\" stroke=\"currentColor\"></path></svg>\n projet neuf\n        </button>\n    </div>\n</div>\n`
             : "";
 
     const banStateLabel = isUserBanned(user)
@@ -15305,7 +16794,7 @@ ${
                     <h4 style="margin:0;">Progression hebdomadaire</h4>
                     <p style="margin:0; color: var(--text-secondary); font-size:0.9rem;">Survolez pour voir les mises à jour par jour.</p>
                 </div>
-                <button class="btn-secondary ${createCtaClass}" onclick="window.openCreateModal && window.openCreateModal()" style="padding:0.45rem 0.8rem; border-radius:10px;">Créer un projet</button>
+                <button class="btn-secondary ${createCtaClass}" onclick="window.openCreateModal && window.openCreateModal()" style="padding:0.45rem 0.8rem; border-radius:10px;">nouveau projet</button>
             </div>
             <div style="margin-top:1rem; min-height:220px;">
                 <canvas id="weekly-progress-chart-${userId}" aria-label="Progression hebdomadaire" role="img"></canvas>
@@ -15432,7 +16921,7 @@ ${showPublicStats ? influenceSectionHtml : ""}
                         <img src="${user.avatar && (user.avatar.startsWith("http") || user.avatar.startsWith("data:")) ? withCacheBust(user.avatar) : "https://placehold.co/150"}" class="profile-avatar-img" alt="Avatar de ${user.name}" onclick="navigateToUserProfile('${userId}')" style="cursor: pointer;">
                     </div>
                     <div class="profile-name-block">
-                        <span class="profile-section-kicker">Profil XERA</span>
+                        <span class="profile-section-kicker">Profil XERA1</span>
                         <h2>${renderUsernameForProfile(user.name, user.id)}${monetizationBadgeHtml}</h2>
                         ${profileRoleBadgeHtml}
                         <p class="profile-title"><strong>${profileTitleHtml}</strong></p>
@@ -15486,7 +16975,7 @@ ${publicActivityHtml}
                     <a href="index.html" style="color: var(--text-secondary); text-decoration: none; transition: color 0.3s;">Accueil</a>
                     <a href="credits.html" style="color: var(--text-secondary); text-decoration: none; transition: color 0.3s;">Crédits</a>
                 </div>
-                <p style="color: var(--text-muted); font-size: 0.9rem;">© 2026 XERA - Documentez l'effort</p>
+                <p style="color: var(--text-muted); font-size: 0.9rem;">© 2026 XERA1 - Documentez l'effort</p>
             </div>
 </footer>
     `;
@@ -15516,6 +17005,9 @@ function isPageProRoute() {
         if (pathname === "/profile.html" || pathname === "/profile") {
             const userId = params.get("user");
             if (userId && typeof getUser === "function") {
+                if (userId === "b0f9f893-1706-4721-899c-d26ad79afc86") {
+                    return false;
+                }
                 const user = getUser(userId);
                 const accountType =
                     user?.account_type ||
@@ -15580,9 +17072,16 @@ async function renderProfileIntoContainer(userId) {
         user?.account_type || user?.user_metadata?.account_type || null;
     const accountSubtype =
         user?.account_subtype || user?.user_metadata?.account_subtype || null;
-    const isPro = user ? isProAccountType(accountType, accountSubtype) : null;
-
+    const isSuperAdminProfile =
+        userId === "b0f9f893-1706-4721-899c-d26ad79afc86";
     const isProRoute = isPageProRoute();
+    const hasExplicitProPageSlug = Boolean(
+        new URLSearchParams(window.location.search).get("pro"),
+    );
+    const isPro =
+        user && (!isSuperAdminProfile || isProRoute)
+            ? isProAccountType(accountType, accountSubtype)
+            : isProRoute;
 
     if (user && !isProRoute && isPro) {
         try {
@@ -15594,7 +17093,12 @@ async function renderProfileIntoContainer(userId) {
         } catch (e) {
             console.warn("Unable to normalize pro profile route:", e);
         }
-    } else if (user && isProRoute && isPro === false) {
+    } else if (
+        user &&
+        isProRoute &&
+        !hasExplicitProPageSlug &&
+        isPro === false
+    ) {
         try {
             window.history.replaceState(
                 {},
@@ -15722,6 +17226,15 @@ async function renderProfileIntoContainer(userId) {
 
         // Injecter les widgets de croissance virale
         injectViralGrowthWidgets(userId);
+
+        bindProfileImmersiveMedia(profileContainer);
+        profileContainer.classList.remove("profile-content-enter");
+        void profileContainer.offsetWidth;
+        profileContainer.classList.add("profile-content-enter");
+        setTimeout(
+            () => profileContainer.classList.remove("profile-content-enter"),
+            300,
+        );
     };
 
     if (
@@ -15804,10 +17317,17 @@ function getProfileSkeletonMarkup(user = null) {
             </div>
 </div>
     `;
+    const feedSkeleton = `
+        <div class="profile-skeleton-feed" aria-hidden="true">
+            <div class="profile-skeleton-feed-card"><div class="skeleton skeleton-card-sm"></div><div class="skeleton skeleton-text"></div><div class="skeleton skeleton-text" style="width:65%"></div></div>
+            <div class="profile-skeleton-feed-card"><div class="skeleton skeleton-card-sm"></div><div class="skeleton skeleton-text"></div><div class="skeleton skeleton-text" style="width:65%"></div></div>
+            <div class="profile-skeleton-feed-card"><div class="skeleton skeleton-card-sm"></div><div class="skeleton skeleton-text"></div><div class="skeleton skeleton-text" style="width:65%"></div></div>
+        </div>
+    `;
 
     if (isProfessionalAccount) {
         return `
-<div class="loading-state-container profile-skeleton profile-skeleton--professional" role="status" aria-busy="true" aria-live="polite">
+<div class="loading-state-container profile-skeleton profile-skeleton--professional" role="status" aria-label="Chargement du profil" aria-busy="true" aria-live="polite">
             <div class="skeleton skeleton-banner" aria-hidden="true" style="height: 220px; border-radius: 28px;"></div>
 
             <div class="profile-skeleton-header" style="margin-top: -58px; align-items: flex-end;">
@@ -15834,12 +17354,13 @@ function getProfileSkeletonMarkup(user = null) {
                 ${timelineItem(2)}
                 ${timelineItem(3)}
             </div>
+            ${feedSkeleton}
 </div>
     `;
     }
 
     return `
-<div class="loading-state-container profile-skeleton" role="status" aria-busy="true" aria-live="polite">
+<div class="loading-state-container profile-skeleton" role="status" aria-label="Chargement du profil" aria-busy="true" aria-live="polite">
             <div class="skeleton skeleton-banner" aria-hidden="true"></div>
 
             <div class="profile-skeleton-header">
@@ -15866,6 +17387,7 @@ function getProfileSkeletonMarkup(user = null) {
                 ${timelineItem(2)}
                 ${timelineItem(3)}
             </div>
+            ${feedSkeleton}
 </div>
     `;
 }
@@ -15919,7 +17441,11 @@ window.renderWeeklyProgressChart = async function (userId) {
         const canvas = document.getElementById(
             `weekly-progress-chart-${userId}`,
         );
-        if (!canvas || typeof Chart === "undefined") return;
+        if (!canvas) return;
+        if (typeof Chart === "undefined") {
+            if (typeof window.ensureChartJs !== "function") return;
+            await window.ensureChartJs();
+        }
 
         // Destroy existing chart instance if any
         if (!window._weeklyCharts) window._weeklyCharts = new Map();
@@ -16139,6 +17665,34 @@ window.syncFloatingCreateVisibility = syncFloatingCreateVisibility;
 document.addEventListener(
     "click",
     (event) => {
+        const pageTrigger = event.target.closest(
+            '[data-profile-author-type="PAGE_PRO"][data-profile-page-id], [data-profile-page-id]',
+        );
+        if (pageTrigger) {
+            const pageId = pageTrigger.dataset.profilePageId;
+            if (!pageId) return;
+
+            event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation();
+
+            if (typeof window.openProfessionalPageById === "function") {
+                Promise.resolve(window.openProfessionalPageById(pageId)).catch(
+                    (error) =>
+                        console.error("Ouverture de Page Pro impossible:", error),
+                );
+            } else if (window.XeraRouter?.navigate) {
+                window.XeraRouter.navigate("pagepro", {
+                    query: { pro: pageId },
+                });
+            } else {
+                window.location.assign(
+                    `profile.html?pro=${encodeURIComponent(pageId)}`,
+                );
+            }
+            return;
+        }
+
         const profileTrigger = event.target.closest(
             ".user-card .card-profile-link[data-profile-user-id]",
         );
@@ -16179,10 +17733,13 @@ async function handleProfileNavigation() {
     const isSuperAdmin =
         !!window.currentUser &&
         window.currentUser.id === "b0f9f893-1706-4721-899c-d26ad79afc86";
-    const profileRoute =
-        isProAccountType(accountType, accountSubtype) && !isSuperAdmin
-            ? "pagepro"
-            : "profile";
+    if (isSuperAdmin) {
+        navigateToPersonalProfile();
+        return;
+    }
+    const profileRoute = isProAccountType(accountType, accountSubtype)
+        ? "pagepro"
+        : "profile";
     window.currentProfileViewed = targetUserId || null;
 
     if (!document.getElementById("profile")) {
@@ -16326,10 +17883,21 @@ function toggleTimelineExpand(button) {
 
 function toggleVideoPlay(video) {
     if (video.paused) {
+        ensureDiscoverVideoSource(video);
         video.play().catch(() => {});
     } else {
         video.pause();
     }
+}
+
+// Les vidéos des cartes ne sont téléchargées qu'une fois visibles à l'écran
+// (avant, chaque carte lançait l'original en autoplay dès l'affichage).
+function ensureDiscoverVideoSource(video) {
+    if (!video || video.getAttribute("src")) return;
+    const src = video.dataset.src;
+    if (!src) return;
+    video.preload = "metadata";
+    video.src = src;
 }
 
 function setupDiscoverVideoInteractions() {
@@ -16349,6 +17917,7 @@ function setupDiscoverVideoInteractions() {
                 if (entry.isIntersecting) {
                     // Play if visible - keep muted for cards
                     video.muted = true;
+                    ensureDiscoverVideoSource(video);
                     video.play().catch(() => {
                         console.log("Autoplay blocked for card video");
                     });
@@ -16401,6 +17970,7 @@ function setupDiscoverVideoInteractions() {
         // Autoplay on hover for discover cards
         video.addEventListener("mouseenter", function () {
             this.muted = true;
+            ensureDiscoverVideoSource(this);
             this.play().catch(() => {});
         });
         video.addEventListener("mouseleave", function () {
@@ -17188,7 +18758,7 @@ async function openSettings(userId) {
                                 <div class="profile-customization-preview-banner"></div>
                                 <div class="profile-customization-preview-grid">
                                     <div class="profile-customization-preview-card">
-                                        <span class="profile-section-kicker">Profil XERA</span>
+                                        <span class="profile-section-kicker">Profil XERA1</span>
                                         <strong>${escapeHtml(user.name || "Utilisateur")}</strong>
                                     </div>
                                     <div class="profile-customization-preview-card is-signal">
@@ -17889,17 +19459,21 @@ curl -X POST https://xera.tech/api/hook/v1/publish \\
                     );
                 }
 
+                const uploadFolder = label === "avatar" ? "avatars" : "profile";
                 let fileToUpload = file;
                 if (!isGif && typeof compressImage === "function") {
                     try {
-                        fileToUpload = await compressImage(file);
+                        fileToUpload = await compressImage(
+                            file,
+                            getImageMaxSideForFolder(uploadFolder),
+                        );
                     } catch (err) {
                         console.warn(`Compression ${label} échouée:`, err);
                     }
                 }
 
                 btnSave.textContent = `Upload ${label}...`;
-                const uploadResult = await uploadFile(fileToUpload, "profile");
+                const uploadResult = await uploadFile(fileToUpload, uploadFolder);
                 if (!uploadResult?.success || !uploadResult?.url) {
                     throw new Error(
                         uploadResult?.error ||
@@ -18273,6 +19847,7 @@ curl -X POST https://xera.tech/api/hook/v1/publish \\
         initializeFileInput("setting-avatar-file", {
             preview: "preview-avatar",
             compress: true,
+            folder: "avatars",
             onBeforeUpload: () => {
                 pendingProfileMediaUploads += 1;
                 updateSaveButtonUploadState();
@@ -19184,6 +20759,208 @@ ${chipsHtml ? `<div class="publish-feedback-chips">${chipsHtml}</div>` : ""}
     window.setTimeout(removeCard, 7000);
 }
 
+const POST_PUBLISH_UPSELL_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
+function trackPostPublishUpsell(eventName) {
+    try {
+        window.gtag?.("event", eventName, { event_category: "conversion" });
+    } catch (error) {
+        // Analytics is optional and must never affect publishing.
+    }
+}
+
+function shouldShowPostPublishUpsell(user) {
+    if (!user || hasActivePaidPlan(user)) return false;
+    if (document.getElementById("post-publish-upsell")) return false;
+    try {
+        const lastShown = Number(
+            localStorage.getItem("xera:post-publish-upsell:last-shown") || 0,
+        );
+        return (
+            !lastShown ||
+            Date.now() - lastShown >= POST_PUBLISH_UPSELL_COOLDOWN_MS
+        );
+    } catch (error) {
+        return true;
+    }
+}
+
+function showPostPublishUpsell(user) {
+    if (!shouldShowPostPublishUpsell(user)) return false;
+    try {
+        localStorage.setItem(
+            "xera:post-publish-upsell:last-shown",
+            String(Date.now()),
+        );
+    } catch (error) {}
+
+    // The success card is useful, but this is the one post-publication dialog: never stack both.
+    document.getElementById("publish-feedback-card")?.remove();
+    const avatar =
+        user.avatar ||
+        user.avatar_url ||
+        user.avatarUrl ||
+        `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user.id || user.name || "xera")}`;
+    const verified = isCurrentUserVerified() || Boolean(user.badge);
+    const overlay = document.createElement("div");
+    overlay.id = "post-publish-upsell";
+    overlay.className = "post-publish-upsell";
+    overlay.setAttribute("role", "dialog");
+    overlay.setAttribute("aria-modal", "true");
+    overlay.setAttribute("aria-labelledby", "post-publish-upsell-title");
+    overlay.innerHTML = `
+        <section class="post-publish-upsell__dialog" tabindex="-1">
+            <button type="button" class="post-publish-upsell__close" aria-label="Fermer la suggestion">✕</button>
+            <div class="post-publish-upsell__avatar-wrap">
+                <img class="post-publish-upsell__avatar" src="${escapeHtml(avatar)}" alt="Avatar de ${escapeHtml(user.name || "votre profil")}">
+                ${verified ? '<span class="post-publish-upsell__badge" aria-label="Profil vérifié"><img src="icons/verify-personal.svg" alt=""></span>' : ""}
+            </div>
+            <p class="post-publish-upsell__eyebrow">C’est publié</p>
+            <h2 id="post-publish-upsell-title">Maintenant, donne-lui plus de portée.</h2>
+            <p>Ton contenu est en ligne. Les fonctionnalités avancées XERA1 t’aident à augmenter son potentiel de visibilité et à toucher une audience plus large.</p>
+            <div class="post-publish-upsell__levels" aria-label="Niveaux de potentiel de visibilité">
+                <span>Potentiel <strong>1,5×</strong></span><span>Potentiel <strong>2×</strong></span><span>Potentiel <strong>5×</strong></span>
+            </div>
+            <button type="button" class="post-publish-upsell__cta">Débloquer plus de portée</button>
+        </section>`;
+    const dialog = overlay.querySelector(".post-publish-upsell__dialog");
+    const close = () => {
+        trackPostPublishUpsell("post_publish_upsell_closed");
+        overlay.classList.remove("is-visible");
+        setTimeout(() => overlay.remove(), 180);
+        document.removeEventListener("keydown", onKeydown);
+    };
+    const onKeydown = (event) => {
+        if (event.key === "Escape") close();
+    };
+    overlay.addEventListener("click", (event) => {
+        if (event.target === overlay) close();
+    });
+    overlay
+        .querySelector(".post-publish-upsell__close")
+        .addEventListener("click", close);
+    overlay
+        .querySelector(".post-publish-upsell__cta")
+        .addEventListener("click", () => {
+            try {
+                sessionStorage.setItem("xera:post-publish-upsell:clicked", "1");
+            } catch (error) {}
+            trackPostPublishUpsell("post_publish_upsell_clicked");
+            const url =
+                window.XeraRouter?.buildHtmlUrl?.("subscriptionPlans") ||
+                "subscription-plans.html";
+            window.location.href = url;
+        });
+    document.body.appendChild(overlay);
+    document.addEventListener("keydown", onKeydown);
+    requestAnimationFrame(() => {
+        overlay.classList.add("is-visible");
+        dialog.focus();
+    });
+    trackPostPublishUpsell("post_publish_upsell_shown");
+    return true;
+}
+
+const PAGE_POST_UPSELL_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
+async function showProfessionalPagePostUpsell(pageId) {
+    if (!pageId || document.getElementById("page-post-publish-upsell")) {
+        return false;
+    }
+
+    let page;
+    try {
+        const { data, error } = await supabase
+            .from("professional_pages")
+            .select("id, name, slug, avatar_url")
+            .eq("id", pageId)
+            .single();
+        if (error) throw error;
+        page = data;
+    } catch (error) {
+        console.warn(
+            "Impossible de charger la Page Pro pour la suggestion:",
+            error,
+        );
+        return false;
+    }
+
+    if (!page || window.isVerifiedPageId?.(page.id)) return false;
+
+    const storageKey = `xera:page-post-upsell:last-shown:${page.id}`;
+    try {
+        const lastShown = Number(localStorage.getItem(storageKey) || 0);
+        if (
+            lastShown &&
+            Date.now() - lastShown < PAGE_POST_UPSELL_COOLDOWN_MS
+        ) {
+            return false;
+        }
+        localStorage.setItem(storageKey, String(Date.now()));
+    } catch (error) {}
+
+    document.getElementById("publish-feedback-card")?.remove();
+    const avatar = page.avatar_url || "icons/enterprise.svg";
+    const overlay = document.createElement("div");
+    overlay.id = "page-post-publish-upsell";
+    overlay.className = "post-publish-upsell page-post-publish-upsell";
+    overlay.setAttribute("role", "dialog");
+    overlay.setAttribute("aria-modal", "true");
+    overlay.setAttribute("aria-labelledby", "page-post-publish-upsell-title");
+    overlay.innerHTML = `
+        <section class="post-publish-upsell__dialog page-post-publish-upsell__dialog" tabindex="-1">
+            <button type="button" class="post-publish-upsell__close" aria-label="Fermer">✕</button>
+            <div class="post-publish-upsell__avatar-wrap">
+                <img class="post-publish-upsell__avatar" src="${escapeHtml(avatar)}" alt="Logo de ${escapeHtml(page.name || "votre Page Pro")}">
+                <span class="page-post-publish-upsell__status"><i class="fas fa-bolt"></i></span>
+            </div>
+            <p class="post-publish-upsell__eyebrow">Publication en ligne</p>
+            <h2 id="page-post-publish-upsell-title">Donnez à ${escapeHtml(page.name || "votre Page Pro")} une portée supérieure.</h2>
+            <p>Votre actualité est publiée. La vérification Page Pro peut lui offrir jusqu’à <strong>10 fois plus de visibilité</strong> dans Discover et les recommandations.</p>
+            <div class="page-post-publish-upsell__proof"><i class="fas fa-chart-line"></i><span>Badge officiel, confiance renforcée et portée amplifiée.</span></div>
+            <button type="button" class="post-publish-upsell__cta">Renforcer la visibilité</button>
+        </section>`;
+
+    const dialog = overlay.querySelector(".post-publish-upsell__dialog");
+    const close = () => {
+        overlay.classList.remove("is-visible");
+        window.setTimeout(() => overlay.remove(), 180);
+        document.removeEventListener("keydown", onKeydown);
+    };
+    const onKeydown = (event) => {
+        if (event.key === "Escape") close();
+    };
+    overlay.addEventListener("click", (event) => {
+        if (event.target === overlay) close();
+    });
+    overlay
+        .querySelector(".post-publish-upsell__close")
+        .addEventListener("click", close);
+    overlay
+        .querySelector(".post-publish-upsell__cta")
+        .addEventListener("click", () => {
+            const destination = `subscription-plans.html?plan=page_verification&context=page-verification&page_id=${encodeURIComponent(page.id)}`;
+            window.location.href = destination;
+        });
+    document.body.appendChild(overlay);
+    document.addEventListener("keydown", onKeydown);
+    requestAnimationFrame(() => {
+        overlay.classList.add("is-visible");
+        dialog.focus();
+    });
+    return true;
+}
+
+function trackPostPublishUpsellConversion(user) {
+    if (!hasActivePaidPlan(user)) return;
+    try {
+        if (sessionStorage.getItem("xera:post-publish-upsell:clicked") !== "1")
+            return;
+        sessionStorage.removeItem("xera:post-publish-upsell:clicked");
+        trackPostPublishUpsell("post_publish_upsell_conversion");
+    } catch (error) {}
+}
+
 function showBackgroundPublishBanner({
     state = "loading",
     title = "",
@@ -19340,6 +21117,42 @@ async function openCreateMenu(
         return;
     }
 
+    let fataChallengeContext = null;
+    if (!existingContent) {
+        try {
+            fataChallengeContext =
+                await window.FataIntegration?.getChallengeFormContext?.();
+        } catch (error) {
+            fataChallengeContext = {
+                requested: true,
+                connected: true,
+                error: error?.message || "Le contexte du challenge Fata n’a pas pu être chargé.",
+            };
+        }
+        if (
+            fataChallengeContext?.requested &&
+            (!fataChallengeContext.connected || fataChallengeContext.error)
+        ) {
+            const modal = document.getElementById("create-modal");
+            const container = modal?.querySelector(".create-container");
+            if (container) {
+                const message = fataChallengeContext.error
+                    ? escapeHtml(fataChallengeContext.error)
+                    : "Connectez votre compte Fata pour publier une preuve dans le challenge.";
+                container.innerHTML = `
+                    <section class="fata-challenge-gate">
+                        <img src="icons/fata.webp" alt="Fata">
+                        <h2>Challenge Fata × XERA1</h2>
+                        <p>${message}</p>
+                        <button type="button" class="btn btn-primary" onclick="${fataChallengeContext.connected ? "window.openCreateMenu(window.currentUser?.id)" : "window.FataIntegration?.openPanel()"}">${fataChallengeContext.connected ? "Réessayer" : "Connecter mon compte Fata"}</button>
+                    </section>`;
+                modal.style.display = "block";
+                modal.classList.add("active");
+            }
+            return;
+        }
+    }
+
     // Afficher le modal IMMÉDIATEMENT avec un contenu vide
     const modal = document.getElementById("create-modal");
     const container = modal.querySelector(".create-container");
@@ -19418,8 +21231,48 @@ async function openCreateMenu(
         arcs = [];
     }
 
+    const isFataChallenge = Boolean(
+        !existingContent && fataChallengeContext?.requested && fataChallengeContext.connected,
+    );
+    if (isFataChallenge) {
+        const eligibleArcs = (fataChallengeContext.arcs || [])
+            .filter((arc) => arc.eligible)
+            .map((arc) => ({ ...arc, _collabRole: "owner" }));
+        const selectedArcId = fataChallengeContext.selection?.arc_id || null;
+        if (selectedArcId) {
+            arcs = eligibleArcs.filter((arc) => String(arc.id) === String(selectedArcId));
+            if (arcs.length === 0) {
+                const modal = document.getElementById("create-modal");
+                const container = modal?.querySelector(".create-container");
+                if (container) {
+                    container.innerHTML = `
+                        <section class="fata-challenge-gate">
+                            <img src="icons/fata.webp" alt="Fata">
+                            <h2>ARC du challenge à corriger</h2>
+                            <p>L’ARC déjà associé ne remplit plus les conditions de sélection (titre, description, visibilité et trois jalons). Contactez le support XERA1 pour faire corriger l’association.</p>
+                            <button type="button" class="btn btn-ghost" onclick="closeCreateMenu()">Fermer</button>
+                        </section>`;
+                    modal.style.display = "block";
+                    modal.classList.add("active");
+                }
+                return;
+            }
+            preSelectedArcId = selectedArcId;
+        } else {
+            arcs = eligibleArcs;
+            if (!arcs.some((arc) => String(arc.id) === String(preSelectedArcId))) {
+                preSelectedArcId = arcs[0]?.id || null;
+            }
+        }
+    }
+
     // BLOCKAGE: Si l'utilisateur n'a pas d'ARC en cours, le forcer à en créer un
     if (arcs.length === 0 && !existingContent) {
+        if (isFataChallenge) {
+            closeCreateMenu();
+            if (window.openCreateModal) await window.openCreateModal();
+            return;
+        }
         if (
             confirm(
                 "Vous devez créer un projet avant de pouvoir poster une mise à jour. Voulez-vous créer votre premier projet maintenant ?",
@@ -19488,7 +21341,9 @@ async function openCreateMenu(
     const selectedArc = findArcInList(arcs, selectedArcId);
     const initialType = isEdit
         ? existingContent.type
-        : smartDefaults?.preferredType || defaultTraceType;
+        : fataChallengeContext?.connected
+          ? "image"
+          : smartDefaults?.preferredType || defaultTraceType;
     const initialState = isEdit
         ? existingContent.state
         : smartDefaults?.preferredState || "success";
@@ -19520,10 +21375,16 @@ async function openCreateMenu(
         })
         .join("");
 
-    const title = isEdit ? "Modifier l'Update" : "Nouvelle Update";
+    const title = isEdit
+        ? "Modifier l'Update"
+        : isFataChallenge
+          ? "Publier une preuve · Challenge Fata"
+          : "Nouvelle Update";
     const subtitle = isEdit
         ? `Modifier la mise à jour du jour ${nextDay}`
-        : `Update = mise à jour rapide (texte + photo optionnelle). Annonce = étape majeure partagée publiquement.`;
+        : isFataChallenge
+          ? "Publiez une preuve liée à l’ARC du challenge. Une image ou vidéo et une description sont requises."
+          : `Update = mise à jour rapide (texte + photo optionnelle). Annonce = étape majeure partagée publiquement.`;
 
     // Remove old form element to detach previous event listeners - check it's in the modal
     const oldForm = modal.querySelector("#create-form");
@@ -19533,7 +21394,7 @@ async function openCreateMenu(
     }
 
     container.innerHTML = `
-<div class="settings-section create-card-panel">
+        <div class="settings-section create-card-panel ${isFataChallenge ? "is-fata-challenge" : ""}">
             <button type="button" class="create-close" onclick="closeCreateMenu()">✕</button>
             <div class="settings-header settings-header-inline">
                 <div>
@@ -19546,16 +21407,22 @@ async function openCreateMenu(
                 </div>
             </div>
 
+            ${isFataChallenge ? `<div class="fata-challenge-form-banner" role="note">
+                <strong>Challenge Fata × XERA1 · Publication d’une preuve</strong>
+                <span>La confirmation est envoyée à Fata après la publication. Ajoutez un média et décrivez clairement le résultat obtenu sur le même ARC que celui présenté au challenge.</span>
+            </div>` : ""}
+
             <form id="create-form" class="create-form-grid">
                 ${isEdit ? `<input type="hidden" id="content-id" value="${existingContent.contentId || existingContent.id}">` : ""}
-                <div class="form-group">
+                ${isFataChallenge ? `<input type="hidden" id="fata-challenge-id" value="${escapeHtml(fataChallengeContext.challengeId)}">` : ""}
+                ${isFataChallenge ? "" : `<div class="form-group">
                     <label>Mode de publication</label>
                     <div class="mode-switch">
                         <button type="button" class="${isAnnouncementEdit ? "" : "active"}" data-mode="update">Mise à jour</button>
                         <button type="button" class="${isAnnouncementEdit ? "active" : ""}" data-mode="announcement">Annonce</button>
                     </div>
                     <p class="form-hint">Trace : mise à jour rapide (texte + photo optionnelle). Annonce : étape majeure partagée publiquement.</p>
-                </div>
+                </div>`}
                 
                 <div class="form-group form-group-day">
                     <label>Jour #</label>
@@ -19582,8 +21449,8 @@ async function openCreateMenu(
                 </div>
 
                 <div class="form-group form-group-desc">
-                    <label>Description</label>
-                    <textarea id="create-desc" class="form-input" rows="4" placeholder="Détaillez ce que vous avez fait, appris ou surmonté...">${isEdit ? existingCleanDesc : ""}</textarea>
+                    <label>${isFataChallenge ? "Description de la preuve *" : "Description"}</label>
+                    <textarea id="create-desc" class="form-input" rows="4" placeholder="${isFataChallenge ? "Quel résultat avez-vous obtenu sur ce projet ?" : "Détaillez ce que vous avez fait, appris ou surmonté..."}" ${isFataChallenge ? "required" : ""}>${isEdit ? existingCleanDesc : ""}</textarea>
                 </div>
 
                 <div class="form-group form-group-tags">
@@ -19602,14 +21469,15 @@ async function openCreateMenu(
                 </div>
 
                 <div class="form-group form-group-arc">
-                    <label>Projet (Requis)</label>
-                    <select id="create-arc" class="form-input" required>
-                        <option value="" disabled ${!selectedArcId ? "selected" : ""}>Choisir un projet...</option>
+                    <label>${isFataChallenge ? "ARC du challenge (requis)" : "Projet (Requis)"}</label>
+                    <select id="create-arc" class="form-input" required ${isFataChallenge && fataChallengeContext.selection?.arc_id ? "disabled" : ""}>
+                        <option value="" disabled ${!selectedArcId ? "selected" : ""}>${isFataChallenge ? "Choisir l’ARC qui sera présenté..." : "Choisir un projet..."}</option>
                         ${arcOptions}
                     </select>
+                    ${isFataChallenge && !fataChallengeContext.selection?.arc_id ? `<p class="form-hint">Cet ARC sera associé au challenge avant la publication de la preuve.</p>` : ""}
                 </div>
 
-                <div class="form-group">
+                ${isFataChallenge ? `<input type="hidden" id="create-type" value="${initialType}">` : `<div class="form-group">
                     <label>Type de publication</label>
                     <select id="create-type" class="form-input">
                         <option value="text" ${initialType === "text" ? "selected" : ""}>Texte</option>
@@ -19623,7 +21491,7 @@ async function openCreateMenu(
                         <button type="button" data-type="video">Vidéo</button>
                         <button type="button" data-type="live">Live</button>
                     </div>
-                </div>
+                </div>`}
 
                 <div class="form-group media-upload-group">
                     <label>Média</label>
@@ -19817,6 +21685,7 @@ async function openCreateMenu(
     };
 
     const getAllowedTypesForCurrentMode = () => {
+        if (isFataChallenge) return ["image", "video"];
         if (currentMode === "announcement") {
             return ["text", "image", "video"];
         }
@@ -20033,6 +21902,8 @@ async function openCreateMenu(
         mediaTypeInput.value =
             currentMode === "announcement" ? "text" : typeSelect.value;
         latestSelectedFileName = "";
+        window.__xeraLatestMediaC2PA = null;
+        window.__xeraLatestMediaPoster = null;
         if (fileInput) fileInput.value = "";
         if (videoDurationHint) videoDurationHint.textContent = "";
         previewContainer.innerHTML = "";
@@ -20263,6 +22134,18 @@ async function openCreateMenu(
                 const successUrls = successful.map((r) => r.url);
                 if (successUrls.length > 0) {
                     setUploadProgress(100);
+                    window.__xeraLatestMediaC2PA =
+                        successful[0]?.c2pa ||
+                        window.__xeraLatestMediaC2PA ||
+                        null;
+                    window.__xeraLatestMediaPoster =
+                        successful[0]?.type === "video" &&
+                        successful[0]?.posterUrl
+                            ? {
+                                  mediaUrl: successUrls[0],
+                                  posterUrl: successful[0].posterUrl,
+                              }
+                            : null;
                 }
                 loader.style.display = "none";
                 setUploadProgressIndeterminate();
@@ -20294,7 +22177,7 @@ async function openCreateMenu(
 
                 if (successful[0]?.type === "video") {
                     previewContainer.innerHTML = buildMediaPreviewShell(
-                        `<video src="${successUrls[0]}" controls style="max-width: 100%; max-height: 300px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);"></video>`,
+                        `<video src="${successful[0]?.previewUrl || successUrls[0]}" controls style="max-width: 100%; max-height: 300px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);"></video>`,
                     );
                     refreshSmartSuggestions({
                         fileName: latestSelectedFileName,
@@ -20434,8 +22317,33 @@ async function openCreateMenu(
                 mediaUrls = [mediaUrl];
             }
             const selectedType = mediaTypeInput.value || typeSelect.value;
+            if (isFataChallenge && !String(descInput.value || "").trim()) {
+                alert("Pour le challenge Fata, décrivez la preuve publiée.");
+                descInput.focus();
+                return;
+            }
+            if (isFataChallenge && !mediaUrl) {
+                alert("Pour le challenge Fata, ajoutez une image ou une vidéo comme preuve.");
+                return;
+            }
             if (selectedType !== "text" && !mediaUrl) {
                 alert('Ajoutez un média ou sélectionnez "Post texte".');
+                return;
+            }
+
+            const selectedArcId =
+                currentMode === "announcement" ? null : arcSelect.value || null;
+            if (isFataChallenge && !selectedArcId) {
+                alert("Choisissez l’ARC qui sert au challenge Fata.");
+                arcSelect.focus();
+                return;
+            }
+            if (
+                isFataChallenge &&
+                fataChallengeContext.selection?.arc_id &&
+                String(fataChallengeContext.selection.arc_id) !== String(selectedArcId)
+            ) {
+                alert("Cette preuve doit être rattachée à l’ARC déjà associé au challenge Fata.");
                 return;
             }
 
@@ -20466,12 +22374,86 @@ async function openCreateMenu(
                           arcSelect?.selectedOptions?.[0]?.textContent || "",
                       ).trim();
 
-            const selectedArcId =
-                currentMode === "announcement" ? null : arcSelect.value || null;
+            if (
+                isFataChallenge &&
+                !fataChallengeContext.selection?.arc_id
+            ) {
+                btnSave.textContent = "Association à Fata…";
+                try {
+                    const selectionResult =
+                        await window.FataIntegration?.selectPublishedArc?.(
+                            selectedArcId,
+                            fataChallengeContext.challengeId,
+                        );
+                    if (!selectionResult?.selected) {
+                        throw new Error(
+                            selectionResult?.error || "L’ARC n’a pas pu être associé au challenge Fata.",
+                        );
+                    }
+                    if (selectionResult.delivery?.status === "failed") {
+                        throw new Error(
+                            selectionResult.delivery.error || "Fata a refusé la présentation de l’ARC.",
+                        );
+                    }
+                    fataChallengeContext.selection = selectionResult.selection;
+                } catch (error) {
+                    btnSave.disabled = false;
+                    btnSave.textContent = originalText;
+                    alert(error?.message || "L’ARC n’a pas pu être associé au challenge Fata.");
+                    return;
+                }
+            }
+
             const selectedArc = selectedArcId
                 ? arcs.find((a) => a.id === selectedArcId)
                 : null;
-            const finalPageIdForContent = selectedArc?.page_id || finalPageId;
+            const finalPageIdForContent = isFataChallenge
+                ? null
+                : selectedArc?.page_id || finalPageId;
+
+            const selectedMediaC2PA =
+                window.__xeraLatestMediaC2PA &&
+                typeof window.__xeraLatestMediaC2PA === "object"
+                    ? {
+                          isAI: !!window.__xeraLatestMediaC2PA.isAI,
+                          provenance:
+                              window.__xeraLatestMediaC2PA.provenance || null,
+                          source: window.__xeraLatestMediaC2PA.source || null,
+                      }
+                    : null;
+            // En édition, on conserve les métadonnées existantes (sub_type des
+            // pages pro, miniature vidéo...) au lieu de les écraser.
+            const preservedMetadata =
+                isEdit &&
+                existingContent?.metadata &&
+                typeof existingContent.metadata === "object"
+                    ? { ...existingContent.metadata }
+                    : {};
+            const previousMediaUrl = isEdit
+                ? existingContent.media_url || existingContent.mediaUrl || null
+                : null;
+            if ((mediaUrl || null) !== previousMediaUrl) {
+                delete preservedMetadata.poster_url;
+                delete preservedMetadata.c2pa;
+                delete preservedMetadata.is_ai;
+            }
+            const latestPoster = window.__xeraLatestMediaPoster;
+            const posterUrl =
+                selectedType === "video" &&
+                latestPoster?.mediaUrl &&
+                latestPoster.mediaUrl === mediaUrl
+                    ? latestPoster.posterUrl
+                    : null;
+            const contentMetadata = {
+                ...preservedMetadata,
+                ...(selectedMediaC2PA
+                    ? {
+                          c2pa: selectedMediaC2PA,
+                          is_ai: selectedMediaC2PA.isAI,
+                      }
+                    : {}),
+                ...(posterUrl ? { poster_url: posterUrl } : {}),
+            };
 
             const contentData = {
                 userId: userId,
@@ -20490,8 +22472,10 @@ async function openCreateMenu(
                 mediaUrls: mediaUrls,
                 arcId: selectedArcId,
                 pageId: finalPageIdForContent,
+                metadata: contentMetadata,
             };
 
+            const publishStartedAt = Date.now();
             closeCreateMenu();
             showBackgroundPublishBanner({
                 state: "loading",
@@ -20586,18 +22570,83 @@ async function openCreateMenu(
                         }
                     }
 
+                    let publishState = "success";
+                    let publishTitle = isEdit
+                        ? "Mise a jour terminee"
+                        : "Publication terminee";
+                    let publishMessage = "Votre contenu est maintenant en ligne sur XERA.";
+                    if (isFataChallenge && !isEdit) {
+                        publishTitle = "Preuve publiée · Challenge Fata";
+                        publishMessage = "La preuve est en ligne; sa confirmation reste dans la file Fata.";
+                        try {
+                            const syncResult =
+                                await window.FataIntegration?.syncPendingActions?.();
+                            const proofEvents = (syncResult?.pendingEvents || [])
+                                .filter(
+                                    (event) =>
+                                        event.challenge_id === fataChallengeContext.challengeId &&
+                                        event.requirement_id === fataChallengeContext.requirements?.proof,
+                                )
+                                .sort(
+                                    (left, right) =>
+                                        Date.parse(right.updated_at || right.created_at || "") -
+                                        Date.parse(left.updated_at || left.created_at || ""),
+                                );
+                            const contentCreatedAt = Date.parse(
+                                result.data?.created_at || result.data?.createdAt || "",
+                            );
+                            const actionEvent =
+                                proofEvents.find(
+                                    (event) =>
+                                        Number.isFinite(contentCreatedAt) &&
+                                        Date.parse(event.occurred_at || "") === contentCreatedAt,
+                                ) || proofEvents.find((event) => {
+                                    const changedAt = Date.parse(
+                                        event.updated_at || event.created_at || "",
+                                    );
+                                    return changedAt >= publishStartedAt - 5000;
+                                });
+                            if (actionEvent?.status === "delivered" && actionEvent.event_id) {
+                                publishTitle = "Preuve confirmée par Fata";
+                                publishMessage = `Fata a reçu la première preuve (eventId ${actionEvent.event_id}).`;
+                            } else if (actionEvent?.status === "failed") {
+                                publishState = "error";
+                                publishTitle = "Preuve publiée · confirmation Fata refusée";
+                                publishMessage = window.FataIntegration?.describeDeliveryFailure?.(
+                                    actionEvent.last_error,
+                                ) || actionEvent.last_error || "Fata a refusé la confirmation.";
+                            } else if (actionEvent?.status === "retry") {
+                                publishTitle = "Preuve publiée · confirmation Fata en reprise";
+                                publishMessage = "La confirmation est conservée dans la file et sera retentée automatiquement.";
+                            } else if (actionEvent?.status === "pending") {
+                                publishTitle = "Preuve publiée · confirmation Fata en attente";
+                            }
+                        } catch (syncError) {
+                            console.warn("Fata proof delivery is still queued:", syncError);
+                        }
+                    }
+
                     showBackgroundPublishBanner({
-                        state: "success",
-                        title: isEdit
-                            ? "Mise a jour terminee"
-                            : "Publication terminee",
-                        message:
-                            "Votre contenu est maintenant en ligne sur XERA.",
+                        state: publishState,
+                        title: publishTitle,
+                        message: publishMessage,
                         autoHideMs: 3200,
                     });
-                    requestAnimationFrame(() =>
-                        showPublishFeedbackCard(publishFeedback),
-                    );
+                    requestAnimationFrame(async () => {
+                        // Only a confirmed, newly-created Page Pro post gets the Page Pro upsell.
+                        const shownPageUpsell =
+                            !isEdit &&
+                            contentData.pageId &&
+                            (await showProfessionalPagePostUpsell(
+                                contentData.pageId,
+                            ));
+                        const shownUpsell =
+                            !shownPageUpsell &&
+                            !isEdit &&
+                            showPostPublishUpsell(window.currentUser);
+                        if (!shownUpsell && !shownPageUpsell)
+                            showPublishFeedbackCard(publishFeedback);
+                    });
                 } else {
                     showBackgroundPublishBanner({
                         state: "error",
@@ -20761,6 +22810,24 @@ async function deleteContent(contentId) {
 }
 
 // Rendre les fonctions disponibles globalement
+window.renderRichDescription = renderRichDescription;
+window.renderProfileUpdateCard = renderProfileUpdateCard;
+window.getUserContentLocal = getUserContentLocal;
+window.getPageContentLocal = getPageContentLocal;
+window.toggleProPostDescription = function (contentId) {
+    const description = Array.from(
+        document.querySelectorAll(".pro-post-description"),
+    ).find((element) => element.dataset.proPostId === String(contentId || ""));
+    if (!description) return;
+    description.classList.toggle("is-expanded");
+    description
+        .closest(".pro-feed-card")
+        ?.querySelector(".pro-post-expand-btn")
+        ?.classList.toggle(
+            "is-expanded",
+            description.classList.contains("is-expanded"),
+        );
+};
 window.editContent = editContent;
 window.deleteContent = deleteContent;
 window.openSettings = openSettings;
@@ -20785,6 +22852,8 @@ window.startOAuthConnection = startOAuthConnection;
 window.refreshOAuthConnectionStatuses = refreshOAuthConnectionStatuses;
 window.navigateToUserProfile = navigateToUserProfile;
 window.renderUsernameWithBadge = renderUsernameWithBadge;
+window.renderVerifiedPageBadge = renderVerifiedPageBadge;
+window.renderVerifiedPageName = renderVerifiedPageName;
 window.renderAmbassadorBadgeById = renderAmbassadorBadgeById;
 window.isAmbassadorUserId = isAmbassadorUserId;
 window.requestVerification = requestVerification;
@@ -20964,20 +23033,42 @@ function subscribeToRealtime() {
                 const { eventType, new: newRecord, old: oldRecord } = payload;
 
                 if (eventType === "INSERT" || eventType === "UPDATE") {
-                    const userId = newRecord?.user_id;
-                    if (!userId) return;
+                    const converted = convertSupabaseContent(newRecord);
+                    const author = getContentAuthorIdentity(converted);
+                    const contentId = converted.contentId;
+                    if (!author.id || !contentId) return;
+
+                    // Un changement d'identité retire aussi l'ancienne copie locale.
+                    Object.keys(userContents).forEach((id) => {
+                        userContents[id] = (userContents[id] || []).filter(
+                            (item) => item?.contentId !== contentId,
+                        );
+                    });
+                    professionalPageContents.forEach((items, id) => {
+                        professionalPageContents.set(
+                            id,
+                            (items || []).filter(
+                                (item) => item?.contentId !== contentId,
+                            ),
+                        );
+                    });
 
                     // Mise a jour locale immediate pour un feed temps reel plus reactif
                     try {
-                        const converted = convertSupabaseContent(newRecord);
-                        const currentList = Array.isArray(userContents[userId])
-                            ? userContents[userId]
-                            : [];
+                        const cache =
+                            author.type === "PAGE_PRO"
+                                ? professionalPageContents
+                                : userContents;
+                        const cacheKey = String(author.id);
+                        const currentList = Array.isArray(cache.get?.(cacheKey))
+                            ? cache.get(cacheKey)
+                            : Array.isArray(cache[cacheKey])
+                              ? cache[cacheKey]
+                              : [];
                         const merged = [
                             converted,
                             ...currentList.filter(
-                                (item) =>
-                                    item?.contentId !== converted.contentId,
+                                (item) => item?.contentId !== contentId,
                             ),
                         ].sort(
                             (left, right) =>
@@ -20988,65 +23079,74 @@ function subscribeToRealtime() {
                                     left?.createdAt || left?.created_at || 0,
                                 ),
                         );
-                        userContents[userId] = merged;
+                        if (author.type === "PAGE_PRO") {
+                            professionalPageContents.set(cacheKey, merged);
+                        } else {
+                            userContents[cacheKey] = merged;
+                        }
                     } catch (_error) {
                         // fallback ci-dessous via refetch complet
                     }
 
-                    // Schedule a debounced background re-fetch to avoid
-                    // repeated heavy SELECTs on every realtime event.
-                    try {
-                        if (!window.__userContentRefetchTimers) {
-                            window.__userContentRefetchTimers = new Map();
-                        }
-                        // If a refetch is already scheduled for this user, skip.
-                        if (!window.__userContentRefetchTimers.has(userId)) {
-                            const timerId = setTimeout(async () => {
-                                try {
-                                    const contentResult =
-                                        await getUserContent(userId);
-                                    if (
-                                        contentResult &&
-                                        contentResult.success
-                                    ) {
-                                        userContents[userId] =
-                                            contentResult.data.map(
-                                                convertSupabaseContent,
+                    // Recharger seulement l'historique USER; les posts Page Pro
+                    // restent indexés dans professionalPageContents.
+                    if (author.type === "USER") {
+                        const userId = author.id;
+                        try {
+                            if (!window.__userContentRefetchTimers) {
+                                window.__userContentRefetchTimers = new Map();
+                            }
+                            if (!window.__userContentRefetchTimers.has(userId)) {
+                                const timerId = setTimeout(async () => {
+                                    try {
+                                        const contentResult =
+                                            await getUserContent(userId);
+                                        if (
+                                            contentResult &&
+                                            contentResult.success
+                                        ) {
+                                            userContents[userId] =
+                                                contentResult.data.map(
+                                                    convertSupabaseContent,
+                                                );
+                                        }
+                                    } catch (e) {
+                                        console.warn(
+                                            "Background getUserContent failed:",
+                                            e?.message || e,
+                                        );
+                                    } finally {
+                                        const t =
+                                            window.__userContentRefetchTimers.get(
+                                                userId,
                                             );
-                                    }
-                                } catch (e) {
-                                    console.warn(
-                                        "Background getUserContent failed:",
-                                        e?.message || e,
-                                    );
-                                } finally {
-                                    const t =
-                                        window.__userContentRefetchTimers.get(
+                                        if (t) clearTimeout(t);
+                                        window.__userContentRefetchTimers.delete(
                                             userId,
                                         );
-                                    if (t) clearTimeout(t);
-                                    window.__userContentRefetchTimers.delete(
-                                        userId,
-                                    );
-                                }
-                            }, 3000); // 3s debounce window
-                            window.__userContentRefetchTimers.set(
-                                userId,
-                                timerId,
+                                    }
+                                }, 3000);
+                                window.__userContentRefetchTimers.set(
+                                    userId,
+                                    timerId,
+                                );
+                            }
+                        } catch (e) {
+                            console.warn(
+                                "Scheduling background refetch failed:",
+                                e,
                             );
                         }
-                    } catch (e) {
-                        console.warn(
-                            "Scheduling background refetch failed:",
-                            e,
-                        );
                     }
 
                     // Si on affiche le profil de cet utilisateur, rafraîchir
-                    if (window.currentProfileViewed === userId) {
+                    if (
+                        author.type === "USER" &&
+                        window.currentProfileViewed === author.id
+                    ) {
                         console.log("Mise à jour automatique du profil...");
                         if (!window.__immersiveOpen) {
-                            await renderProfileIntoContainer(userId);
+                            await renderProfileIntoContainer(author.id);
                         } else {
                             console.log(
                                 "Immersive open: skip profile auto-refresh",
@@ -21059,16 +23159,30 @@ function subscribeToRealtime() {
                         scheduleDiscoverRefresh();
                     }
                 } else if (eventType === "DELETE") {
-                    const userId = oldRecord?.user_id;
                     const contentId = oldRecord?.id;
+                    const author = getContentAuthorIdentity(oldRecord);
+                    if (contentId) {
+                        Object.keys(userContents).forEach((id) => {
+                            userContents[id] = (userContents[id] || []).filter(
+                                (item) => item?.contentId !== contentId,
+                            );
+                        });
+                        professionalPageContents.forEach((items, id) => {
+                            professionalPageContents.set(
+                                id,
+                                (items || []).filter(
+                                    (item) => item?.contentId !== contentId,
+                                ),
+                            );
+                        });
+                    }
                     if (
-                        userId &&
-                        contentId &&
-                        Array.isArray(userContents[userId])
+                        author.type === "USER" &&
+                        author.id &&
+                        window.currentProfileViewed === author.id &&
+                        !window.__immersiveOpen
                     ) {
-                        userContents[userId] = userContents[userId].filter(
-                            (item) => item?.contentId !== contentId,
-                        );
+                        await renderProfileIntoContainer(author.id);
                     }
                     if (document.querySelector(".discover-grid")) {
                         scheduleDiscoverRefresh();
@@ -21436,42 +23550,44 @@ function loadAllCarouselImagesSequentially() {
 /**
  * Expand immersive description to show full text and views
  */
-function expandImmersiveDescription(contentId, fullDescription) {
-    const wrapper = document.querySelector(
-        `.immersive-description-wrapper[data-content-id="${contentId}"]`,
-    );
-
-    if (!wrapper) return;
-
-    const descriptionEl = wrapper.querySelector(".immersive-description");
-    if (!descriptionEl) return;
-
-    // Check if already expanded
-    if (descriptionEl.classList.contains("expanded")) {
-        descriptionEl.classList.remove("expanded");
-        const viewsRow = wrapper.querySelector(".expanded-views-row");
-        if (viewsRow) viewsRow.remove();
-        return;
-    }
-
-    // Expand the description
-    descriptionEl.classList.add("expanded");
-    descriptionEl.textContent = fullDescription || "Pas de description";
+function expandImmersiveDescription(contentId) {
+    showContentDetailsModal(contentId);
 }
 
 /**
  * Show content details modal with full description and metadata
  */
 function showContentDetailsModal(contentId, contentTitle) {
-    // Find content by contentId across all userContents
+    // Find both personal and Page Pro content by id.
+    const targetContentId = String(contentId || "");
     let content = null;
     for (const userId in window.userContents || {}) {
         const contents = window.userContents[userId] || [];
-        const found = contents.find((c) => (c.contentId || c.id) === contentId);
+        const found = contents.find(
+            (c) =>
+                String(c.contentId || c.content_id || c.id || "") ===
+                targetContentId,
+        );
         if (found) {
             content = found;
             break;
         }
+    }
+
+    if (!content) {
+        professionalPageContents.forEach((contents) => {
+            if (content) return;
+            const found = (contents || []).find(
+                (candidate) =>
+                    String(
+                        candidate.contentId ||
+                            candidate.content_id ||
+                            candidate.id ||
+                            "",
+                    ) === targetContentId,
+            );
+            if (found) content = found;
+        });
     }
 
     if (!content) {
@@ -21499,7 +23615,7 @@ function showContentDetailsModal(contentId, contentTitle) {
             content.rawDescription || content.description || "",
         ).cleanDescription || "";
 
-    const contentUser = getUser(content.userId);
+    const contentUser = getUser(content.userId || content.user_id);
     const contentUserName = contentUser ? contentUser.name : "Utilisateur";
     const contentUserAvatar = contentUser ? contentUser.avatar : "";
     const views = formatCompactCount(content.views || 0);
@@ -21520,46 +23636,46 @@ function showContentDetailsModal(contentId, contentTitle) {
             ? `<div class="stat-item"><span class="stat-label">Jour</span><span class="stat-value">${content.dayNumber}</span></div>`
             : "";
 
-    // Create modal HTML
+    const page =
+        (content.pageId || content.page_id) &&
+        window.professionalManager?.proPagesCache?.get(
+            String(content.pageId || content.page_id),
+        );
+    const authorName = page?.name || contentUserName;
+    const authorAvatar =
+        page?.avatar_url || contentUserAvatar || "icons/logo.png";
+    const certificationBadge = page
+        ? '<span class="immersive-details-badge">Page Pro</span>'
+        : "";
+    const metadataItems = [
+        content.dayNumber ? `Jour ${content.dayNumber}` : "",
+        stateLabel,
+        `${views} vues`,
+        `${encouragements} encouragements`,
+    ].filter(Boolean);
+
+    // Create bottom-sheet HTML
     const modalHtml = `
-        <div class="content-details-modal-overlay" onclick="if(event.target === this) closeContentDetailsModal()">
-            <div class="content-details-modal" onclick="event.stopPropagation()">
-                <button class="modal-close-btn" onclick="closeContentDetailsModal()">✕</button>
+        <div class="content-details-modal-overlay immersive-details-overlay" onclick="if(event.target === this) closeContentDetailsModal()">
+            <div class="content-details-modal immersive-details-sheet" role="dialog" aria-modal="true" aria-label="Description complète" onclick="event.stopPropagation()">
+                <div class="immersive-details-handle" aria-hidden="true"></div>
+                <button class="modal-close-btn immersive-details-close" aria-label="Fermer" onclick="closeContentDetailsModal()">✕</button>
                 
                 <div class="modal-header">
                     <h2>${escapeHtml(contentTitle || content.title)}</h2>
                     <p class="modal-user">
-                        <img src="${escapeHtml(contentUserAvatar)}" alt="${escapeHtml(contentUserName)}" class="modal-user-avatar">
-                        <span>${escapeHtml(contentUserName)}</span>
+                        <img src="${escapeHtml(authorAvatar)}" alt="${escapeHtml(authorName)}" class="modal-user-avatar">
+                        <span>${escapeHtml(authorName)} ${certificationBadge}</span>
                         <span class="modal-date">${createdAt}</span>
                     </p>
                 </div>
 
                 <div class="modal-body">
-                    <p class="full-description">${fullDescription ? escapeHtml(fullDescription).replace(/\n/g, "<br>") : "<em>Pas de description</em>"}</p>
+                    <p class="full-description">${fullDescription ? renderRichDescription(fullDescription) : "<em>Pas de description</em>"}</p>
                 </div>
 
                 <div class="modal-stats">
-                    ${dayInfo}
-                    <div class="stat-item">
-                        <span class="stat-label">État</span>
-                        <span class="stat-value">${stateLabel}</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-label">Vues</span>
-                        <span class="stat-value">${views}</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-label">Encouragements</span>
-                        <span class="stat-value">${encouragements}</span>
-                    </div>
-                </div>
-
-                <div class="modal-actions">
-                    <button class="modal-btn primary" onclick="handleProfileClick('${content.userId}', null, true); closeContentDetailsModal();">
-                        Voir le profil
-                    </button>
-                    <button class="modal-btn" onclick="closeContentDetailsModal();">Fermer</button>
+                    ${metadataItems.map((item) => `<span class="immersive-details-meta-item">${escapeHtml(item)}</span>`).join("")}
                 </div>
             </div>
         </div>
@@ -21573,8 +23689,98 @@ function showContentDetailsModal(contentId, contentTitle) {
         existingModal.remove();
     }
 
-    // Inject modal
+    // Inject modal and lock the background while the sheet is open.
     document.body.insertAdjacentHTML("beforeend", modalHtml);
+    const overlay = document.querySelector(".immersive-details-overlay");
+    const sheet = overlay?.querySelector(".immersive-details-sheet");
+    if (!overlay || !sheet) return;
+
+    if (!document.getElementById("immersive-details-sheet-styles")) {
+        const style = document.createElement("style");
+        style.id = "immersive-details-sheet-styles";
+        style.textContent = `
+            .immersive-details-overlay { display:flex; align-items:flex-end; justify-content:center; padding:0; background:rgba(0,0,0,.72); backdrop-filter:blur(8px); }
+            .immersive-details-sheet { position:relative; width:min(720px, 100%); max-height:min(82vh, 760px); overflow-y:auto; overscroll-behavior:contain; background:#09090b; border:1px solid rgba(255,255,255,.1); border-bottom:0; border-radius:24px 24px 0 0; padding:18px 24px 28px; transform:translateY(100%); opacity:.7; animation:immersive-sheet-in .28s cubic-bezier(.22,1,.36,1) forwards; touch-action:pan-y; }
+            .immersive-details-handle { width:48px; height:4px; margin:0 auto 14px; border-radius:999px; background:#3f3f46; }
+            .immersive-details-close { top:14px; right:16px; }
+            .immersive-details-badge { display:inline-block; margin-left:6px; padding:3px 7px; border-radius:999px; background:#2e1065; color:#c4b5fd; font-size:.7rem; }
+            .immersive-details-sheet .full-description { line-height:1.75; white-space:normal; color:#e4e4e7; }
+            .immersive-details-sheet .rich-link, .immersive-details-sheet .rich-hashtag, .immersive-details-sheet .rich-mention { color:#a78bfa; }
+            .immersive-details-meta-item { display:inline-flex; margin:4px 6px 0 0; padding:6px 9px; border:1px solid rgba(255,255,255,.08); border-radius:8px; color:#a1a1aa; font-size:.78rem; }
+            @keyframes immersive-sheet-in { to { transform:translateY(0); opacity:1; } }
+            @media (min-width:721px) { .immersive-details-sheet { margin-bottom:18px; border-bottom:1px solid rgba(255,255,255,.1); border-radius:24px; } }
+        `;
+        document.head.appendChild(style);
+    }
+
+    const previousBodyOverflow = document.body.style.overflow;
+    document.body.dataset.immersiveDetailsOverflow = previousBodyOverflow;
+    document.body.style.overflow = "hidden";
+    let startY = 0;
+    let currentY = 0;
+    let dragging = false;
+    const dismiss = () => closeContentDetailsModal();
+    sheet.addEventListener(
+        "touchstart",
+        (event) => {
+            startY = event.touches[0].clientY;
+            currentY = startY;
+            dragging = sheet.scrollTop <= 0;
+            if (dragging) sheet.style.transition = "none";
+        },
+        { passive: true },
+    );
+    sheet.addEventListener(
+        "touchmove",
+        (event) => {
+            if (!dragging) return;
+            currentY = event.touches[0].clientY;
+            const delta = Math.max(0, currentY - startY);
+            if (delta > 0) {
+                event.preventDefault();
+                sheet.style.transform = `translateY(${delta}px)`;
+            }
+        },
+        { passive: false },
+    );
+    sheet.addEventListener(
+        "touchend",
+        () => {
+            if (!dragging) return;
+            const delta = Math.max(0, currentY - startY);
+            sheet.style.transition = "transform .22s ease, opacity .22s ease";
+            if (delta > 100) {
+                sheet.style.transform = "translateY(100%)";
+                sheet.style.opacity = "0";
+                setTimeout(dismiss, 220);
+            } else {
+                sheet.style.transform = "translateY(0)";
+            }
+            dragging = false;
+        },
+        { passive: true },
+    );
+    sheet.addEventListener(
+        "wheel",
+        (event) => {
+            if (sheet.scrollTop <= 0 && event.deltaY > 0) {
+                event.preventDefault();
+                dismiss();
+            }
+        },
+        { passive: false },
+    );
+    const handleDetailsKeydown = (event) => {
+        if (event.key === "Escape") dismiss();
+    };
+    document.addEventListener("keydown", handleDetailsKeydown);
+    overlay.addEventListener(
+        "details-closed",
+        () => {
+            document.removeEventListener("keydown", handleDetailsKeydown);
+        },
+        { once: true },
+    );
 }
 
 /**
@@ -21583,6 +23789,18 @@ function showContentDetailsModal(contentId, contentTitle) {
 function closeContentDetailsModal() {
     const modal = document.querySelector(".content-details-modal-overlay");
     if (modal) {
-        modal.remove();
+        const sheet = modal.querySelector(".immersive-details-sheet");
+        if (sheet) {
+            sheet.style.transition = "transform .2s ease, opacity .2s ease";
+            sheet.style.transform = "translateY(100%)";
+            sheet.style.opacity = "0";
+            setTimeout(() => modal.remove(), 200);
+        } else {
+            modal.remove();
+        }
+        modal.dispatchEvent(new CustomEvent("details-closed"));
+        document.body.style.overflow =
+            document.body.dataset.immersiveDetailsOverflow || "";
+        delete document.body.dataset.immersiveDetailsOverflow;
     }
 }

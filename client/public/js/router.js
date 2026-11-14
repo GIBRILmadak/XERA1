@@ -1,4 +1,6 @@
 (function () {
+    let profileHubScriptsPromise = null;
+
     const WEB_APP_HEAD_ENTRIES = [
         {
             selector: 'link[rel="manifest"]',
@@ -15,7 +17,7 @@
                 rel: "icon",
                 type: "image/png",
                 sizes: "192x192",
-                href: "/icons/logo-192x192.png",
+                href: "/icons/logo.png",
             },
         },
         {
@@ -33,7 +35,7 @@
             tagName: "link",
             attributes: {
                 rel: "shortcut icon",
-                href: "/icons/logo-192x192.png",
+                href: "/icons/logo.png",
             },
         },
         {
@@ -41,7 +43,7 @@
             tagName: "link",
             attributes: {
                 rel: "apple-touch-icon",
-                href: "/icons/logo-192x192.png",
+                href: "/icons/logo.png",
             },
         },
         {
@@ -81,6 +83,7 @@
         "index.html": "/",
         "login.html": "/login",
         "profile.html": "/profile",
+        "messages.html": "/messages",
         "analytics.html": "/analytics",
         "admin.html": "/admin",
         "badges-admin.html": "/badges-admin",
@@ -90,6 +93,8 @@
         "stream.html": "/stream",
         "subscription-plans.html": "/subscription-plans",
         "verification.html": "/verification",
+        "cgu.html": "/cgu",
+        "privacy.html": "/privacy",
         "404.html": "/404",
     };
     const CLEAN_TO_HTML_PATH = Object.fromEntries(
@@ -104,6 +109,7 @@
         discover: "/",
         login: "/login",
         profile: "/profile",
+        messages: "/messages",
         pagepro: "/pagepro",
         analytics: "/analytics",
         admin: "/admin",
@@ -114,6 +120,8 @@
         stream: "/stream",
         subscriptionPlans: "/subscription-plans",
         verification: "/verification",
+        cgu: "/cgu",
+        privacy: "/privacy",
         notFound: "/404",
     };
 
@@ -123,6 +131,7 @@
         discover: "discover",
         login: "login",
         profile: "profile",
+        messages: "messages",
         pagepro: "pagepro",
         analytics: "analytics",
         admin: "admin",
@@ -133,6 +142,8 @@
         stream: "stream",
         subscriptionplans: "subscriptionPlans",
         verification: "verification",
+        cgu: "cgu",
+        privacy: "privacy",
         notfound: "notFound",
         404: "notFound",
     };
@@ -270,6 +281,9 @@
                 ? buildHtmlUrl(target, { query, hash })
                 : toHtmlUrl(target);
 
+        const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+        if (destination === currentUrl) return;
+
         if (replace) {
             window.location.replace(destination);
             return;
@@ -362,13 +376,7 @@
         if (typeof target !== "string" || !target) return;
 
         if (target === "messages") {
-            navigate("discover", {
-                ...options,
-                query: {
-                    ...(options.query || {}),
-                    messages: "1",
-                },
-            });
+            navigate("messages", options);
             return;
         }
 
@@ -415,9 +423,7 @@
             return;
         }
 
-        navigate("discover", {
-            query: { messages: "1" },
-        });
+        navigate("messages");
     }
 
     function fallbackToggleNotificationPanel() {
@@ -507,12 +513,326 @@
         }
     }
 
+    function ensureSecondaryPageBottomNav() {
+        let bottomNav = document.querySelector(".xera-bottom-nav");
+        if (!bottomNav) {
+            if (document.body?.classList.contains("index-page")) return;
+            bottomNav = document.createElement("div");
+            bottomNav.className = "xera-bottom-nav";
+            bottomNav.innerHTML = `
+                <a class="xera-bottom-item" href="index.html" title="Accueil">
+                    <div class="xera-bottom-icon"><i class="fas fa-home"></i></div>
+                    <span>Accueil</span>
+                </a>
+                <a class="xera-bottom-item" href="index.html" title="Explorer">
+                    <div class="xera-bottom-icon"><i class="fas fa-search"></i></div>
+                    <span>Explorer</span>
+                </a>
+                <button type="button" class="xera-bottom-fab" title="Créer" aria-label="Créer">
+                    <i class="fas fa-plus"></i>
+                </button>
+                <a class="xera-bottom-item xera-bottom-item--messages" href="messages.html" title="Messages">
+                    <div class="xera-bottom-icon"><i class="fas fa-envelope"></i></div>
+                    <span>Messages</span>
+                </a>
+                <a class="xera-bottom-item" href="profile.html" title="Profil">
+                    <div class="xera-bottom-icon"><i class="fas fa-user"></i></div>
+                    <span>Profil</span>
+                </a>
+            `;
+            document.body.appendChild(bottomNav);
+        }
+
+        const createButton = bottomNav.querySelector(".xera-bottom-fab");
+        if (createButton && !createButton.dataset.bound) {
+            createButton.dataset.bound = "true";
+            createButton.addEventListener("click", () => {
+                if (typeof window.openCreateChoiceModal === "function") {
+                    window.openCreateChoiceModal();
+                } else {
+                    window.location.href = "index.html";
+                }
+            });
+        }
+
+        const profileTrigger = bottomNav.querySelector(
+            '[data-profile-hub-trigger], .xera-bottom-item[title="Profil"]',
+        );
+        if (profileTrigger) {
+            profileTrigger.dataset.profileHubTrigger = "";
+            profileTrigger.setAttribute("href", "#");
+            profileTrigger.setAttribute("aria-label", "Ouvrir le menu Profil");
+            ensureProfileHubScripts();
+        }
+
+        if (bottomNav.dataset.scrollBound) return;
+        bottomNav.dataset.scrollBound = "true";
+        let lastScrollY = window.scrollY;
+        window.addEventListener(
+            "scroll",
+            () => {
+                const currentScrollY = window.scrollY;
+                if (currentScrollY > lastScrollY + 4) {
+                    bottomNav.classList.remove("is-hidden");
+                } else if (
+                    currentScrollY < lastScrollY - 4 &&
+                    currentScrollY > 16
+                ) {
+                    bottomNav.classList.add("is-hidden");
+                } else if (currentScrollY <= 16) {
+                    bottomNav.classList.remove("is-hidden");
+                }
+                lastScrollY = currentScrollY;
+            },
+            { passive: true },
+        );
+    }
+
+    function ensureProfileHubScripts(onReady) {
+        const loadFataIntegration = () => {
+            if (
+                window.FataIntegration ||
+                document.querySelector('script[src*="fata-integration.js"]')
+            ) {
+                return;
+            }
+            const fataScript = document.createElement("script");
+            fataScript.src = "/js/fata-integration.js?v=20261108-2";
+            document.body.appendChild(fataScript);
+        };
+
+        if (window.XeraNavHub) {
+            loadFataIntegration();
+            onReady?.(true);
+            return Promise.resolve(true);
+        }
+
+        if (!profileHubScriptsPromise) {
+            profileHubScriptsPromise = new Promise((resolve) => {
+                const existingScript = document.querySelector(
+                    'script[src*="navigation-hub.js"]',
+                );
+
+                // Static deferred scripts have finished loading by the time
+                // this control can be clicked. If the global is still absent,
+                // let the caller use its normal profile navigation fallback.
+                if (
+                    existingScript &&
+                    document.readyState !== "loading" &&
+                    existingScript.dataset.xeraNavHubLoading !== "true"
+                ) {
+                    resolve(false);
+                    return;
+                }
+
+                const navigationScript =
+                    existingScript || document.createElement("script");
+                navigationScript.dataset.xeraNavHubLoading = "true";
+                navigationScript.addEventListener(
+                    "load",
+                    () => resolve(Boolean(window.XeraNavHub)),
+                    { once: true },
+                );
+                navigationScript.addEventListener(
+                    "error",
+                    () => resolve(false),
+                    { once: true },
+                );
+
+                if (!existingScript) {
+                    navigationScript.src =
+                        "/js/navigation-hub.js?v=20261105-1";
+                    document.body.appendChild(navigationScript);
+                }
+            }).finally(() => {
+                profileHubScriptsPromise = null;
+            });
+        }
+
+        return profileHubScriptsPromise.then((loaded) => {
+            const ready = Boolean(loaded && window.XeraNavHub);
+            if (ready) loadFataIntegration();
+            onReady?.(ready);
+            return ready;
+        });
+    }
+
+    function getCreationUserId() {
+        if (window.currentUser?.id) return window.currentUser.id;
+        if (window.currentUserId) return window.currentUserId;
+        try {
+            const stored = JSON.parse(
+                localStorage.getItem("xera_user") ||
+                    localStorage.getItem("rize_user") ||
+                    "null",
+            );
+            return stored?.id || stored?.user_id || null;
+        } catch (_) {
+            return null;
+        }
+    }
+
+    function openCreateChoiceModal() {
+        let modal = document.getElementById("creation-choice-modal");
+        if (modal) {
+            modal.classList.add("active");
+            return;
+        }
+        modal = document.createElement("div");
+        modal.id = "creation-choice-modal";
+        modal.className = "creation-choice-modal active";
+        modal.innerHTML = `
+            <div class="creation-choice-panel" role="dialog" aria-modal="true" aria-labelledby="creation-choice-title">
+                <button type="button" class="creation-choice-close" aria-label="Fermer">&times;</button>
+                <span class="creation-choice-kicker">NOUVEL ÉLAN</span>
+                <h2 id="creation-choice-title">Qu'allez-vous construire aujourd'hui ?</h2>
+                <p class="creation-choice-intro">Choisissez une action pour documenter votre progression.</p>
+                <div class="creation-choice-actions">
+                    <button type="button" class="creation-choice-action" data-choice="project">
+                        <span class="creation-choice-icon"><i class="fas fa-layer-group"></i></span>
+                        <span><strong>Nouveau projet</strong><small>Définir une trajectoire et un objectif.</small></span>
+                        <i class="fas fa-arrow-right creation-choice-arrow"></i>
+                    </button>
+                    <button type="button" class="creation-choice-action" data-choice="update">
+                        <span class="creation-choice-icon"><i class="fas fa-bolt"></i></span>
+                        <span><strong>Publier une update</strong><small>Partager une avancée avec votre communauté.</small></span>
+                        <i class="fas fa-arrow-right creation-choice-arrow"></i>
+                    </button>
+                </div>
+                <p class="creation-choice-note">Une update doit être rattachée à un projet existant.</p>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        const close = () => modal.classList.remove("active");
+        modal
+            .querySelector(".creation-choice-close")
+            .addEventListener("click", close);
+        modal.addEventListener("click", (event) => {
+            if (event.target === modal) close();
+        });
+        modal.querySelectorAll("[data-choice]").forEach((button) => {
+            button.addEventListener("click", () => {
+                const userId = getCreationUserId();
+                if (!userId) {
+                    close();
+                    window.location.href = "login.html";
+                    return;
+                }
+                close();
+                if (button.dataset.choice === "project") {
+                    window.openCreateModal?.();
+                } else {
+                    window.openCreateMenu?.(userId);
+                }
+            });
+        });
+    }
+
+    function ensureDesktopQuickActions() {
+        const existingActions = document.querySelector(
+            ".desktop-quick-actions",
+        );
+        if (existingActions) {
+            bindDesktopProfileAction(
+                existingActions.querySelector('[data-quick-action="profile"]'),
+            );
+            return;
+        }
+
+        const actions = document.createElement("div");
+        actions.className = "desktop-quick-actions";
+        actions.innerHTML = `
+            <button type="button" class="desktop-quick-action" data-quick-action="feed" title="Ouvrir le feed" aria-label="Ouvrir le feed">
+                <i class="fas fa-rss" aria-hidden="true"></i><span>Feed</span>
+            </button>
+            <button type="button" class="desktop-quick-action" data-quick-action="profile" title="Ouvrir mon profil" aria-label="Ouvrir mon profil">
+                <i class="fas fa-user" aria-hidden="true"></i><span>Profil</span>
+            </button>
+            <button type="button" class="desktop-quick-action" data-quick-action="messages" title="Ouvrir la messagerie">
+                <i class="fas fa-comments" aria-hidden="true"></i><span>Messages</span>
+            </button>
+            <button type="button" class="desktop-quick-action" data-quick-action="search" title="Rechercher">
+                <i class="fas fa-search" aria-hidden="true"></i><span>Rechercher</span>
+            </button>
+            <button type="button" class="desktop-quick-action desktop-quick-action-primary" data-quick-action="create" title="Créer un nouvel élan">
+                <i class="fas fa-plus" aria-hidden="true"></i><span>Nouvel élan</span>
+            </button>
+        `;
+
+        const indexNav = document.querySelector(
+            "body.index-page nav .nav-links",
+        );
+        if (indexNav) {
+            indexNav.appendChild(actions);
+        } else {
+            document.body.appendChild(actions);
+        }
+
+        actions
+            .querySelector('[data-quick-action="feed"]')
+            .addEventListener("click", () => {
+                if (typeof window.navigateTo === "function") {
+                    window.navigateTo("discover");
+                } else {
+                    window.location.href = "index.html";
+                }
+            });
+        bindDesktopProfileAction(
+            actions.querySelector('[data-quick-action="profile"]'),
+        );
+        actions
+            .querySelector('[data-quick-action="messages"]')
+            .addEventListener("click", () => {
+                window.openMessagesPage?.();
+            });
+        actions
+            .querySelector('[data-quick-action="search"]')
+            .addEventListener("click", () => {
+                if (typeof window.openDedicatedSearch === "function") {
+                    window.openDedicatedSearch();
+                } else {
+                    window.location.href = "index.html#search";
+                }
+            });
+        actions
+            .querySelector('[data-quick-action="create"]')
+            .addEventListener("click", () => {
+                window.openCreateChoiceModal?.();
+            });
+    }
+
+    function bindDesktopProfileAction(profileAction) {
+        if (!profileAction || profileAction.dataset.profileHubBound === "true") {
+            return;
+        }
+        profileAction.dataset.profileHubBound = "true";
+        profileAction.addEventListener("click", (event) => {
+            event.preventDefault();
+            if (window.XeraNavHub?.toggleProfileHub()) return;
+
+            const navigateToProfile = () => {
+                if (typeof window.handleProfileNavigation === "function") {
+                    window.handleProfileNavigation();
+                } else {
+                    window.location.href = "profile.html";
+                }
+            };
+            void ensureProfileHubScripts((loaded) => {
+                if (loaded && window.XeraNavHub?.openProfileHub()) return;
+                navigateToProfile();
+            });
+        });
+    }
+
     ensureWebAppHead();
     ensureRouteHelpers();
+    window.openCreateChoiceModal = openCreateChoiceModal;
 
     document.addEventListener("DOMContentLoaded", () => {
         ensureWebAppHead();
         ensureRouteHelpers();
+        ensureSecondaryPageBottomNav();
+        ensureDesktopQuickActions();
         normalizeCurrentLocation();
         updateLinks();
     });

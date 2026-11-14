@@ -271,11 +271,7 @@ function subscribeDashboardRealtime(userId) {
             },
             (payload) => {
                 const next = payload?.new || payload?.old || {};
-                if (
-                    !["support", "video_rpm", "subscription"].includes(
-                        next.type,
-                    )
-                ) {
+                if (next.type !== "support") {
                     return;
                 }
                 scheduleDashboardRealtimeRefresh(userId);
@@ -408,18 +404,6 @@ function isDateOnOrAfter(value, startDate) {
     const dateValue = new Date(value);
     const start = new Date(startDate);
     return Number.isFinite(dateValue.getTime()) && dateValue >= start;
-}
-
-function getVideoPayoutReferenceDate(payout) {
-    return (
-        payout?.paid_at ||
-        payout?.paidAt ||
-        payout?.created_at ||
-        payout?.createdAt ||
-        payout?.period_month ||
-        payout?.periodMonth ||
-        null
-    );
 }
 
 function renderDashboardIdentity(profile) {
@@ -919,29 +903,19 @@ async function initDashboard() {
         // Mettre à jour l'avatar dans la nav
         updateNavAvatar(profile.avatar);
 
-        // Afficher le bouton upgrade si nécessaire
-        updateUpgradeButton(profile);
-
-        // Mettre à jour le statut de monétisation
+        // Mettre à jour le statut de réception des dons
         updateMonetizationStatus(profile);
 
         // Initialiser les formulaires de portefeuille
+        window.populateKPayMobileMoneySelect?.("#payoutProvider");
         setupWalletForms();
         await refreshWalletData();
 
         // Charger les revenus
         await loadRevenueData(profile.id);
 
-        // Charger les statistiques vidéo (si Pro)
-        if (canMonetizeVideos(profile)) {
-            await loadVideoStats(profile.id);
-        }
-
         // Charger les transactions
-        await loadTransactions(profile.id);
-
-        // Charger les payouts
-        await loadPayouts(profile.id);
+        await loadTransactions(profile.id, { type: "support" });
 
         // Configurer les filtres
         setupFilters();
@@ -973,20 +947,7 @@ function updateNavAvatar(avatarUrl) {
     navAvatar.src = resolvedAvatar;
 }
 
-// Mettre à jour le bouton d'upgrade
-function updateUpgradeButton(profile) {
-    const upgradeBtn = document.getElementById("upgradePlanBtn");
-    if (!upgradeBtn) return;
-
-    if (!hasActiveMonetizationPlan(profile)) {
-        upgradeBtn.style.display = "block";
-        upgradeBtn.onclick = () => openUpgradeModal();
-    } else {
-        upgradeBtn.style.display = "none";
-    }
-}
-
-// Mettre à jour le statut de monétisation
+// Mettre à jour le statut de réception des dons
 function updateMonetizationStatus(profile) {
     const statusSection = document.getElementById("monetizationStatus");
     const statusText = document.getElementById("statusText");
@@ -995,7 +956,6 @@ function updateMonetizationStatus(profile) {
     if (!statusSection || !statusText) return;
 
     const isMonetized = canReceiveSupport(profile);
-    const canMonetizeVid = canMonetizeVideos(profile);
     const hasEligiblePlan = hasActiveMonetizationPlan(profile);
     const followerGap = getMonetizationFollowerGap(profile);
 
@@ -1003,21 +963,12 @@ function updateMonetizationStatus(profile) {
         statusSection.classList.add("active");
         statusSection.classList.remove("inactive");
 
-        if (canMonetizeVid) {
-            statusText.innerHTML = `
-                <span class="status-badge active">
-                    <i class="fas fa-check-circle"></i> Monétisation complète activée
-                </span>
-                <span class="status-detail">Vous pouvez recevoir des soutiens et monétiser vos vidéos</span>
-            `;
-        } else {
-            statusText.innerHTML = `
-                <span class="status-badge active">
-                    <i class="fas fa-check-circle"></i> Soutiens activés
-                </span>
-                <span class="status-detail">Vous pouvez recevoir des soutiens. Passez à Pro pour monétiser vos vidéos.</span>
-            `;
-        }
+        statusText.innerHTML = `
+            <span class="status-badge active">
+                <i class="fas fa-check-circle"></i> Dons activés
+            </span>
+            <span class="status-detail">Votre communauté peut vous envoyer des soutiens.</span>
+        `;
 
         statusActions.innerHTML = `
             <a href="subscription-plans.html" class="btn-secondary">
@@ -1030,12 +981,12 @@ function updateMonetizationStatus(profile) {
 
         const followerMessage =
             followerGap > 0
-                ? `Il vous manque encore ${followerGap} abonné${followerGap > 1 ? "s" : ""} pour débloquer les soutiens et la monétisation.`
-                : `Votre abonnement est actif, mais l'état de monétisation n'est pas encore synchronisé.`;
+                ? `Il vous manque encore ${followerGap} abonné${followerGap > 1 ? "s" : ""} pour débloquer la réception des dons.`
+                : `Votre abonnement est actif, mais l'état de réception des dons n'est pas encore synchronisé.`;
 
         statusText.innerHTML = `
             <span class="status-badge inactive">
-                <i class="fas fa-hourglass-half"></i> Abonnement actif, monétisation en attente
+                <i class="fas fa-hourglass-half"></i> Réception des dons en attente
             </span>
             <span class="status-detail">${followerMessage}</span>
         `;
@@ -1051,15 +1002,15 @@ function updateMonetizationStatus(profile) {
 
         statusText.innerHTML = `
             <span class="status-badge inactive">
-                <i class="fas fa-lock"></i> Monétisation non activée
+                <i class="fas fa-lock"></i> Dons non activés
             </span>
             <span class="status-detail">Ce compte n'a pas encore les soutiens actifs. Vous pouvez néanmoins configurer votre portefeuille et gérer vos retraits ici dès que le compte devient éligible.</span>
         `;
 
         statusActions.innerHTML = `
-            <button class="btn-primary" onclick="openUpgradeModal()">
-                <i class="fas fa-rocket"></i> Activer la monétisation
-            </button>
+            <a class="btn-primary" href="subscription-plans.html">
+                <i class="fas fa-arrow-up-right-dots"></i> Activer les dons
+            </a>
         `;
     }
 }
@@ -1093,94 +1044,40 @@ async function loadRevenueData(userId, period = "all") {
                 startDate = null;
         }
 
-        const [supportResult, videoTransactionsResult, videoPayoutsResult] =
-            await Promise.all([
-                supabase
-                    .from("transactions")
-                    .select("*")
-                    .eq("to_user_id", userId)
-                    .eq("status", "succeeded")
-                    .eq("type", "support"),
-                supabase
-                    .from("transactions")
-                    .select("*")
-                    .eq("to_user_id", userId)
-                    .eq("status", "succeeded")
-                    .eq("type", "video_rpm"),
-                supabase
-                    .from("video_payouts")
-                    .select("*")
-                    .eq("creator_id", userId)
-                    .in("status", ["pending", "processing", "paid"])
-                    .order("period_month", { ascending: false }),
-            ]);
+        const supportResult = await supabase
+            .from("transactions")
+            .select("*")
+            .eq("to_user_id", userId)
+            .eq("status", "succeeded")
+            .eq("type", "support");
 
-        if (
-            supportResult.error ||
-            videoTransactionsResult.error ||
-            videoPayoutsResult.error
-        ) {
-            console.error(
-                "Erreur chargement revenus:",
-                supportResult.error ||
-                    videoTransactionsResult.error ||
-                    videoPayoutsResult.error,
-            );
+        if (supportResult.error) {
+            console.error("Erreur chargement dons:", supportResult.error);
             return;
         }
 
         const supportTransactions = (supportResult.data || []).filter((tx) =>
             isDateOnOrAfter(tx.created_at, startDate),
         );
-        const videoTransactions = (videoTransactionsResult.data || []).filter(
-            (tx) => isDateOnOrAfter(tx.created_at, startDate),
-        );
-        const paidVideoPayouts = (videoPayoutsResult.data || [])
-            .filter((payout) => payout.status === "paid")
-            .filter((payout) =>
-                isDateOnOrAfter(getVideoPayoutReferenceDate(payout), startDate),
-            );
-
-        const useVideoTransactions = videoTransactions.length > 0;
-        const creditedVideoEntries = useVideoTransactions
-            ? videoTransactions
-            : paidVideoPayouts;
 
         // Calculer les totaux
-        let totalNet = 0;
         let supportRevenue = 0;
-        let videoRevenue = 0;
         const supportCount = supportTransactions.length;
-        const videoCount = creditedVideoEntries.length;
 
         supportTransactions.forEach((tx) => {
             const net = parseFloat(tx.amount_net_creator || 0);
-
-            totalNet += net;
             supportRevenue += net;
-        });
-
-        creditedVideoEntries.forEach((entry) => {
-            const net = parseFloat(entry.amount_net_creator || 0);
-            totalNet += net;
-            videoRevenue += net;
         });
 
         // Mettre à jour l'UI
         document.getElementById("totalRevenue").textContent =
-            formatCurrency(totalNet);
+            formatCurrency(supportRevenue);
         document.getElementById("supportRevenue").textContent =
             formatCurrency(supportRevenue);
         document.getElementById("supportCount").textContent =
             `${supportCount} transaction${supportCount !== 1 ? "s" : ""}`;
-        document.getElementById("videoRevenue").textContent =
-            formatCurrency(videoRevenue);
         document.getElementById("netRevenue").textContent =
-            formatCurrency(totalNet);
-
-        // Mettre à jour les stats vidéo dans la card
-        document.getElementById("videoStats").textContent =
-            `${videoCount} paiement${videoCount !== 1 ? "s" : ""} credite${videoCount !== 1 ? "s" : ""}`;
+            formatCurrency(supportRevenue);
     } catch (error) {
         if (
             error &&
@@ -1193,62 +1090,6 @@ async function loadRevenueData(userId, period = "all") {
         } else {
             console.error("Exception chargement revenus:", error);
         }
-    }
-}
-
-// Charger les statistiques vidéo
-async function loadVideoStats(userId) {
-    try {
-        const videoSection = document.getElementById("videoStatsSection");
-        if (videoSection) {
-            videoSection.style.display = "block";
-        }
-
-        const createBtn = document.getElementById("createVideoBtn");
-        if (createBtn) {
-            createBtn.onclick = (e) => {
-                e.preventDefault();
-                const uid =
-                    window.currentUserId ||
-                    window.currentUser?.id ||
-                    profile?.id ||
-                    userId;
-                if (!uid) {
-                    console.warn(
-                        "Impossible de déterminer l’utilisateur courant pour créer une mise à jour.",
-                    );
-                    return;
-                }
-                if (typeof window.openCreateMenu === "function") {
-                    window.openCreateMenu(uid);
-                } else {
-                    window.location.href = "profile.html";
-                }
-            };
-        }
-
-        const { data: stats, error } = await getCreatorVideoStats(
-            userId,
-            "month",
-        );
-
-        if (error) {
-            console.error("Erreur stats vidéo:", error);
-            return;
-        }
-
-        if (stats) {
-            document.getElementById("totalViews").textContent =
-                stats.totalViews.toLocaleString();
-            document.getElementById("eligibleViews").textContent =
-                stats.totalEligibleViews.toLocaleString();
-            document.getElementById("videoCount").textContent =
-                stats.videoCount;
-            document.getElementById("estimatedRevenue").textContent =
-                formatCurrency(stats.estimatedRevenue);
-        }
-    } catch (error) {
-        console.error("Exception stats vidéo:", error);
     }
 }
 
@@ -1293,13 +1134,6 @@ async function loadTransactions(userId, options = {}) {
                     },
                 );
 
-                const typeLabels = {
-                    support: '<i class="fas fa-heart"></i> Soutien',
-                    video_rpm: '<i class="fas fa-video"></i> Vidéo',
-                    subscription: '<i class="fas fa-crown"></i> Abonnement',
-                    other: "Autre",
-                };
-
                 const statusLabels = {
                     succeeded: '<span class="status-success">Réussi</span>',
                     pending: '<span class="status-pending">En attente</span>',
@@ -1310,7 +1144,7 @@ async function loadTransactions(userId, options = {}) {
                 return `
                 <tr>
                     <td>${date}</td>
-                    <td>${typeLabels[tx.type] || tx.type}</td>
+                    <td><i class="fas fa-heart"></i> Don</td>
                     <td>${formatCurrency(tx.amount_gross)}</td>
                     <td>${formatCurrency(tx.amount_commission_xera)}</td>
                     <td><strong>${formatCurrency(tx.amount_net_creator)}</strong></td>
@@ -1334,71 +1168,6 @@ async function loadTransactions(userId, options = {}) {
     }
 }
 
-// Charger les payouts vidéo
-async function loadPayouts(userId) {
-    try {
-        const { data: payouts, error } = await getCreatorVideoPayouts(userId);
-
-        if (error) {
-            console.error("Erreur chargement payouts:", error);
-            return;
-        }
-
-        const tbody = document.getElementById("payoutsBody");
-        if (!tbody) return;
-
-        if (!payouts || payouts.length === 0) {
-            tbody.innerHTML = `
-                <tr class="empty-row">
-                    <td colspan="6">Aucun paiement pour le moment</td>
-                </tr>
-            `;
-            return;
-        }
-
-        tbody.innerHTML = payouts
-            .map((payout) => {
-                const monthDate = new Date(payout.period_month);
-                const monthLabel = monthDate.toLocaleDateString("fr-FR", {
-                    month: "long",
-                    year: "numeric",
-                });
-
-                const statusLabels = {
-                    pending: '<span class="status-pending">En attente</span>',
-                    processing:
-                        '<span class="status-processing">En cours</span>',
-                    paid: '<span class="status-paid">Payé</span>',
-                    failed: '<span class="status-failed">Échoué</span>',
-                };
-
-                return `
-                <tr>
-                    <td>${monthLabel}</td>
-                    <td>${payout.views.toLocaleString()}</td>
-                    <td>$${payout.rpm_rate}/1000</td>
-                    <td>${formatCurrency(payout.amount_gross)}</td>
-                    <td><strong>${formatCurrency(payout.amount_net_creator)}</strong></td>
-                    <td>${statusLabels[payout.status] || payout.status}</td>
-                </tr>
-            `;
-            })
-            .join("");
-    } catch (error) {
-        if (
-            error &&
-            (error.message?.includes("Failed to fetch") ||
-                error.message?.includes("NetworkError"))
-        ) {
-            console.warn(
-                "Réseau instable lors du chargement des payouts (tentative ignorée).",
-            );
-        } else {
-            console.error("Exception chargement payouts:", error);
-        }
-    }
-}
-
 // Configurer les filtres
 function setupFilters() {
     // Filtres de période pour les revenus
@@ -1418,61 +1187,25 @@ function setupFilters() {
     if (typeFilter) {
         typeFilter.addEventListener("change", () => {
             const type = typeFilter.value;
-            const options = type === "all" ? {} : { type };
+            const options = { type: "support" };
             loadTransactions(window.currentUser.id, options);
         });
-    }
-}
-
-// Modal d'upgrade
-function openUpgradeModal() {
-    const modal = document.getElementById("upgradeModal");
-    if (modal) {
-        modal.classList.add("active");
-    }
-}
-
-function closeUpgradeModal() {
-    const modal = document.getElementById("upgradeModal");
-    if (modal) {
-        modal.classList.remove("active");
-    }
-}
-
-// Sélection d'un plan
-async function selectPlan(planId) {
-    try {
-        if (window.XeraAppServices?.subscriptions?.navigateToCheckout) {
-            await window.XeraAppServices.subscriptions.navigateToCheckout(planId, "monthly");
-            return;
-        }
-
-        if (window.XeraRouter?.navigate) {
-            window.XeraRouter.navigate("subscriptionPlans", {
-                query: { plan: planId, billing: "monthly" },
-            });
-        } else {
-            const url = new URL(
-                "subscription-plans.html",
-                window.location.href,
-            );
-            url.searchParams.set("plan", planId);
-            url.searchParams.set("billing", "monthly");
-            window.location.href = url.toString();
-        }
-    } catch (error) {
-        console.error("Exception sélection plan:", error);
-        showError("Une erreur est survenue");
     }
 }
 
 // Modal de soutien
 let selectedSupportAmount = 0;
 let selectedCreatorId = null;
+let selectedSupportMessage = "";
 
 function openSupportModal(creatorId) {
     selectedCreatorId = creatorId;
     selectedSupportAmount = 0;
+    selectedSupportMessage = "";
+    const supportMessageInput = document.getElementById("supportMessage");
+    if (supportMessageInput) {
+        supportMessageInput.value = "";
+    }
 
     const modal = document.getElementById("supportModal");
     const amountOptions = document.getElementById("amountOptions");
@@ -1506,6 +1239,11 @@ function closeSupportModal() {
     }
     selectedSupportAmount = 0;
     selectedCreatorId = null;
+    selectedSupportMessage = "";
+    const supportMessageInput = document.getElementById("supportMessage");
+    if (supportMessageInput) {
+        supportMessageInput.value = "";
+    }
 }
 
 function selectSupportAmount(amount) {
@@ -1545,10 +1283,11 @@ async function processSupport() {
             document.getElementById("customAmount")?.value || 0,
         );
         const amount = selectedSupportAmount || customAmount;
-        const submitBtn = document.querySelector(
-            "#supportModal .btn-primary.btn-full",
-        );
-
+        const supportMessageInput = document.getElementById("supportMessage");
+        selectedSupportMessage = String(supportMessageInput?.value || "")
+            .replace(/\s+/g, " ")
+            .trim()
+            .slice(0, 200);
         if (!amount || amount < 1) {
             showError(
                 "Veuillez sélectionner ou entrer un montant valide (minimum $1)",
@@ -1576,6 +1315,7 @@ async function processSupport() {
             creatorId: selectedCreatorId,
             amount,
             description: "Soutien depuis le dashboard",
+            message: selectedSupportMessage,
         });
 
         if (result.success) {

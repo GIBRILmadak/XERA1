@@ -1,4 +1,4 @@
-/* XERA UI motion: intentionally small, reusable and respectful of reduced motion. */
+/* XERA1 UI motion: intentionally small, reusable and respectful of reduced motion. */
 (function () {
     "use strict";
 

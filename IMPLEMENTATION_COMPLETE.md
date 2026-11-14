@@ -115,7 +115,7 @@ Range: 0-100+ points
 ### Step 1: Database (5 min)
 
 ```bash
-psql -U postgres -d xera < sql/engagement-tracking-schema.sql
+psql -U postgres -d xera1 < sql/engagement-tracking-schema.sql
 ```
 
 ✅ Creates 6 tables with indexes and RLS

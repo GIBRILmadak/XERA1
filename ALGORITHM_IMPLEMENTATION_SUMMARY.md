@@ -1,4 +1,4 @@
-# 🚀 ALGORITHME DE RECOMMANDATION XERA - RÉSUMÉ D'IMPLÉMENTATION
+# 🚀 ALGORITHME DE RECOMMANDATION XERA1 - RÉSUMÉ D'IMPLÉMENTATION
 
 **Date:** 30 Mai 2026  
 **Version:** 2.0 - Proof of Building  
@@ -50,7 +50,7 @@ async function fetchRecommendedUsers(options)
 
 app.get("/api/app/discover/users", async)
 // Maintenant utilise fetchRecommendedUsers()
-// Retourne { algorithm: "xera-v2-composite" }
+// Retourne { algorithm: "xera1-v2-composite" }
 ```
 
 ### 3. 📊 **sql/engagement-tracking-schema.sql** (NEW - 350 lignes)
@@ -219,10 +219,10 @@ Score =
 
 ```bash
 # 1. Exécuter schema SQL
-psql -U postgres -d xera -f sql/engagement-tracking-schema.sql
+psql -U postgres -d xera1 -f sql/engagement-tracking-schema.sql
 
 # 2. Vérifier tables créées
-psql -U postgres -d xera -c "\dt" | grep -E "user_interactions|content_metrics|feed_impressions"
+psql -U postgres -d xera1 -c "\dt" | grep -E "user_interactions|content_metrics|feed_impressions"
 ```
 
 ### Phase 2: Server Integration (15 min)
@@ -292,7 +292,7 @@ function onLike(creator) {
 curl http://localhost:5050/api/app/discover/users
 
 # 2. Vérifier algo
-# Doit retourner: "algorithm": "xera-v2-composite"
+# Doit retourner: "algorithm": "xera1-v2-composite"
 
 # 3. Vérifier DB
 # SELECT COUNT(*) FROM user_interactions;
@@ -356,7 +356,7 @@ window.engagementTracker.trackFeedImpression({
       ...
     }
   ],
-  "algorithm": "xera-v2-composite", // ✅ Nouvel algo
+  "algorithm": "xera1-v2-composite", // ✅ Nouvel algo
   "cached": false
 }
 ```

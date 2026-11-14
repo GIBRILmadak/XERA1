@@ -1,86 +1,106 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="fr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oups erreur 404 | XERA</title>
-    <link rel="manifest" href="/manifest.json">
-    <link rel="icon" type="image/png" sizes="192x192" href="/icons/logo-192x192.png">
-    <link rel="shortcut icon" href="/icons/logo-192x192.png">
-    <link rel="apple-touch-icon" href="/icons/logo-192x192.png">
-    <meta name="theme-color" content="#050505">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/style.css">
-    <style>
-        .error-404 {
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 3rem 1.5rem;
-            background: #000;
-        }
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Oups erreur 404 | XERA1</title>
+        <link rel="manifest" href="/manifest.json" />
+        <link
+            rel="icon"
+            type="image/png"
+            sizes="192x192"
+            href="/icons/logo.png"
+        />
+        <link rel="shortcut icon" href="/icons/logo.png" />
+        <link rel="apple-touch-icon" href="/icons/logo.png" />
+        <meta name="theme-color" content="#050505" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+        <link
+            href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;600;700;800&display=swap"
+            rel="stylesheet"
+        />
+        <link rel="stylesheet" href="css/style.css?v=20261006-1" />
+        <style>
+            .error-404 {
+                min-height: 100vh;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 3rem 1.5rem;
+                background: #000;
+            }
 
-        .error-404__card {
-            width: min(920px, 100%);
-            background: transparent;
-            border: 0;
-            border-radius: 24px;
-            padding: clamp(1.5rem, 3vw, 2.5rem);
-            text-align: center;
-        }
+            .error-404__card {
+                width: min(920px, 100%);
+                background: transparent;
+                border: 0;
+                border-radius: 24px;
+                padding: clamp(1.5rem, 3vw, 2.5rem);
+                text-align: center;
+            }
 
-        .error-404__title {
-            font-family: var(--font-heading);
-            font-size: clamp(1.6rem, 2.5vw, 2.4rem);
-            margin-bottom: 1.5rem;
-            letter-spacing: 0.02em;
-        }
+            .error-404__title {
+                font-family: var(--font-heading);
+                font-size: clamp(1.6rem, 2.5vw, 2.4rem);
+                margin-bottom: 1.5rem;
+                letter-spacing: 0.02em;
+            }
 
-        .error-404__video {
-            width: min(620px, 100%);
-            max-height: 70vh;
-            border-radius: 16px;
-            display: block;
-            background: #000;
-            object-fit: contain;
-            margin: 0 auto;
-        }
+            .error-404__video {
+                width: min(620px, 100%);
+                max-height: 70vh;
+                border-radius: 16px;
+                display: block;
+                background: #000;
+                object-fit: contain;
+                margin: 0 auto;
+            }
 
-        .error-404__action {
-            margin-top: 1.8rem;
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.85rem 1.5rem;
-            border-radius: 999px;
-            background: #ffffff;
-            color: #050505;
-            font-weight: 600;
-            text-decoration: none;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-        }
+            .error-404__action {
+                margin-top: 1.8rem;
+                display: inline-flex;
+                align-items: center;
+                gap: 0.5rem;
+                padding: 0.85rem 1.5rem;
+                border-radius: 999px;
+                background: #ffffff;
+                color: #050505;
+                font-weight: 600;
+                text-decoration: none;
+                transition:
+                    transform 0.2s ease,
+                    box-shadow 0.2s ease;
+            }
 
-        .error-404__action:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 10px 25px rgba(255, 255, 255, 0.15);
-        }
-    </style>
-</head>
-<body>
-    <main class="error-404">
-        <section class="error-404__card" aria-label="Erreur 404">
-            <h1 class="error-404__title">Oups erreur 404</h1>
-            <video class="error-404__video" autoplay muted loop playsinline>
-                <source src="./icons/404.mp4" type="video/mp4">
-                Votre navigateur ne prend pas en charge la lecture vidéo.
-            </video>
-            <a class="error-404__action" href="./index.html">Retour à l'accueil</a>
-        </section>
-    </main>
-    <script src="js/router.js"></script>
+            .error-404__action:hover {
+                transform: translateY(-1px);
+                box-shadow: 0 10px 25px rgba(255, 255, 255, 0.15);
+            }
+        </style>
+    </head>
+    <body>
+<div class="lang-switcher-nav">
+                <select id="header-lang-select" class="nav-lang-select" aria-label="Language selection">
+                    <option value="fr">FR</option>
+                    <option value="en">EN</option>
+                </select>
+            </div>
+        <main class="error-404">
+            <section class="error-404__card" aria-label="Erreur 404">
+                <h1 class="error-404__title">Oups erreur 404</h1>
+                <video class="error-404__video" autoplay muted loop playsinline>
+                    <source src="./icons/404.mp4" type="video/mp4" />
+                    Votre navigateur ne prend pas en charge la lecture vidéo.
+                </video>
+                <a class="error-404__action" href="./index.html"
+                    >Retour à l'accueil</a
+                >
+            </section>
+        </main>
+        <script src="js/router.js?v=20261004-3"></script>
+        <script src="js/i18n.js"></script>
+    <script src="js/seo-schema.js"></script>
 </body>
 </html>

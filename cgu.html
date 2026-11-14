@@ -1,0 +1,990 @@
+<!doctype html>
+<html lang="fr">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Conditions d’utilisation – XERA1</title>
+        <meta
+            name="description"
+            content="Conditions Générales d’Utilisation de XERA1 – Proof of Building, Pages Pro, abonnements, dons et règles de la plateforme."
+        />
+        <link rel="canonical" href="https://xera1.xyz/cgu" />
+        <meta property="og:title" content="Conditions d’utilisation – XERA1" />
+        <meta property="og:description" content="Conditions Générales d’Utilisation de XERA1 – Proof of Building, Pages Pro, abonnements, dons et règles de la plateforme." />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://xera1.xyz/cgu" />
+        <meta property="og:image" content="https://xera1.xyz/icons/logo.png" />
+        <link rel="icon" type="image/png" href="icons/logo.png" />
+        <link
+            rel="stylesheet"
+            href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+        />
+        <style>
+            :root {
+                --bg: #050505;
+                --panel: #0d0d12;
+                --panel-strong: #13131a;
+                --border: rgba(255, 255, 255, 0.1);
+                --text: #f5f5f7;
+                --muted: #b4b6c4;
+                --soft: #d9dbe3;
+                --violet: #7c3aed;
+                --violet-strong: #8b5cf6;
+                --glow: rgba(124, 58, 237, 0.26);
+                --green: #3ddc97;
+                --danger: #ff7a7a;
+                --shadow: 0 30px 80px rgba(0, 0, 0, 0.38);
+            }
+
+            * {
+                box-sizing: border-box;
+            }
+
+            html {
+                scroll-behavior: smooth;
+            }
+
+            body {
+                margin: 0;
+                background:
+                    radial-gradient(
+                        circle at top left,
+                        rgba(124, 58, 237, 0.14),
+                        transparent 28%
+                    ),
+                    linear-gradient(180deg, #050505 0%, #0d0d12 100%);
+                color: var(--text);
+                font-family: Inter, "Segoe UI", sans-serif;
+                line-height: 1.7;
+            }
+
+            a {
+                color: var(--violet-strong);
+                text-decoration: none;
+            }
+
+            a:hover {
+                text-decoration: underline;
+            }
+
+            .legal-shell {
+                max-width: 1260px;
+                margin: 0 auto;
+                padding: 32px 20px 80px;
+            }
+
+            .legal-header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 18px;
+                margin-bottom: 28px;
+                padding-bottom: 22px;
+                border-bottom: 1px solid var(--border);
+            }
+
+            .brand {
+                display: inline-flex;
+                align-items: center;
+                gap: 12px;
+                font-weight: 800;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+                color: var(--text);
+            }
+
+            .brand-mark {
+                width: 38px;
+                height: 38px;
+                border-radius: 12px;
+                display: grid;
+                place-items: center;
+                background: linear-gradient(135deg, var(--violet), #3b2a6a);
+                box-shadow: 0 12px 30px var(--glow);
+            }
+
+            .brand-mark img {
+                width: 22px;
+                height: 22px;
+                object-fit: contain;
+            }
+
+            .header-meta {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                font-size: 0.82rem;
+                color: var(--muted);
+                letter-spacing: 0.06em;
+                text-transform: uppercase;
+            }
+
+            .header-pill {
+                padding: 7px 12px;
+                border: 1px solid rgba(124, 58, 237, 0.4);
+                background: rgba(124, 58, 237, 0.08);
+                border-radius: 999px;
+                color: var(--soft);
+            }
+
+            .legal-grid {
+                display: grid;
+                grid-template-columns: 280px minmax(0, 1fr);
+                gap: 28px;
+                align-items: start;
+            }
+
+            .toc {
+                position: sticky;
+                top: 20px;
+            }
+
+            .toc-card {
+                background: rgba(15, 15, 20, 0.9);
+                border: 1px solid var(--border);
+                border-radius: 20px;
+                padding: 20px 18px;
+                box-shadow: var(--shadow);
+            }
+
+            .toc-title {
+                margin: 0 0 14px;
+                font-size: 0.78rem;
+                letter-spacing: 0.12em;
+                text-transform: uppercase;
+                color: var(--muted);
+            }
+
+            .toc-nav {
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+            }
+
+            .toc-nav a {
+                display: block;
+                padding: 9px 10px 9px 12px;
+                border-radius: 10px;
+                color: var(--soft);
+                font-size: 0.95rem;
+                border: 1px solid transparent;
+            }
+
+            .toc-nav a:hover {
+                background: rgba(124, 58, 237, 0.08);
+                border-color: rgba(124, 58, 237, 0.22);
+                text-decoration: none;
+            }
+
+            .legal-content {
+                background: rgba(15, 15, 20, 0.78);
+                border: 1px solid var(--border);
+                border-radius: 28px;
+                padding: 36px clamp(20px, 4vw, 52px);
+                box-shadow: var(--shadow);
+            }
+
+            .eyebrow {
+                margin: 0 0 16px;
+                color: var(--violet-strong);
+                font-size: 0.76rem;
+                letter-spacing: 0.15em;
+                text-transform: uppercase;
+                font-weight: 700;
+            }
+
+            h1 {
+                margin: 0 0 10px;
+                font-size: clamp(2.1rem, 4vw, 3.3rem);
+                line-height: 1.1;
+                letter-spacing: -0.06em;
+            }
+
+            .last-updated {
+                margin: 0 0 26px;
+                color: var(--muted);
+                font-size: 0.9rem;
+            }
+
+            .intro {
+                margin: 0 0 28px;
+                font-size: 1.04rem;
+                color: var(--soft);
+            }
+
+            .legal-easter-egg {
+                margin: 20px 0 28px;
+                padding: 16px 18px;
+                background: rgba(124, 58, 237, 0.08);
+                border: 1px solid rgba(124, 58, 237, 0.2);
+                border-left: 4px solid var(--violet-strong);
+                border-radius: 14px;
+                color: var(--soft);
+                font-style: italic;
+            }
+
+            section {
+                padding-top: 10px;
+                margin-top: 28px;
+                border-top: 1px solid var(--border);
+            }
+
+            section:first-of-type {
+                border-top: none;
+                margin-top: 0;
+                padding-top: 0;
+            }
+
+            h2 {
+                margin: 0 0 14px;
+                font-size: clamp(1.2rem, 2vw, 1.7rem);
+                letter-spacing: -0.04em;
+            }
+
+            p,
+            li {
+                color: var(--soft);
+                font-size: 1rem;
+            }
+
+            ul,
+            ol {
+                margin: 12px 0 14px 18px;
+                padding-left: 12px;
+            }
+
+            li + li {
+                margin-top: 8px;
+            }
+
+            .muted {
+                color: var(--muted);
+            }
+
+            .callout {
+                margin: 18px 0;
+                padding: 16px 18px;
+                border: 1px solid rgba(61, 220, 151, 0.26);
+                background: rgba(61, 220, 151, 0.05);
+                border-radius: 12px;
+                color: var(--soft);
+            }
+
+            .callout strong {
+                color: var(--text);
+            }
+
+            .contact-box {
+                margin-top: 18px;
+                padding: 18px 20px;
+                border-radius: 16px;
+                background: rgba(124, 58, 237, 0.08);
+                border: 1px solid rgba(124, 58, 237, 0.2);
+            }
+
+            @media (max-width: 900px) {
+                .legal-grid {
+                    grid-template-columns: 1fr;
+                }
+
+                .toc {
+                    position: static;
+                }
+
+                .toc-nav {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+                    gap: 8px;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="legal-shell">
+            <header class="legal-header">
+                <div class="brand">
+                    <span class="brand-mark">
+                        <img src="icons/logo.png" alt="Logo XERA1" />
+                    </span>
+                    <span>XΞRA1</span>
+                </div>
+                <div class="header-meta">
+                <div class="lang-switcher-nav">
+                <select id="header-lang-select" class="nav-lang-select" aria-label="Language selection">
+                    <option value="fr">FR</option>
+                    <option value="en">EN</option>
+                </select>
+            </div>
+                    <span class="header-pill">Conditions d’utilisation</span>
+                </div>
+            </header>
+
+            <main class="legal-grid">
+                <aside class="toc" aria-label="Sommaire des CGU">
+                    <div class="toc-card">
+                        <p class="toc-title">Sommaire</p>
+                        <nav class="toc-nav">
+                            <a href="#objet">1. Objet</a>
+                            <a href="#presentation">2. Présentation</a>
+                            <a href="#compte">3. Compte</a>
+                            <a href="#acceptable">4. Utilisation acceptable</a>
+                            <a href="#proof-building">5. Proof of Building</a>
+                            <a href="#contenu">6. Contenu</a>
+                            <a href="#pages-pro">7. Pages Pro</a>
+                            <a href="#abonnements">8. Abonnements</a>
+                            <a href="#soutien">9. Soutien financier</a>
+                            <a href="#badges">10. Badges</a>
+                            <a href="#partenaires">11. Partenaires</a>
+                            <a href="#ip">12. Propriété intellectuelle</a>
+                            <a href="#donnees">13. Données</a>
+                            <a href="#disponibilite">14. Disponibilité</a>
+                            <a href="#suspension">15. Suspension</a>
+                            <a href="#responsabilite">16. Responsabilité</a>
+                            <a href="#modifications">17. Modifications</a>
+                            <a href="#juridique">18. Droit applicable</a>
+                            <a href="#contact">19. Contact</a>
+                        </nav>
+                    </div>
+                </aside>
+
+                <article class="legal-content">
+                    <p class="eyebrow">XERA1</p>
+                    <h1>Conditions Générales d’Utilisation</h1>
+                    <p class="last-updated">
+                        Dernière mise à jour : 1 septembre 2026
+                    </p>
+
+                    <p class="intro">
+                        XERA1 est une infrastructure de Proof of Building
+                        destinée à accompagner les développeurs, étudiants,
+                        entrepreneurs, créateurs et équipes et tout porteur de projet dans la
+                        documentation, la publication et la valorisation de
+                        leurs projets, compétences et progrès. En créant un
+                        compte, en accédant à la plateforme, en publiant du
+                        contenu ou en utilisant l’une de ses fonctionnalités,
+                        l’utilisateur accepte les présentes Conditions Générales
+                        d’Utilisation et s’engage à les respecter.
+                    </p>
+
+                    <div class="legal-easter-egg">
+                        Une dernière précision : déclarer « j’ai lu les CGU »
+                        sans les lire ne constitue malheureusement pas encore un
+                        Proof of Building.
+                    </div>
+
+                    <section id="objet">
+                        <h2>1. Objet et acceptation des conditions</h2>
+                        <p>
+                            Les présentes Conditions Générales d’Utilisation
+                            régissent l’accès et l’utilisation de XERA1, y
+                            compris les fonctionnalités de création de profil,
+                            de publication, de gestion de projets, d’Arcs de
+                            progression, de vérification, de monétisation et de
+                            collaboration.
+                        </p>
+                        <p>
+                            Toute utilisation de XERA1 implique l’acceptation
+                            pleine et entière des présentes conditions. Si un
+                            utilisateur ne les accepte pas, il ne doit pas
+                            utiliser la plateforme.
+                        </p>
+                    </section>
+
+                    <section id="presentation">
+                        <h2>2. Présentation de XERA1</h2>
+                        <p>
+                            XERA1 met à disposition une infrastructure de preuve
+                            de travail, de construction en public et de
+                            valorisation des parcours. L’objectif est de
+                            permettre aux utilisateurs de documenter leur
+                            progression, présenter leurs projets, partager leurs
+                            réalisations et faire valoir leur travail à travers
+                            des éléments concrets, visibles et vérifiables.
+                        </p>
+                        <p>
+                            La plateforme peut notamment permettre à un
+                            utilisateur de créer un compte, de gérer son profil,
+                            de publier des contenus, de présenter des projets,
+                            de documenter des étapes de développement et
+                            d’utiliser des outils de vérification, de visibilité
+                            ou de monétisation selon les fonctionnalités
+                            disponibles à un moment donné.
+                        </p>
+                    </section>
+
+                    <section id="compte">
+                        <h2>3. Conditions d’accès et création de compte</h2>
+                        <p>
+                            Pour utiliser XERA1, l’utilisateur peut être amené à
+                            fournir des informations telles que son nom, son
+                            identifiant, ses informations de profil, des
+                            éléments de présentation et, selon les
+                            fonctionnalités, des données associées à son
+                            activité sur la plateforme.
+                        </p>
+                        <p>
+                            L’utilisateur est responsable de l’exactitude, de la
+                            fiabilité et de la sécurité des informations qu’il
+                            fournit et de toute utilisation de son compte. Il
+                            doit veiller à protéger ses identifiants et ne pas
+                            les communiquer à des tiers.
+                        </p>
+                        <ul>
+                            <li>
+                                Le compte doit être utilisé uniquement par la
+                                personne qui le crée ou qui en est autorisée.
+                            </li>
+                            <li>
+                                Il est interdit de créer un faux compte,
+                                d’usurper l’identité d’une autre personne ou
+                                d’utiliser des informations trompeuses.
+                            </li>
+                            <li>
+                                Le compte peut être suspendu, limité ou supprimé
+                                en cas de violation des présentes conditions ou
+                                d’usage abusif.
+                            </li>
+                            <li>
+                                Aucune limite d’âge explicite n’est actuellement
+                                affichée dans l’application ; l’utilisateur doit
+                                toutefois respecter les lois et règles
+                                applicables à son usage.
+                            </li>
+                        </ul>
+                        <p class="muted">
+                            XERA1 se réserve le droit de suspendre ou supprimer
+                            un compte, un profil ou un contenu lorsqu’une
+                            violation de ces règles est constatée, ou lorsque la
+                            sécurité, l’intégrité ou la qualité du service
+                            l’exige.
+                        </p>
+                    </section>
+
+                    <section id="acceptable">
+                        <h2>4. Utilisation acceptable de la plateforme</h2>
+                        <p>Les comportements suivants sont interdits :</p>
+                        <ul>
+                            <li>
+                                fraude, tentative de fraude ou manipulation des
+                                statistiques ;
+                            </li>
+                            <li>
+                                usurpation d’identité, faux profils ou
+                                informations trompeuses ;
+                            </li>
+                            <li>
+                                spam, messages répétitifs ou contenu intrusif ;
+                            </li>
+                            <li>
+                                harcèlement, intimidation, menaces ou
+                                comportement abusif ;
+                            </li>
+                            <li>
+                                manipulation artificielle des interactions, des
+                                métriques ou de la visibilité ;
+                            </li>
+                            <li>
+                                publication de contenus illégaux, dangereux,
+                                diffamatoires ou contraires aux règles
+                                applicables ;
+                            </li>
+                            <li>
+                                toute tentative d’exploitation, de compromission
+                                ou d’altération de la plateforme ;
+                            </li>
+                            <li>
+                                scraping abusif, automatisation non autorisée ou
+                                usage de bots non autorisés ;
+                            </li>
+                            <li>
+                                fausses preuves de construction, fausses
+                                attestations ou éléments de preuve inventés ;
+                            </li>
+                            <li>
+                                manipulation du système de vérification ou du
+                                système de badges ;
+                            </li>
+                            <li>
+                                toute tentative de tromper les recruteurs,
+                                partenaires, investisseurs, autres utilisateurs
+                                ou la plateforme elle-même.
+                            </li>
+                        </ul>
+                        <p>
+                            XERA1 peut modifier, limiter, masquer ou supprimer
+                            les contenus ou comptes qui violent ces règles.
+                        </p>
+                    </section>
+
+                    <section id="proof-building">
+                        <h2>5. Proof of Building et Arcs</h2>
+                        <p>
+                            XERA1 propose un cadre de preuve de travail et de
+                            progression. Les Arcs permettent à un utilisateur de
+                            documenter, présenter et valoriser l’évolution de
+                            son projet, sa démarche et ses réalisations.
+                        </p>
+                        <p>
+                            Les Arcs constituent un outil d’exposition et de
+                            preuve, mais ils ne doivent pas être interprétés
+                            comme une garantie absolue de compétences
+                            professionnelles, de qualité finale, d’identité
+                            réelle, d’employabilité ou de succès futur. XERA1
+                            fournit une infrastructure de preuve et de
+                            valorisation, mais n’assure pas automatiquement
+                            l’embauche, l’opportunité, la validation ou la
+                            crédibilité de l’utilisateur au-delà des éléments
+                            qu’il publie et des règles de la plateforme.
+                        </p>
+                        <div class="callout">
+                            <strong>Important :</strong> un Arc ou un badge ne
+                            remplace pas une évaluation professionnelle, une
+                            vérification indépendante, ni les responsabilités
+                            découlant de l’usage de la plateforme.
+                        </div>
+                    </section>
+
+                    <section id="contenu">
+                        <h2>6. Contenu publié par les utilisateurs</h2>
+                        <p>
+                            Les utilisateurs restent responsables du contenu
+                            qu’ils publient sur XERA1, y compris les textes,
+                            images, vidéos, projets, publications, mises à jour,
+                            documents, éléments de présentation et tout autre
+                            matériel partagé.
+                        </p>
+                        <p>
+                            Sauf disposition contraire, l’utilisateur conserve
+                            la propriété de son contenu lorsqu’il détient les
+                            droits sur celui-ci. Toutefois, en publiant du
+                            contenu sur XERA1, il autorise la plateforme à
+                            héberger, afficher, distribuer, organiser et
+                            présenter ce contenu dans le cadre du service
+                            proposé.
+                        </p>
+                        <p>
+                            Cette autorisation est nécessaire pour permettre à
+                            XERA1 d’exploiter techniquement le contenu sur la
+                            plateforme, notamment pour l’affichage, la
+                            recherche, les aperçus, la mise en page, la
+                            présentation dans les profils et Pages
+                            Professionnelles, et l’usage lié au service.
+                        </p>
+                        <ul>
+                            <li>
+                                L’utilisateur doit disposer des droits
+                                nécessaires pour publier le contenu qu’il
+                                partage.
+                            </li>
+                            <li>
+                                Le contenu interdit ou non conforme aux règles
+                                peut être supprimé.
+                            </li>
+                            <li>
+                                XERA1 peut mettre en place des mécanismes de
+                                signalement et de modération.
+                            </li>
+                            <li>
+                                Un utilisateur peut retirer un contenu qu’il a
+                                publié, dans la mesure où cela reste
+                                techniquement possible et conforme aux règles de
+                                la plateforme.
+                            </li>
+                        </ul>
+                        <p>
+                            Les contenus illégaux, harcelants, diffamatoires,
+                            trompeurs, contrefaisants, frauduleux ou violant les
+                            droits d’autrui sont interdits. XERA1 peut supprimer
+                            ou limiter ces contenus, et prendre des mesures à
+                            l’encontre de leur auteur selon les circonstances.
+                        </p>
+                    </section>
+
+                    <section id="pages-pro">
+                        <h2>7. Pages Professionnelles</h2>
+                        <p>
+                            XERA1 permet à certains utilisateurs de créer et
+                            gérer des Pages Professionnelles, destinées à
+                            présenter leur parcours, leurs projets, leurs
+                            publications, leurs réalisations et leur activité.
+                        </p>
+                        <p>
+                            Les fonctionnalités disponibles peuvent inclure une
+                            présentation professionnelle, des projets, des
+                            publications, des badges, des statistiques, des
+                            éléments de visibilité, ainsi que certaines
+                            fonctionnalités Pro selon les abonnements et
+                            paramètres applicables.
+                        </p>
+                        <p>
+                            Les Pages Professionnelles ne sont pas une
+                            validation automatique de la qualité ou de la
+                            fiabilité d’un utilisateur. Certaines
+                            fonctionnalités peuvent être réservées à des
+                            abonnements payants ou à des conditions spécifiques
+                            définies par la plateforme.
+                        </p>
+                        <p>
+                            Le soutien financier peut être proposé sur certains
+                            profils ou projets lorsque la fonctionnalité est
+                            activée, sans qu’il soit garanti que chaque profil
+                            ou projet soit éligible à cette option.
+                        </p>
+                    </section>
+
+                    <section id="abonnements">
+                        <h2>8. Abonnements et paiements</h2>
+                        <p>
+                            XERA1 propose des plans d’abonnement et des
+                            fonctionnalités de monétisation ou de vérification
+                            selon la configuration actuelle de la plateforme.
+                            Les plans actuellement visibles dans l’interface de
+                            XERA1 incluent notamment :
+                        </p>
+                        <ul>
+                            <li>Standard : 2,99 $/mois ;</li>
+                            <li>Medium : 7,99 $/mois ;</li>
+                            <li>Pro : 14,99 $/mois.</li>
+                        </ul>
+                        <p>
+                            Les paiements sont traités via le service KPay,
+                            utilisé pour le paiement et la confirmation de
+                            l’abonnement. La facturation peut se faire selon la
+                            période de facturation affichée dans l’application,
+                            et l’interface propose également une option de
+                            facturation annuelle avec réduction.
+                        </p>
+                        <p>
+                            Les changements de plan, les renouvellements et la
+                            résiliation sont gérés selon la logique de la
+                            plateforme et du prestataire de paiement. XERA1 ne
+                            publie pas de politique de remboursement distincte
+                            pour les abonnements dans le code actuellement
+                            disponible ; les éventuelles demandes de
+                            remboursement doivent être traitées selon la
+                            procédure applicable au prestataire de paiement et à
+                            la configuration de la plateforme.
+                        </p>
+                        <p>
+                            Les fonctionnalités premium ou payantes sont
+                            limitées à la mesure où elles sont associées aux
+                            plans actifs et à la validation du paiement. En cas
+                            de non-conformité aux règles ou à une violation
+                            grave, XERA1 peut limiter ou retirer certaines
+                            fonctionnalités sans préjudice de ses autres droits.
+                        </p>
+                    </section>
+
+                    <section id="soutien">
+                        <h2>9. Soutien financier / dons</h2>
+                        <p>
+                            La plateforme peut proposer des fonctionnalités de
+                            soutien financier entre un utilisateur ou un projet
+                            et des contributeurs. Ces fonctionnalités,
+                            lorsqu’elles sont activées, permettent de soutenir
+                            un profil, un projet ou une initiative via le
+                            système de paiement de XERA1.
+                        </p>
+                        <p>
+                            XERA1 peut faciliter la mise en relation financière
+                            entre un soutien et un utilisateur ou un projet,
+                            notamment par le biais de flux de paiement
+                            sécurisés. Le système de monétisation utilisé par la
+                            plateforme est intégré avec KPay.
+                        </p>
+                        <p>
+                            La commission actuelle documentée dans le code
+                            applicatif est de 25 % sur les dons confirmés
+                            supportés par la plateforme. Cette règle est
+                            appliquée côté serveur et ne doit pas être
+                            interprétée comme une garantie de revenu ou de
+                            paiement à titre personnel pour l’utilisateur
+                            titulaire du profil ou du projet concerné.
+                        </p>
+                        <p>
+                            Les montants, limites et modalités de paiement
+                            peuvent varier selon la configuration effective, la
+                            devise, le pays et les fonctionnalités disponibles.
+                            Les utilisateurs doivent respecter les règles de
+                            sécurité et de conformité applicables lors de tout
+                            soutien financier ou paiement.
+                        </p>
+                    </section>
+
+                    <section id="badges">
+                        <h2>10. Badges et vérification</h2>
+                        <p>
+                            XERA1 peut attribuer à certains profils ou Pages
+                            Professionnelles des badges ou éléments de
+                            vérification. Ces éléments servent à signaler un
+                            niveau de vérification ou une présence plus
+                            structurée sur la plateforme, selon les règles et
+                            mécanismes mis en place par XERA1.
+                        </p>
+                        <p>
+                            Les badges ne doivent pas être utilisés pour tromper
+                            les autres utilisateurs, les recruteurs, les
+                            partenaires ou la communauté XERA1. Ils doivent
+                            refléter une réalité conforme aux conditions de
+                            vérification applicables au moment où ils sont
+                            accordés ou conservés.
+                        </p>
+                        <p>
+                            XERA1 peut retirer ou suspendre un badge ou un
+                            statut de vérification lorsque des violations des
+                            règles sont constatées, lorsque les conditions de
+                            vérification ne sont plus respectées, ou lorsque la
+                            sécurité, la confiance ou l’intégrité de la
+                            plateforme l’exige.
+                        </p>
+                    </section>
+
+                    <section id="partenaires">
+                        <h2>11. Relations avec les partenaires</h2>
+                        <p>
+                            XERA1 peut collaborer avec des communautés, centres
+                            de formation, incubateurs, entreprises,
+                            organisations, programmes d’accompagnement ou autres
+                            acteurs du secteur. Ces partenariats peuvent
+                            favoriser l’accès à des ressources, des opportunités
+                            ou des programmes de visibilité.
+                        </p>
+                        <p>
+                            Un partenariat n’implique pas automatiquement une
+                            validation de l’ensemble des contenus, profils,
+                            utilisateurs ou projets présents sur XERA1. Le
+                            statut de partenaire ne crée pas de garantie ou de
+                            qualification particulière pour les utilisateurs
+                            concernés.
+                        </p>
+                    </section>
+
+                    <section id="ip">
+                        <h2>12. Propriété intellectuelle de XERA1</h2>
+                        <p>
+                            Tous les éléments du service XERA1, y compris la
+                            marque XERA1, le logo, l’interface, le design, le
+                            code, les contenus propriétaires, les systèmes de
+                            Proof of Building, les éléments graphiques, les
+                            technologies, les algorithmes, les modèles de
+                            présentation et les composants de la plateforme,
+                            restent la propriété de XERA1 ou de ses titulaires
+                            de droits, selon le cas.
+                        </p>
+                        <p>
+                            Il est interdit de reproduire, copier, exploiter,
+                            distribuer, modifier, ou utiliser sans autorisation
+                            les éléments protégés de XERA1, sauf lorsque cela
+                            est expressément autorisé dans le cadre de
+                            l’utilisation normale du service ou par une
+                            autorisation écrite préalable de XERA1.
+                        </p>
+                    </section>
+
+                    <section id="donnees">
+                        <h2>13. Données personnelles et confidentialité</h2>
+                        <p>
+                            XERA1 collecte et traite certaines données pour
+                            permettre le fonctionnement du service, la gestion
+                            des comptes, la sécurité, la modération, la
+                            publication de contenus, le suivi de l’activité et
+                            la gestion des abonnements, des paiements et des
+                            interactions.
+                        </p>
+                        <p>
+                            Les données susceptibles d’être collectées peuvent
+                            inclure, selon les fonctionnalités utilisées :
+                        </p>
+                        <ul>
+                            <li>
+                                informations de compte et d’identification ;
+                            </li>
+                            <li>
+                                informations de profil, bio, titre, avatar,
+                                contenu publié ;
+                            </li>
+                            <li>données de sécurité et de connexion ;</li>
+                            <li>
+                                données liées à la configuration du profil et à
+                                la vie privée ;
+                            </li>
+                            <li>
+                                données relatives aux abonnements, paiements et
+                                soutiens financiers ;
+                            </li>
+                            <li>
+                                données techniques nécessaires au bon
+                                fonctionnement, à la sécurité et à la
+                                maintenance de la plateforme.
+                            </li>
+                        </ul>
+                        <p>
+                            XERA1 traite ces données dans le cadre de son
+                            fonctionnement et conformément aux exigences légales
+                            et techniques applicables. Une Politique de
+                            confidentialité distincte, le cas échéant, devra
+                            être consultée en complément de ces CGU. À ce stade,
+                            la mise en place d’une telle politique doit faire
+                            l’objet d’une validation juridique spécifique.
+                        </p>
+                    </section>
+
+                    <section id="disponibilite">
+                        <h2>14. Disponibilité du service</h2>
+                        <p>
+                            XERA1 s’efforce de maintenir la plateforme
+                            accessible et fonctionnelle. Toutefois, la
+                            disponibilité du service ne peut être garantie à 100
+                            % en permanence.
+                        </p>
+                        <p>
+                            Des interruptions peuvent survenir pour des raisons
+                            de maintenance, de pannes, de problèmes
+                            d’infrastructure, de défaillance d’un fournisseur
+                            tiers, d’incident technique, de force majeure ou
+                            d’autres circonstances indépendantes de la volonté
+                            de XERA1.
+                        </p>
+                        <p>
+                            XERA1 ne peut pas garantir une continuité parfaite
+                            du service en toutes circonstances, mais s’engage à
+                            mettre en œuvre les moyens raisonnables pour assurer
+                            sa stabilité, sa sécurité et son bon fonctionnement.
+                        </p>
+                    </section>
+
+                    <section id="suspension">
+                        <h2>15. Suspension et résiliation</h2>
+                        <p>
+                            XERA1 peut suspendre ou limiter l’accès à certaines
+                            fonctionnalités, retirer un contenu, suspendre un
+                            compte ou clôturer le compte d’un utilisateur
+                            lorsque cela est nécessaire pour :
+                        </p>
+                        <ul>
+                            <li>
+                                préserver la sécurité, l’intégrité ou la
+                                réputation de la plateforme ;
+                            </li>
+                            <li>
+                                mettre fin à une violation des présentes
+                                Conditions Générales d’Utilisation ;
+                            </li>
+                            <li>
+                                supprimer des contenus illégaux, frauduleux,
+                                abusifs ou dangereux ;
+                            </li>
+                            <li>
+                                répondre à un incident technique, une suspicion
+                                de fraude, ou une situation de sécurité ;
+                            </li>
+                            <li>
+                                faire face à un risque pour les droits des
+                                autres utilisateurs, des partenaires ou de la
+                                plateforme.
+                            </li>
+                        </ul>
+                        <p>
+                            Un utilisateur peut également décider de cesser
+                            d’utiliser XERA1 et, selon les cas, de demander la
+                            suppression de son compte dans les procédures et
+                            outils mis à disposition par la plateforme.
+                        </p>
+                    </section>
+
+                    <section id="responsabilite">
+                        <h2>16. Limitation de responsabilité</h2>
+                        <p>
+                            XERA1 agit comme une plateforme d’hébergement, de
+                            publication et de mise en relation. La plateforme ne
+                            contrôle pas l’ensemble des contenus publiés par les
+                            utilisateurs ni toutes les interactions entre
+                            utilisateurs, partenaires ou tiers.
+                        </p>
+                        <p>
+                            XERA1 ne peut pas être tenue responsable de manière
+                            absolue des contenus publiés par les utilisateurs,
+                            des interactions qu’ils ont entre eux, des
+                            opportunités professionnelles ou commerciales qui
+                            peuvent résulter de leur activité, des risques liés
+                            à des projets, des transactions ou soutiens
+                            financiers, ni des services ou outils fournis par
+                            des tiers.
+                        </p>
+                        <p>
+                            En revanche, XERA1 reste responsable de ses
+                            obligations et de ses propres actes dans le cadre du
+                            service qu’elle fournit, dans les limites du droit
+                            applicable et de la raisonnabilité du système.
+                        </p>
+                        <p>
+                            XERA1 ne saurait être tenue responsable des
+                            interruptions techniques, des défaillances de
+                            service, des incidents d’infrastructure ou des
+                            dysfonctionnements dus à des facteurs externes, sauf
+                            dans le cas où la responsabilité de XERA1 serait
+                            établie conformément au droit applicable.
+                        </p>
+                    </section>
+
+                    <section id="modifications">
+                        <h2>17. Modifications des conditions</h2>
+                        <p>
+                            XERA1 peut modifier les présentes Conditions
+                            Générales d’Utilisation afin de refléter l’évolution
+                            du service, des fonctionnalités, des règles de
+                            sécurité ou des exigences légales et réglementaires.
+                        </p>
+                        <p>
+                            Les modifications importantes seront communiquées de
+                            manière visible, par exemple via la plateforme, un
+                            avis d’actualisation ou un message sur l’interface.
+                            L’utilisation continue de XERA1 après publication
+                            des changements vaut acceptation de ces derniers.
+                        </p>
+                    </section>
+
+                    <section id="juridique">
+                        <h2>18. Droit applicable et règlement des litiges</h2>
+                        <p>
+                            Les présentes Conditions Générales d’Utilisation
+                            sont régies, dans la mesure applicable, par le droit
+                            applicable et par les règles juridiques pertinentes
+                            pour les services en ligne et les transactions
+                            numériques. Toutefois, la juridiction compétente et
+                            le droit applicable n’ont pas été explicitement
+                            validés dans le code ou la documentation disponible
+                            du projet à ce jour.
+                        </p>
+                        <p>
+                            La clause de droit applicable et la procédure de
+                            règlement des différends doivent donc faire l’objet
+                            d’une validation juridique complémentaire : [À
+                            DÉFINIR JURIDIQUEMENT].
+                        </p>
+                    </section>
+
+                    <section id="contact">
+                        <h2>19. Contact</h2>
+                        <p>
+                            Pour toute question relative aux présentes
+                            Conditions Générales d’Utilisation, à l’utilisation
+                            de la plateforme, à un compte, à un paiement, à un
+                            badge, à un contenu ou à un signalement, vous pouvez
+                            contacter XERA1 à l’adresse suivante :
+                        </p>
+                        <div class="contact-box">
+                            <strong>Email officiel XERA1 :</strong>
+                            <br />
+                            <a href="mailto:hello@xera1.xyz">hello@xera1.xyz</a>
+                        </div>
+                    </section>
+                </article>
+            </main>
+        </div>
+
+        <script src="js/router.js?v=20261004-3"></script>
+        <script src="js/i18n.js"></script>
+    <script src="js/seo-schema.js"></script>
+</body>
+</html>

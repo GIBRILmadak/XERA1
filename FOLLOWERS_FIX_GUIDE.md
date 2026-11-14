@@ -8,7 +8,7 @@ La table `followers` qui gère les relations de suivi entre utilisateurs **n'exi
 
 ### Étape 1 : Exécuter le script SQL dans Supabase
 
-1. Allez à https://app.supabase.com et connectez-vous à votre projet XERA
+1. Allez à https://app.supabase.com et connectez-vous à votre projet XERA1
 2. Allez à l'onglet **SQL Editor**
 3. Créez une nouvelle requête
 4. Copiez-collez le contenu du fichier `sql/create-followers-table.sql`

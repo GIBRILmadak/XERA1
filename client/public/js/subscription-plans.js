@@ -459,10 +459,46 @@
                 }
 
                 selectedPlanId = normalizedPlanId;
-                await Hooks.navigateToSubscriptionPayment(
-                    normalizedPlanId,
-                    billingCycle,
-                );
+
+                // Populate summary for non-React fallback
+                const detailsContainer =
+                    document.getElementById("confirmPlanDetails");
+                if (detailsContainer) {
+                    const summary = Data.getPlanSummary(
+                        normalizedPlanId,
+                        billingCycle,
+                    );
+                    const planDef = Data.getPlanDefinition(normalizedPlanId);
+
+                    detailsContainer.innerHTML = `
+                        <div class="plan-confirm-card">
+                            <div class="plan-confirm-header">
+                                <div class="plan-confirm-icon">
+                                    <i class="${planDef.iconClass}"></i>
+                                </div>
+                                <div>
+                                    <h3>${summary.title}</h3>
+                                    <p class="plan-confirm-desc">${summary.description}</p>
+                                </div>
+                            </div>
+                            <div class="plan-confirm-price">
+                                <span class="amount">${summary.price.formattedAmount}</span>
+                                <span class="cycle">${summary.price.suffix}</span>
+                            </div>
+                            <ul class="plan-confirm-features">
+                                ${summary.features
+                                    .map(
+                                        (f) =>
+                                            `<li><i class="fas fa-check"></i> <span>${f.text}</span></li>`,
+                                    )
+                                    .join("")}
+                            </ul>
+                        </div>
+                    `;
+                }
+
+                const modal = document.getElementById("confirmModal");
+                if (modal) modal.classList.add("active");
                 return true;
             },
             setBillingCycle,
@@ -585,10 +621,10 @@
                         },
                         e("img", {
                             src: "icons/logo.png",
-                            alt: "XERA - Logo",
+                            alt: "XERA1 - Logo",
                         }),
                     ),
-                    e("span", null, "XΞRA"),
+                    e("span", null, "XΞRA1"),
                 ),
                 e(
                     "div",
@@ -977,8 +1013,12 @@
             return e(
                 "div",
                 {
-                    className: "modal" + (props.isOpen ? " active" : ""),
+                    className:
+                        "modal plan-modal" + (props.isOpen ? " active" : ""),
                     id: "confirmModal",
+                    role: "dialog",
+                    "aria-modal": "true",
+                    "aria-labelledby": "confirmModalTitle",
                     onClick: (event) => {
                         if (event.target === event.currentTarget) {
                             props.onClose();
@@ -988,19 +1028,25 @@
                 e(
                     "div",
                     {
-                        className: "modal-content support-modal-content",
+                        className: "modal-content plan-modal-content",
                     },
                     e(
                         "div",
                         {
                             className: "modal-header",
                         },
-                        e("h2", null, "Confirmer l'abonnement"),
+                        e(
+                            "h2",
+                            { id: "confirmModalTitle" },
+                            "Confirmer l'abonnement",
+                        ),
                         e(
                             "button",
                             {
                                 className: "close-btn",
                                 type: "button",
+                                "aria-label":
+                                    "Fermer la fenêtre de confirmation",
                                 onClick: props.onClose,
                             },
                             e("i", {
@@ -1016,50 +1062,88 @@
                         e(
                             "div",
                             {
-                                className: "confirm-plan",
-                                id: "confirmPlanDetails",
+                                className: "plan-confirm-card",
                             },
                             e(
                                 "div",
-                                {
-                                    className: "plan-summary",
-                                },
-                                e("h3", null, summary.title),
+                                { className: "plan-confirm-header" },
                                 e(
                                     "div",
-                                    {
-                                        className: "plan-price-large",
-                                    },
-                                    summary.price.formattedAmount,
-                                    e("span", null, summary.price.suffix),
+                                    { className: "plan-confirm-icon" },
+                                    e("i", {
+                                        className: Data.getPlanDefinition(
+                                            summary.id,
+                                        ).iconClass,
+                                    }),
                                 ),
-                                e("p", null, summary.description),
                                 e(
-                                    "ul",
-                                    {
-                                        className: "plan-mini-features",
-                                    },
-                                    summary.features.map((feature) =>
-                                        e(
-                                            "li",
-                                            {
-                                                key: `${summary.id}-${feature.text}`,
-                                            },
-                                            e("i", {
-                                                className: feature.iconClass,
-                                            }),
-                                            " ",
-                                            feature.text,
-                                        ),
+                                    "div",
+                                    null,
+                                    e("h3", null, summary.title),
+                                    e(
+                                        "p",
+                                        { className: "plan-confirm-desc" },
+                                        summary.description,
+                                    ),
+                                ),
+                            ),
+                            e(
+                                "div",
+                                { className: "plan-confirm-price" },
+                                e(
+                                    "span",
+                                    { className: "amount" },
+                                    summary.price.formattedAmount,
+                                ),
+                                e(
+                                    "span",
+                                    { className: "cycle" },
+                                    summary.price.suffix,
+                                ),
+                            ),
+                            e(
+                                "ul",
+                                {
+                                    className: "plan-confirm-features",
+                                },
+                                summary.features.map((feature) =>
+                                    e(
+                                        "li",
+                                        {
+                                            key: `${summary.id}-${feature.text}`,
+                                        },
+                                        e("i", {
+                                            className: "fas fa-check",
+                                        }),
+                                        e("span", null, feature.text),
                                     ),
                                 ),
                             ),
                         ),
                         e(
-                            "p",
-                            {
-                                className: "confirm-note",
-                            },
+                            "div",
+                            { className: "discount-section" },
+                            e(
+                                "label",
+                                { htmlFor: "subscription-discount-code" },
+                                "Code de réduction (optionnel)",
+                            ),
+                            e(
+                                "div",
+                                { className: "discount-input-wrap" },
+                                e("input", {
+                                    id: "subscription-discount-code",
+                                    className: "form-input",
+                                    type: "text",
+                                    maxLength: 40,
+                                    placeholder: "Entrez votre code",
+                                }),
+                                e("i", { className: "fas fa-tag" }),
+                            ),
+                        ),
+                        e(
+                            "div",
+                            { className: "redirect-info" },
                             e("i", {
                                 className: "fas fa-info-circle",
                             }),
@@ -1068,7 +1152,7 @@
                         e(
                             "button",
                             {
-                                className: "btn-primary btn-full",
+                                className: "btn-primary btn-full btn-process",
                                 type: "button",
                                 onClick: props.onConfirm,
                             },

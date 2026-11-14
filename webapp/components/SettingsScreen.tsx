@@ -131,7 +131,7 @@ const initialCategories: SettingCategory[] = [
                 id: "privacy",
                 icon: "🕶️",
                 title: "Confidentialité",
-                description: "Gérez ce que XERA partage à votre sujet.",
+                description: "Gérez ce que XERA1 partage à votre sujet.",
                 actionType: "link",
                 field: "privacy",
             },
@@ -245,7 +245,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
     useEffect(() => {
         try {
-            const saved = storage?.getItem("xera.settings.v1");
+            const saved = storage?.getItem("xera1.settings.v1");
             if (saved) {
                 const parsed = JSON.parse(saved) as Partial<typeof initialValues>;
                 setToggles((prev) => ({ ...prev, ...parsed }));
@@ -257,7 +257,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
     useEffect(() => {
         try {
-            storage?.setItem("xera.settings.v1", JSON.stringify(toggles));
+            storage?.setItem("xera1.settings.v1", JSON.stringify(toggles));
         } catch {
             // Ignore storage write errors in unsupported environments.
         }

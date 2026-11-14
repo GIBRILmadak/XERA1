@@ -1,11 +1,8 @@
 const crypto = require("crypto");
-const { createClient } = require("@supabase/supabase-js");
 const { runIngestion } = require("./ingestion-engine");
+const { createSupabaseServiceClient } = require("./supabase-service-client");
 
-const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY,
-);
+const supabase = createSupabaseServiceClient();
 const MAX_ATTEMPTS = Number(process.env.INGESTION_JOB_MAX_ATTEMPTS) || 3;
 const WORKER_INTERVAL_MS = Number(process.env.INGESTION_WORKER_MS) || 60 * 1000;
 
@@ -108,7 +105,7 @@ async function processIngestionJobs(limit = 10) {
 }
 
 function startIngestionWorker() {
-    console.info(
+    logger.info(
         "[Ingestion Queue] Worker démarré, interval:",
         WORKER_INTERVAL_MS,
     );

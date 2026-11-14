@@ -1,11 +1,121 @@
 // `isProUser` is provided globally by app-supabase.js (window.isProUser)
 /**
- * XERA PROFESSIONAL PAGES & CERTIFICATIONS
+ * XERA1 PROFESSIONAL PAGES & CERTIFICATIONS
  * Gère la création de pages entreprises et la certification des talents
  * Version Onboarding Interactif XXL - Haute Visibilité
  */
 
+function isPhoneDestination(value) {
+    const raw = String(value || "").trim();
+    return raw.length >= 6 && /^[\d\s()+./-]+$/.test(raw);
+}
+
+function getProfessionalCta(page) {
+    const cta = page?.metadata?.professional_cta || {};
+    const rawUrl = cta.url || page?.website_url || "";
+    const destination = String(rawUrl).trim();
+    const phone = isPhoneDestination(destination);
+    const externalUrl = phone
+        ? `tel:${destination.replace(/[^\d+]/g, "")}`
+        : destination && !/^[a-z][a-z\d+.-]*:/i.test(destination)
+          ? `https://${destination}`
+          : destination;
+    return {
+        objective: cta.objective || "sales",
+        label: cta.label || "Visiter le site",
+        type: phone ? "phone" : "external",
+        url: externalUrl,
+    };
+}
+
+function CompanyPageSkeleton() {
+    return `
+        <div class="w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <section class="company-page-skeleton" role="status" aria-busy="true" aria-label="Chargement de la page professionnelle">
+                <div class="company-skeleton-banner animate-pulse"></div>
+                <div class="company-skeleton-header">
+                    <div class="company-skeleton-logo animate-pulse"></div>
+                    <div class="company-skeleton-identity">
+                        <div class="company-skeleton-line company-skeleton-kicker animate-pulse"></div>
+                        <div class="company-skeleton-line company-skeleton-title animate-pulse"></div>
+                        <div class="company-skeleton-line company-skeleton-subtitle animate-pulse"></div>
+                        <div class="company-skeleton-actions">
+                            <div class="company-skeleton-button animate-pulse"></div>
+                            <div class="company-skeleton-button company-skeleton-button-secondary animate-pulse"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="company-skeleton-metrics">
+                    <div class="company-skeleton-metric animate-pulse"></div>
+                    <div class="company-skeleton-metric animate-pulse"></div>
+                    <div class="company-skeleton-metric animate-pulse"></div>
+                    <div class="company-skeleton-metric animate-pulse"></div>
+                </div>
+                <div class="company-skeleton-content">
+                    <div class="company-skeleton-main">
+                        <div class="company-skeleton-section-heading animate-pulse"></div>
+                        <div class="company-skeleton-card animate-pulse"></div>
+                        <div class="company-skeleton-card company-skeleton-card-tall animate-pulse"></div>
+                    </div>
+                    <div class="company-skeleton-sidebar">
+                        <div class="company-skeleton-section-heading animate-pulse"></div>
+                        <div class="company-skeleton-card animate-pulse"></div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    `;
+}
+
+function ensureCompanyPageSkeletonStyles() {
+    if (document.getElementById("company-page-skeleton-styles")) return;
+    const style = document.createElement("style");
+    style.id = "company-page-skeleton-styles";
+    style.textContent = `
+        .company-page-skeleton {
+            width: 100%; max-width: 1240px; margin: 0 auto; padding: 28px clamp(16px, 3vw, 38px) 72px;
+            box-sizing: border-box; color: #fff; background: #09090b; overflow: hidden;
+        }
+        .company-page-skeleton > * { box-sizing: border-box; }
+        .company-skeleton-banner { height: clamp(180px, 25vw, 260px); border: 1px solid rgba(255,255,255,.05); border-radius: 24px 24px 0 0; background: #13131a; }
+        .company-skeleton-header { display: grid; grid-template-columns: 126px minmax(0, 1fr); gap: 22px; align-items: end; min-height: 174px; padding: 0 30px 24px; background: #13131a; border: 1px solid rgba(255,255,255,.05); border-top: 0; }
+        .company-skeleton-logo { width: 126px; height: 126px; margin-top: -62px; border: 5px solid #13131a; border-radius: 22px; background: rgba(255,255,255,.05); }
+        .company-skeleton-identity { display: grid; gap: 9px; padding-bottom: 4px; }
+        .company-skeleton-line, .company-skeleton-button, .company-skeleton-metric, .company-skeleton-section-heading, .company-skeleton-card { background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.05); }
+        .company-skeleton-kicker { width: 30%; height: 12px; border-radius: 4px; }
+        .company-skeleton-title { width: min(360px, 72%); height: 32px; border-radius: 7px; }
+        .company-skeleton-subtitle { width: 190px; height: 14px; border-radius: 5px; }
+        .company-skeleton-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 7px; }
+        .company-skeleton-button { width: 160px; height: 48px; border-radius: 16px; }
+        .company-skeleton-button-secondary { width: 130px; }
+        .company-skeleton-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 16px 0 22px; }
+        .company-skeleton-metric { height: 82px; border-radius: 14px; background: #13131a; }
+        .company-skeleton-content { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; }
+        .company-skeleton-main, .company-skeleton-sidebar { display: grid; gap: 14px; align-content: start; }
+        .company-skeleton-section-heading { width: 42%; height: 22px; border-radius: 6px; }
+        .company-skeleton-card { width: 100%; height: 150px; border-radius: 22px; background: #13131a; }
+        .company-skeleton-card-tall { height: 210px; }
+        .company-page-skeleton .animate-pulse { animation: company-skeleton-shimmer 1.7s ease-in-out infinite; }
+        @keyframes company-skeleton-shimmer { 0%, 100% { opacity: .48; } 50% { opacity: .9; } }
+        .pro-page-wrapper.pro-page-fade-in { animation: company-page-fade-in .24s ease-out both; }
+        @keyframes company-page-fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+        @media (max-width: 700px) {
+            .company-page-skeleton { padding: 0 0 42px; }
+            .company-skeleton-banner { height: 160px; border-radius: 0; }
+            .company-skeleton-header { grid-template-columns: 100px minmax(0, 1fr); gap: 15px; min-height: 160px; padding: 0 15px 24px; }
+            .company-skeleton-logo { width: 100px; height: 100px; margin-top: -50px; }
+            .company-skeleton-title { width: 100%; height: 26px; }
+            .company-skeleton-actions { display: none; }
+            .company-skeleton-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 0 15px; }
+            .company-skeleton-content { grid-template-columns: 1fr; padding: 0 15px; }
+            .company-skeleton-sidebar { display: none; }
+        }
+    `;
+    document.head.appendChild(style);
+}
+
 if (typeof window !== "undefined") {
+    window.CompanyPageSkeleton = CompanyPageSkeleton;
     window.waitForProfessionalManager =
         window.waitForProfessionalManager ||
         async function (timeoutMs = 5000) {
@@ -39,6 +149,10 @@ class XERAProfessionalManager {
         this.onboarding = null;
         this.myPageSlug = null;
         this.proPagesCache = new Map();
+        this.pageFollowStateCache = new Map();
+        this.initialStateHandled = false;
+        this.initialStatePromise = null;
+        this.proPageRenderSequence = 0;
 
         // Initialiser l'état global
         window.userHasProPage = window.userHasProPage || false;
@@ -107,6 +221,13 @@ class XERAProfessionalManager {
         }
 
         return "subscription-plans.html";
+    }
+
+    hasPageProEntitlements(pageId, ownerSubscriptionActive = false) {
+        const isVerified =
+            typeof window.isVerifiedPageId === "function" &&
+            window.isVerifiedPageId(pageId);
+        return Boolean(isVerified || ownerSubscriptionActive);
     }
 
     buildPageSlug(name) {
@@ -178,7 +299,6 @@ class XERAProfessionalManager {
             .neq("id", page.owner_id)
             .order("updated_at", { ascending: false })
             .limit(100);
-
         if (error) {
             console.warn("Momentum Engine error:", error);
             return [];
@@ -465,7 +585,7 @@ class XERAProfessionalManager {
                                 .slice(0, 3)
                                 .map((profile) => {
                                     const name = this.escapeHtml(
-                                        profile.name || "Profil XERA",
+                                        profile.name || "Profil XERA1",
                                     );
                                     const title = this.escapeHtml(
                                         profile.title ||
@@ -505,9 +625,10 @@ class XERAProfessionalManager {
                 </div>
                 <div class="pro-match-list">
                     ${profiles
+                        .slice(0, 3)
                         .map((profile) => {
                             const name = this.escapeHtml(
-                                profile.name || "Profil XERA",
+                                profile.name || "Profil XERA1",
                             );
                             const title = this.escapeHtml(
                                 profile.title ||
@@ -603,6 +724,28 @@ class XERAProfessionalManager {
      * Initialise la navigation pour afficher le bouton Page Pro si nécessaire
      */
     async initNavigation(retryCount = 0) {
+        if (
+            String(window.location.pathname || "").endsWith(
+                "profile-personal.html",
+            )
+        ) {
+            return;
+        }
+
+        const initialParams = new URLSearchParams(window.location.search);
+        if (
+            (initialParams.get("pro") || initialParams.get("explorer")) &&
+            !this.initialStateHandled &&
+            !this.initialStatePromise
+        ) {
+            this.publicInitialStateStarted = true;
+            this.initialStatePromise = this.handleInitialState().finally(() => {
+                this.initialStateHandled = true;
+                this.initialStatePromise = null;
+            });
+            await this.initialStatePromise;
+        }
+
         // Attendre que l'utilisateur soit chargé (Augmenté à 15s pour correspondre à app-supabase)
         if (!window.currentUser || !window.currentUser.id) {
             if (retryCount < 60) {
@@ -666,71 +809,23 @@ class XERAProfessionalManager {
                 return;
             }
 
-            // Détection renforcée du statut PRO
             const isSuperAdmin =
                 window.currentUser?.id ===
                 "b0f9f893-1706-4721-899c-d26ad79afc86";
-            const isUserPro =
-                isSuperAdmin ||
-                (window.isProUser && window.isProUser(window.currentUser)) ||
-                this.isNonPersonalAccount(window.currentUser);
-
-            const userMetadata = window.currentUser?.user_metadata || {};
-            const isProByMetadata =
-                userMetadata.plan === "pro" ||
-                userMetadata.plan === "professional" ||
-                userMetadata.role === "pro" ||
-                userMetadata.role === "professional" ||
-                userMetadata.subscription_tier === "pro" ||
-                userMetadata.subscription_tier === "professional";
 
             if (navBtn) {
-                if (hasPage || isUserPro || isProByMetadata) {
-                    if (hasPage) {
-                        this.myPageSlug = pages[0].slug;
-                    }
+                this.myPageSlug = hasPage ? pages[0].slug : null;
+                navBtn.style.setProperty("display", "flex", "important");
+                navBtn.title = hasPage
+                    ? "Basculer vers ma Page Pro"
+                    : "Créer une Page Pro";
 
-                    navBtn.style.setProperty("display", "flex", "important");
-                    navBtn.title = hasPage
-                        ? "Accéder à ma Page Pro"
-                        : "Configurer ma Page Pro";
+                console.log(
+                    "[Pro] Entrée Page Pro disponible. Slug:",
+                    this.myPageSlug,
+                );
 
-                    // Fallback href pour SEO et robustesse
-                    navBtn.href = this.myPageSlug
-                        ? `profile.html?pro=${this.myPageSlug}`
-                        : "profile.html";
-
-                    console.log(
-                        "[Pro] Affichage du bouton Pro activé. Slug:",
-                        this.myPageSlug,
-                    );
-                } else {
-                    this.myPageSlug = null;
-                    // On ne cache que si on est CERTAIN que ce n'est pas un pro
-                    if (!isUserPro && !isProByMetadata) {
-                        navBtn.style.display = "none";
-                    }
-                }
-
-                // Supprimer les anciens listeners pour éviter les doubles appels
-                const newNavBtn = navBtn.cloneNode(true);
-                navBtn.parentNode.replaceChild(newNavBtn, navBtn);
-
-                newNavBtn.onclick = (e) => {
-                    console.log(
-                        "[Pro] Nav button clicked (via onclick listener)",
-                    );
-                    e.preventDefault();
-                    e.stopPropagation();
-
-                    if (window.navigateToProfessionalPage) {
-                        window.navigateToProfessionalPage();
-                    } else {
-                        this.navigateToMyPage();
-                    }
-                };
-
-                newNavBtn._proInitDone = true;
+                navBtn._proInitDone = true;
             }
 
             // Afficher l'onglet Talents si c'est un profil Pro/Institution
@@ -765,7 +860,15 @@ class XERAProfessionalManager {
             console.log("Pro Page Navigation Initialized. Has Page:", hasPage);
 
             // Gérer l'état initial depuis l'URL (permet de rester sur la page au refresh)
-            await this.handleInitialState();
+            if (!this.initialStateHandled && !this.initialStatePromise) {
+                this.initialStatePromise = this.handleInitialState().finally(
+                    () => {
+                        this.initialStateHandled = true;
+                        this.initialStatePromise = null;
+                    },
+                );
+                await this.initialStatePromise;
+            }
 
             // Si on a une page pro, empêcher le onboarding intempestif
             if (hasPage) {
@@ -812,11 +915,7 @@ class XERAProfessionalManager {
         const proSlug = params.get("pro");
         const userId = params.get("user");
         const explorer = params.get("explorer");
-
-        if (proSlug) {
-            await this.renderProPage(proSlug);
-            return true;
-        }
+        const team = params.get("team");
 
         if (userId && window.location.pathname.includes("pagepro")) {
             const page = await this.getPageByOwnerId(userId);
@@ -828,6 +927,15 @@ class XERAProfessionalManager {
 
         if (explorer === "1") {
             await this.renderTalentExplorer();
+            return true;
+        }
+
+        if (proSlug) {
+            if (team === "1") {
+                await this.renderCertifiedTeamDirectory(proSlug);
+                return true;
+            }
+            await this.renderProPage(proSlug);
             return true;
         }
 
@@ -911,7 +1019,16 @@ class XERAProfessionalManager {
             talent_interests: data.talentInterests || [],
             avatar_url: data.avatarUrl,
             banner_url: data.bannerUrl,
-            website_url: data.websiteUrl || "",
+            website_url: String(data.websiteUrl || "").trim(),
+            metadata: {
+                ...(data.metadata || {}),
+                professional_cta: {
+                    ...(data.professionalCta || {}),
+                    url: String(
+                        data.professionalCta?.url || data.websiteUrl || "",
+                    ).trim(),
+                },
+            },
         };
 
         console.log("Tentative de création de page avec owner_id:", ownerId);
@@ -953,7 +1070,7 @@ class XERAProfessionalManager {
                 description: updates.description,
                 avatar_url: updates.avatarUrl,
                 banner_url: updates.bannerUrl,
-                website_url: updates.websiteUrl,
+                website_url: String(updates.websiteUrl || "").trim(),
                 hiring_needs: updates.hiringNeeds,
                 updated_at: new Date().toISOString(),
             })
@@ -1059,6 +1176,160 @@ class XERAProfessionalManager {
         return data;
     }
 
+    async getPageFollowState(pageId) {
+        if (!pageId) return { count: 0, isFollowing: false, available: false };
+
+        try {
+            const [{ count, error: countError }, followResult] =
+                await Promise.all([
+                    this.supabase
+                        .from("page_followers")
+                        .select("id", { count: "exact", head: true })
+                        .eq("page_id", pageId),
+                    window.currentUser?.id
+                        ? this.supabase
+                              .from("page_followers")
+                              .select("id")
+                              .eq("page_id", pageId)
+                              .eq("user_id", window.currentUser.id)
+                              .limit(1)
+                        : Promise.resolve({ data: [] }),
+                ]);
+
+            if (countError) throw countError;
+            if (followResult.error) throw followResult.error;
+
+            const state = {
+                count: count || 0,
+                isFollowing: (followResult.data || []).length > 0,
+                available: true,
+            };
+            this.pageFollowStateCache.set(
+                `${window.currentUser?.id || "anonymous"}:${String(pageId)}`,
+                state,
+            );
+            return state;
+        } catch (error) {
+            console.warn("Abonnements Page Pro indisponibles:", error);
+            return { count: 0, isFollowing: false, available: false };
+        }
+    }
+
+    getCachedPageFollowState(pageId) {
+        if (!pageId) return null;
+        return (
+            this.pageFollowStateCache.get(
+                `${window.currentUser?.id || "anonymous"}:${String(pageId)}`,
+            ) || null
+        );
+    }
+
+    async preloadPageFollowStates(pageIds = []) {
+        const ids = Array.from(
+            new Set((pageIds || []).map((id) => String(id || "")).filter(Boolean)),
+        );
+        if (ids.length === 0) return;
+
+        const viewerId = window.currentUser?.id || null;
+        const followingPageIds = new Set();
+        if (viewerId) {
+            try {
+                const { data, error } = await this.supabase
+                    .from("page_followers")
+                    .select("page_id")
+                    .eq("user_id", viewerId)
+                    .in("page_id", ids);
+                if (error) throw error;
+                (data || []).forEach((row) => {
+                    if (row?.page_id) followingPageIds.add(String(row.page_id));
+                });
+            } catch (error) {
+                console.warn(
+                    "Impossible de précharger les abonnements aux Pages Pro:",
+                    error,
+                );
+                return;
+            }
+        }
+
+        ids.forEach((pageId) => {
+            this.pageFollowStateCache.set(
+                `${viewerId || "anonymous"}:${pageId}`,
+                {
+                    count: null,
+                    isFollowing: followingPageIds.has(pageId),
+                    available: true,
+                },
+            );
+        });
+    }
+
+    async togglePageFollow(pageId) {
+        if (!pageId) return;
+        if (!window.currentUser?.id) {
+            window.location.href = "login.html?redirect=profile.html";
+            return;
+        }
+
+        const pageIdString = String(pageId);
+        const getButtons = () =>
+            Array.from(document.querySelectorAll("[data-page-follow-id]")).filter(
+                (candidate) => candidate.dataset.pageFollowId === pageIdString,
+            );
+        const buttons = getButtons();
+        buttons.forEach((button) => (button.disabled = true));
+
+        try {
+            const state = await this.getPageFollowState(pageId);
+            if (!state.available) {
+                throw new Error(
+                    "Les abonnements aux Pages Pro sont indisponibles.",
+                );
+            }
+
+            const query = this.supabase
+                .from("page_followers")
+                .delete()
+                .eq("page_id", pageId)
+                .eq("user_id", window.currentUser.id);
+
+            const { error } = state.isFollowing
+                ? await query
+                : await this.supabase.from("page_followers").insert({
+                      page_id: pageId,
+                      user_id: window.currentUser.id,
+                  });
+
+            if (error && error.code !== "23505") throw error;
+
+            const nextState = await this.getPageFollowState(pageId);
+            getButtons().forEach((button) => {
+                button.classList.toggle("is-following", nextState.isFollowing);
+                button.innerHTML = `<img src="icons/${nextState.isFollowing ? "subscribed" : "subscribe"}.svg" class="btn-icon" style="width: 20px; height: 20px;"> ${nextState.isFollowing ? "Abonné" : "S'abonner"}`;
+            });
+            const countElement = document.getElementById(
+                `page-follow-count-${pageId}`,
+            );
+            if (countElement)
+                countElement.textContent = String(nextState.count);
+            document
+                .querySelectorAll("[data-page-follow-count]")
+                .forEach((element) => {
+                    if (element.dataset.pageFollowCount === pageIdString) {
+                        element.textContent = String(nextState.count);
+                    }
+                });
+        } catch (error) {
+            console.error("Erreur abonnement Page Pro:", error);
+            window.ToastManager?.error(
+                "Erreur",
+                error?.message || "Impossible de modifier l'abonnement.",
+            );
+        } finally {
+            getButtons().forEach((button) => (button.disabled = false));
+        }
+    }
+
     async getPageByOwnerId(ownerId) {
         if (!ownerId) return null;
 
@@ -1109,8 +1380,8 @@ class XERAProfessionalManager {
     /**
      * Récupère toutes les certifications d'une page
      */
-    async getPageCertifications(pageId) {
-        const { data, error } = await this.supabase
+    async getPageCertifications(pageId, includeInactive = false) {
+        let query = this.supabase
             .from("professional_certifications")
             .select(
                 `
@@ -1119,12 +1390,20 @@ class XERAProfessionalManager {
                     id,
                     name,
                     avatar,
+                    title,
+                    bio,
                     account_subtype
                 )
             `,
             )
             .eq("page_id", pageId);
 
+        if (!includeInactive) {
+            query = query.eq("status", "active");
+        }
+        query = query.order("created_at", { ascending: false });
+
+        const { data, error } = await query;
         if (error) throw error;
         return data || [];
     }
@@ -1199,7 +1478,7 @@ class XERAProfessionalManager {
         container.innerHTML = `<div style="text-align:center; padding: 40px;"><div class="loading-spinner"></div></div>`;
 
         if (tabName === "members") {
-            const certs = await this.getPageCertifications(pageId);
+            const certs = await this.getPageCertifications(pageId, true);
             if (certs.length === 0) {
                 container.innerHTML = `<p style="text-align: center; padding: 40px; color: var(--text-secondary);">Aucun membre certifié pour le moment.</p>`;
                 return;
@@ -1491,6 +1770,8 @@ class XERAProfessionalManager {
             const { data: updates, error } = await this.supabase
                 .from("content")
                 .select("*")
+                .eq("author_type", "PAGE_PRO")
+                .eq("author_id", pageId)
                 .eq("page_id", pageId)
                 .order("created_at", { ascending: false });
 
@@ -1501,18 +1782,33 @@ class XERAProfessionalManager {
                 return;
             }
 
-            container.innerHTML = updates
-                .map((update) => {
-                    // On utilise la fonction de rendu globale si disponible, sinon fallback
-                    if (typeof window.renderProfileUpdateCard === "function") {
-                        return window.renderProfileUpdateCard(update, {
-                            profileUserId: update.user_id,
-                            currentUserId: window.currentUserId,
-                        });
-                    }
+            const normalizedUpdates = updates.map((update) => ({
+                ...update,
+                userId: update.user_id,
+                pageId: update.page_id || pageId,
+                authorType: update.author_type || "PAGE_PRO",
+                authorId: update.author_id || update.page_id || pageId,
+                type: update.metadata?.sub_type === "event" ? "event" : "news",
+                createdAt: update.created_at,
+            }));
 
-                    // Fallback (ancien style amélioré)
-                    return `
+            container.innerHTML = `
+                <div class="pro-posts-carousel" tabindex="0" aria-label="Publications de la page">
+                    ${normalizedUpdates
+                        .map((update) => {
+                            // On utilise la fonction de rendu globale si disponible, sinon fallback
+                            if (
+                                typeof window.renderProfileUpdateCard ===
+                                "function"
+                            ) {
+                                return window.renderProfileUpdateCard(update, {
+                                    profileUserId: pageId,
+                                    currentUserId: window.currentUserId,
+                                });
+                            }
+
+                            // Fallback (ancien style amélioré)
+                            return `
                     <div class="timeline-card pro-feed-card" style="margin-bottom: 20px; padding: 25px;">
                         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px;">
                             <h4 style="margin: 0; font-size: 1.2rem; font-family: var(--font-heading);">
@@ -1539,15 +1835,21 @@ class XERAProfessionalManager {
                             update.media_url
                                 ? `
                             <div style="border-radius: 12px; overflow: hidden; margin-bottom: 15px; border: 1px solid var(--border-color);">
-                                ${update.type === "video" ? `<video src="${update.media_url}" controls style="width: 100%;"></video>` : `<img src="${update.media_url}" style="width: 100%; object-fit: cover;">`}
+                                ${update.type === "video" ? `<video src="${update.media_url}"${update.metadata?.poster_url ? ` poster="${update.metadata.poster_url}" preload="none"` : ` preload="metadata"`} controls playsinline style="width: 100%;"></video>` : `<img src="${update.media_url}" style="width: 100%; object-fit: cover;">`}
                             </div>
                         `
                                 : ""
                         }
                     </div>
                 `;
-                })
-                .join("");
+                        })
+                        .join("")}
+                </div>
+                <div class="pro-posts-scroll-hint" aria-hidden="true">
+                    <span>Faites défiler pour voir les autres publications</span>
+                    <span class="pro-posts-scroll-arrow">→</span>
+                </div>
+            `;
         } catch (err) {
             console.error(err);
             container.innerHTML = `<p style="color: #ef4444;">Erreur lors du chargement des actualités.</p>`;
@@ -1579,12 +1881,19 @@ class XERAProfessionalManager {
 
         const page = this.proPagesCache.get(content.validatedByPageId);
         const pageName = page ? page.name : "Organisation";
+        const pageNameHtml =
+            typeof window.renderVerifiedPageName === "function"
+                ? window.renderVerifiedPageName(
+                      pageName,
+                      content.validatedByPageId,
+                  )
+                : pageName;
         const pageAvatar = page?.avatar_url || "icons/enterprise.svg";
 
         return `
             <div class="seal-of-approval" title="Validé officiellement par ${pageName}" style="display: flex; align-items: center; gap: 6px; background: #000; color: #fff; padding: 4px 10px; border-radius: 20px; font-size: 0.7rem; font-weight: 800; border: 2px solid #fff; box-shadow: 0 4px 10px rgba(0,0,0,0.2); width: fit-content; margin-top: 5px;">
                 <img src="${pageAvatar}" style="width: 14px; height: 14px; border-radius: 3px; object-fit: cover;">
-                <span>VALIDÉ PAR ${pageName.toUpperCase()}</span>
+                <span>VALIDÉ PAR ${pageNameHtml}</span>
                 <span style="color: #00ff88;">✔</span>
             </div>
         `;
@@ -1605,13 +1914,13 @@ class XERAProfessionalManager {
         }
 
         modal.innerHTML = `
-            <div class="onboarding-xxl pro-create-modal-content" style="width: 600px; max-width: 95vw; padding: 0; background: var(--bg-secondary); border: 1px solid var(--border-color); overflow: hidden; display: flex; flex-direction: column;">
-                <div class="modal-header" style="padding: 20px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
-                    <h2 style="margin: 0; font-size: 1.25rem;">Créer une publication officielle</h2>
-                    <button onclick="this.closest('.modal-overlay-xxl').remove()" style="background: none; border: none; font-size: 1.5rem; color: var(--text-secondary); cursor: pointer;">×</button>
+            <div class="onboarding-xxl pro-create-modal-content">
+                <div class="modal-header pro-create-modal-header">
+                    <h2>Créer une publication officielle</h2>
+                    <button class="pro-create-modal-close" type="button" aria-label="Fermer" onclick="this.closest('.modal-overlay-xxl').remove()">×</button>
                 </div>
 
-                <div class="pro-create-tabs" style="display: flex; background: var(--bg-primary);">
+                <div class="pro-create-tabs">
                     <button class="pro-tab-btn ${initialType === "news" ? "active" : ""}" data-type="news">
                         <i class="fas fa-newspaper"></i> Actualité
                     </button>
@@ -1620,11 +1929,11 @@ class XERAProfessionalManager {
                     </button>
                 </div>
 
-                <div id="pro-create-form-container" style="padding: 25px; flex: 1; overflow-y: auto;">
+                <div id="pro-create-form-container">
                     <!-- Formulaire dynamique -->
                 </div>
 
-                <div class="modal-footer" style="padding: 20px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 15px; background: var(--bg-primary);">
+                <div class="modal-footer pro-create-modal-footer">
                     <button class="btn btn-secondary" onclick="this.closest('.modal-overlay-xxl').remove()">Annuler</button>
                     <button id="pro-submit-btn" class="btn btn-primary">Publier maintenant</button>
                 </div>
@@ -1647,19 +1956,19 @@ class XERAProfessionalManager {
             );
             if (type === "news") {
                 container.innerHTML = `
-                    <div class="form-group" style="margin-bottom: 20px;">
+                    <div class="form-group pro-create-form-group">
                         <label>Titre de l'actualité</label>
-                        <input type="text" id="pro-news-title" class="form-input" placeholder="Ex: XERA lève 10M€ pour le Momentum Engine" style="font-size: 1.1rem; font-weight: 700;">
+                        <input type="text" id="pro-news-title" class="form-input" placeholder="LE TITRE DE VOTRE ACTUALITÉ" style="font-size: 1.1rem; font-weight: 700;">
                     </div>
-                    <div class="form-group" style="margin-bottom: 20px;">
+                    <div class="form-group pro-create-form-group">
                         <label>Contenu</label>
                         <textarea id="pro-news-content" class="form-input" rows="8" placeholder="Écrivez votre annonce officielle ici..."></textarea>
                     </div>
-                    <div class="form-group">
+                    <div class="form-group pro-create-form-group pro-create-media-group">
                         <label>Image de couverture (Optionnelle)</label>
-                        <div id="pro-news-media-preview" style="margin-bottom: 10px; display: none;"></div>
-                        <label class="btn btn-secondary" style="display: inline-flex; cursor: pointer;">
-                            <i class="fas fa-image" style="margin-right: 8px;"></i> Ajouter un média
+                        <div id="pro-news-media-preview"></div>
+                        <label class="btn btn-secondary pro-create-upload-control">
+                            <i class="fas fa-image"></i> Ajouter un média
                             <input type="file" id="pro-news-file" accept="image/*" style="display: none;">
                         </label>
                         <input type="hidden" id="pro-news-media-url">
@@ -1691,11 +2000,11 @@ class XERAProfessionalManager {
                 };
             } else {
                 container.innerHTML = `
-                    <div class="form-group" style="margin-bottom: 20px;">
+                    <div class="form-group pro-create-form-group">
                         <label>Nom de l'événement</label>
-                        <input type="text" id="pro-event-title" class="form-input" placeholder="Ex: Web Summit 2026 - Meetup XERA">
+                        <input type="text" id="pro-event-title" class="form-input" placeholder="Ex: Web Summit 2026 - Meetup XERA1">
                     </div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+                    <div class="pro-create-event-grid">
                         <div class="form-group">
                             <label>Date</label>
                             <input type="date" id="pro-event-date" class="form-input">
@@ -1705,11 +2014,11 @@ class XERAProfessionalManager {
                             <input type="time" id="pro-event-time" class="form-input">
                         </div>
                     </div>
-                    <div class="form-group" style="margin-bottom: 20px;">
+                    <div class="form-group pro-create-form-group">
                         <label>Lieu / Lien (Online)</label>
                         <input type="text" id="pro-event-location" class="form-input" placeholder="Ex: Paris, Station F ou Lien Zoom">
                     </div>
-                    <div class="form-group">
+                    <div class="form-group pro-create-form-group">
                         <label>Description de l'événement</label>
                         <textarea id="pro-event-desc" class="form-input" rows="5" placeholder="Détails, agenda, intervenants..."></textarea>
                     </div>
@@ -1746,6 +2055,8 @@ class XERAProfessionalManager {
                 let payload = {
                     page_id: pageId,
                     user_id: window.currentUserId,
+                    author_type: "PAGE_PRO",
+                    author_id: pageId,
                     type: "text", // Par défaut, sera écrasé si média présent
                     state: "success", // Ajout du state pour éviter la contrainte NOT NULL
                     day_number: 0, // Correction : ajout du day_number pour éviter l'erreur NOT NULL
@@ -1824,10 +2135,12 @@ class XERAProfessionalManager {
     /**
      * Rendu complet d'une Page Professionnelle
      */
-    async renderProPage(slug) {
-        console.log("[Pro] renderProPage starting for slug:", slug);
+    async renderProPage(slugOrId) {
+        console.log("[Pro] renderProPage starting for page:", slugOrId);
 
-        const routeKey = `${window.location.pathname || ""}|${window.location.search || ""}|${slug || ""}`;
+        if (!slugOrId) return;
+
+        const routeKey = `${window.location.pathname || ""}|${window.location.search || ""}|${slugOrId || ""}`;
         const now = Date.now();
         if (
             window.__proPageRenderGuardKey === routeKey &&
@@ -1839,6 +2152,9 @@ class XERAProfessionalManager {
         window.__proPageRenderGuardKey = routeKey;
         window.__proPageRenderGuardAt = now;
 
+        const renderId = ++this.proPageRenderSequence;
+        const isCurrentRender = () => renderId === this.proPageRenderSequence;
+
         const currentPath = window.location.pathname;
         const isProfilePage =
             currentPath.includes("profile.html") ||
@@ -1846,20 +2162,20 @@ class XERAProfessionalManager {
             currentPath.includes("/pagepro");
 
         const hasProParam =
-            new URLSearchParams(window.location.search).get("pro") === slug;
+            new URLSearchParams(window.location.search).get("pro") === String(slugOrId);
 
         // 1. Navigation / Redirection (Si on n'est pas sur la bonne page ou URL)
         if (!isProfilePage || !hasProParam) {
-            console.log("[Pro] Redirecting to profile page with slug:", slug);
-            const targetUrl = `profile.html?pro=${slug}`;
+            console.log("[Pro] Redirecting to the professional page:", slugOrId);
+            const targetUrl = `profile.html?pro=${encodeURIComponent(slugOrId)}`;
 
             if (
                 window.XeraRouter &&
                 typeof window.XeraRouter.navigate === "function"
             ) {
-                window.XeraRouter.navigate("pagepro", { query: { pro: slug } });
+                window.XeraRouter.navigate("pagepro", { query: { pro: slugOrId } });
             } else if (typeof window.navigateTo === "function") {
-                window.navigateTo("pagepro", { query: { pro: slug } });
+                window.navigateTo("pagepro", { query: { pro: slugOrId } });
             } else {
                 window.location.href = targetUrl;
             }
@@ -1887,23 +2203,39 @@ class XERAProfessionalManager {
             return;
         }
 
+        if (!isCurrentRender()) return;
+
         // Persister dans l'URL si on reste en mode SPA
-        this.syncUrl({ pro: slug, explorer: null });
+        this.syncUrl({ pro: slugOrId, explorer: null });
 
         if (typeof document !== "undefined" && document.body) {
             document.body.classList.add("is-pro");
         }
 
-        proContainer.innerHTML = `<div style="text-align:center; padding: 100px;"><div class="loading-spinner"></div></div>`;
+        ensureCompanyPageSkeletonStyles();
+        proContainer.innerHTML = CompanyPageSkeleton();
 
         try {
-            const { data: page, error } = await this.supabase
+            const isPageId = /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(String(slugOrId));
+            let { data: page, error } = await this.supabase
                 .from("professional_pages")
                 .select("*")
-                .eq("slug", slug)
-                .single();
+                .eq(isPageId ? "id" : "slug", slugOrId)
+                .maybeSingle();
+
+            // Support both the canonical slug and an ID-only Page Pro link.
+            if ((!page || error) && isPageId) {
+                const bySlug = await this.supabase
+                    .from("professional_pages")
+                    .select("*")
+                    .eq("slug", slugOrId)
+                    .maybeSingle();
+                page = bySlug.data;
+                error = bySlug.error;
+            }
 
             if (error || !page) throw new Error("Page introuvable");
+            if (!isCurrentRender()) return;
 
             // Marquer la page courante pour re-rendu si on met à jour sa vérification
             try {
@@ -1912,13 +2244,27 @@ class XERAProfessionalManager {
 
             const isOwner =
                 window.currentUser && page.owner_id === window.currentUser.id;
+            const pageFollowState = await this.getPageFollowState(page.id);
+            const pageFollowHtml = isOwner
+                ? ""
+                : `<button id="page-follow-btn-${page.id}" data-page-follow-id="${page.id}" class="btn-pro-primary pro-page-follow-btn${pageFollowState.isFollowing ? " is-following" : ""}" onclick="window.professionalManager.togglePageFollow('${page.id}')"><img src="icons/${pageFollowState.isFollowing ? "subscribed" : "subscribe"}.svg" class="btn-icon" style="width: 20px; height: 20px;"> ${pageFollowState.isFollowing ? "Abonné" : "S'abonner"}</button>`;
+            if (typeof window.fetchVerifiedBadges === "function") {
+                await window
+                    .fetchVerifiedBadges()
+                    .catch((verificationError) => {
+                        console.warn(
+                            "[Pro] Vérifications indisponibles, conservation du cache local:",
+                            verificationError,
+                        );
+                    });
+            }
             const isPageVerified =
                 typeof window.isVerifiedPageId === "function"
                     ? window.isVerifiedPageId(page.id)
                     : false;
 
             const pageVerifiedBadgeHtml = isPageVerified
-                ? `<span class="pro-badge-pill">Page Professionnelle</span>`
+                ? `<span class="pro-badge-pill"><img src="icons/verify_page.svg" alt="Page Pro vérifiée" class="pro-page-verification-badge"> Page Professionnelle</span>`
                 : `<span class="pro-badge-pill" style="background: rgba(255,255,255,0.05); color: var(--text-secondary);">Page Non-Vérifiée</span>`;
 
             const pageVerificationCtaHtml =
@@ -1935,10 +2281,30 @@ class XERAProfessionalManager {
                 .eq("page_id", page.id)
                 .order("created_at", { ascending: false });
 
-            const avatar = page.avatar_url || "icons/enterprise.svg";
-            const banner =
-                page.banner_url ||
-                "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2564&auto=format&fit=crop";
+            const toPublicMediaUrl = (value) => {
+                const stored = String(value || "").trim();
+                if (!stored) return "";
+                if (/^(https?:|data:|blob:)/i.test(stored)) return stored;
+                const path = stored.replace(/^\/+/, "").replace(/^media\//, "");
+                try {
+                    return (
+                        this.supabase.storage.from("media").getPublicUrl(path)
+                            .data.publicUrl || ""
+                    );
+                } catch (_) {
+                    return "";
+                }
+            };
+            const avatar =
+                toPublicMediaUrl(page.avatar_url) || "icons/enterprise.svg";
+            // Une bannière absente reste une surface éditoriale : aucune image externe
+            // n'est ajoutée à la page professionnelle.
+            // Older pages can contain either a complete Storage URL or its object
+            // path. Normalize both forms identically for owners and visitors.
+            const banner = toPublicMediaUrl(page.banner_url);
+            const bannerAlt = this.escapeHtml(
+                `Bannière de ${page.name || "la Page Pro"}`,
+            );
             const pageOwner =
                 window.currentUser?.id === page.owner_id
                     ? window.currentUser
@@ -1961,19 +2327,25 @@ class XERAProfessionalManager {
                         ? window.hasActivePaidPlan(ownerProfile)
                         : false;
             }
+            const pageProEntitlementsActive = this.hasPageProEntitlements(
+                page.id,
+                pageOwnerSubscriptionActive,
+            );
 
             const recommendedProfiles =
                 await this.getRecommendedProfilesForPage(page, employees);
             const recommendedProfilesHtml = this.renderRecommendedProfiles(
                 recommendedProfiles,
                 page,
-                pageOwnerSubscriptionActive,
+                pageProEntitlementsActive,
             );
             const officialComparisonHtml = this.renderOfficialComparison(
                 page,
                 recommendedProfiles,
-                pageOwnerSubscriptionActive,
+                pageProEntitlementsActive,
             );
+
+            if (!isCurrentRender()) return;
 
             // Injection des styles premium spécifiques
             const proStyleId = "pro-page-premium-styles";
@@ -1986,7 +2358,16 @@ class XERAProfessionalManager {
             styleElement.textContent = `
                     #pro-page { padding-top: 76px !important; }
                     #pro-page .pro-page-container,
-                    #pro-page .profile-container { padding-top: 0 !important; }
+                    #pro-page .profile-container {
+                        padding-top: 0 !important;
+                    }
+                    #pro-page .pro-page-container {
+                        width: 100% !important;
+                        max-width: none !important;
+                        margin-inline: auto !important;
+                        padding-inline: 0 !important;
+                        box-sizing: border-box;
+                    }
 
                     nav { transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important; }
 
@@ -2080,13 +2461,18 @@ class XERAProfessionalManager {
                     }
                     .pro-name-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; justify-content: center; }
                     .pro-name-row h2 { font-size: clamp(1.7rem, 6vw, 2.4rem); margin: 0; font-weight: 800; letter-spacing: -0.8px; line-height: 1.05; }
-                    .pro-badge-pill {
+                    .pro-badge-pill { 
                         background: #8b5cf6;
                         color: #fff;
                         padding: 6px 14px;
                         border-radius: 999px;
                         font-size: 0.78rem;
                         font-weight: 600;
+                    }
+                    .pro-page-verification-badge {
+                        width: 18px;
+                        height: 18px;
+                        vertical-align: middle;
                     }
                     .pro-industry-label { color: var(--text-secondary); font-size: 0.8rem; text-transform: uppercase; font-weight: 700; letter-spacing: 1px; margin-bottom: 6px; text-align: center; }
                     .pro-members-count { color: var(--text-secondary); font-size: 0.86rem; margin-top: 8px; text-align: center; }
@@ -2428,6 +2814,677 @@ class XERAProfessionalManager {
                         .feature-card-pro { padding: 20px; }
                         .pro-card-premium, .sidebar-card-premium, .pro-creation-card { padding: 22px; }
                     }
+
+                    /* Portfolio institutionnel vivant — thème sombre local de la Page Pro. */
+                    #pro-page { background: #090d16; }
+                    #pro-page .pro-page-wrapper {
+                        --pro-ink: #f5f3ff;
+                        --pro-muted: #aab2c3;
+                        --pro-line: #293244;
+                        --pro-violet: #946cff;
+                        --pro-violet-soft: #211947;
+                        max-width: 100%;
+                        padding: 28px 0 72px;
+                        background: transparent;
+                        color: var(--pro-ink);
+                        font-family: inherit;
+                        overflow: visible;
+                    }
+                    #pro-page .pro-header-card {
+                        background: #101624;
+                        border: 1px solid var(--pro-line);
+                        border-radius: 24px;
+                        box-shadow: 0 16px 38px rgba(17,24,39,.06);
+                        margin-bottom: 22px;
+                        overflow: visible;
+                    }
+                    #pro-page .pro-banner-container {
+                        height: clamp(180px, 25vw, 260px);
+                        border-radius: 23px 23px 0 0;
+                        overflow: hidden;
+                        background:
+                          linear-gradient(120deg, rgba(15,23,42,.25), rgba(109,61,245,.16)),
+                          linear-gradient(135deg, #111827 0%, #25334c 54%, #6850bb 100%);
+                    }
+                    #pro-page .pro-banner-container::after {
+                        content: ''; position: absolute; inset: 0;
+                        background: linear-gradient(90deg, rgba(17,24,39,.36), transparent 62%);
+                        pointer-events: none;
+                    }
+                    #pro-page .pro-banner-img { filter: saturate(.82) contrast(1.04); }
+                    #pro-page .pro-edit-banner-btn {
+                        z-index: 2; width: 40px; height: 40px; border-radius: 12px;
+                        background: rgba(17,24,39,.78); border-color: rgba(255,255,255,.28);
+                    }
+                    #pro-page .pro-header-info {
+                        grid-template-columns: minmax(0, 1fr) minmax(280px, .8fr);
+                        justify-items: stretch;
+                        align-items: end;
+                        gap: 22px;
+                        padding: 0 30px 24px;
+                        text-align: left;
+                    }
+                    #pro-page .pro-header-info > div:first-child { display: grid; grid-template-columns: 126px minmax(220px,1fr); min-width: 0; gap: 22px; align-items: end; }
+                    #pro-page .pro-avatar-overlap {
+                        width: 126px; height: 126px; margin: -72px 0 0;
+                        border: 5px solid #101624; border-radius: 22px; background: #101624;
+                        box-shadow: 0 12px 28px rgba(0,0,0,.32);
+                    }
+                    #pro-page .pro-main-details { min-width: 0; padding: 0; margin: 0; text-align: left; }
+                    #pro-page .pro-industry-label { color: var(--pro-violet); font-size: .72rem; text-align: left; margin: 0 0 7px; overflow-wrap: anywhere; }
+                    #pro-page .pro-name-row { justify-content: flex-start; gap: 9px; margin-bottom: 6px; }
+                    #pro-page .pro-name-row h2 { min-width: 0; color: var(--pro-ink); font-size: clamp(1.65rem, 3.4vw, 2.45rem); letter-spacing: -1.35px; overflow-wrap: anywhere; }
+                    #pro-page .pro-badge-pill { border-radius: 8px; padding: 5px 9px; background: var(--pro-violet-soft); color: #5130c7; font-size: .7rem; }
+                    #pro-page .pro-members-count { margin: 0; text-align: left; color: var(--pro-muted); }
+                    #pro-page .pro-secondary-details {
+                        min-width: min(330px, 100%); padding: 14px 0 0 22px;
+                        border-left: 1px solid var(--pro-line); text-align: left;
+                    }
+                    #pro-page .pro-interests-label { color: var(--pro-muted); text-align: left; letter-spacing: .08em; }
+                    #pro-page .pro-interest-list { justify-content: flex-start; margin: 0; }
+                    #pro-page .pro-interest-chip { max-width: 100%; background: #171f30; border-color: #344057; color: #d5d9e3; border-radius: 9px; padding: 6px 9px; white-space: normal; overflow-wrap: anywhere; }
+                    #pro-page .pro-interest-chip:hover { background: #282051; color: #f3efff; border-color: #6e55c7; }
+                    #pro-page .pro-secondary-details > .pro-role-label { color: var(--pro-muted); }
+                    #pro-page .pro-secondary-details > .pro-role-label span { color: var(--pro-ink); }
+                    #pro-page .pro-actions-row {
+                        display: flex;
+                        flex-wrap: wrap;
+                        justify-content: flex-start;
+                        padding: 0 30px 26px;
+                        margin: 0;
+                        gap: 12px;
+                        border-top: 1px solid var(--pro-line);
+                        padding-top: 20px;
+                    }
+                    #pro-page .pro-actions-row > * { width: auto; flex: 0 0 auto; }
+                    #pro-page .btn-pro-label-short { display: none !important; }
+                    #pro-page .btn-pro-primary, #pro-page .btn-pro-secondary {
+                        width: auto; min-height: 42px; border-radius: 10px; padding: 10px 15px;
+                        font-size: .86rem; box-sizing: border-box; text-decoration: none;
+                    }
+                    #pro-page .btn-pro-primary { background: var(--pro-violet); box-shadow: 0 7px 15px rgba(109,61,245,.18); }
+                    #pro-page .btn-pro-primary:hover { background: #5930d4; transform: translateY(-1px); }
+                    #pro-page .btn-pro-secondary { background: #171f2e; color: #e5e7ef; border-color: #38445a; }
+                    #pro-page .btn-pro-secondary:hover { background: #242d40; border-color: #7961d7; color: #fff; }
+                    #pro-page .pro-features-grid { grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; margin-bottom: 24px; }
+                    #pro-page .pro-features-grid > .feature-card-pro:nth-child(3) { grid-column: auto; }
+                    #pro-page .feature-card-pro { background: #121826; color: var(--pro-ink); border-color: var(--pro-line); border-radius: 16px; min-height: 110px; padding: 16px; }
+                    #pro-page .feature-card-pro:hover { background: #171f30; border-color: #6250aa; box-shadow: 0 10px 24px rgba(0,0,0,.25); }
+                    #pro-page .feature-icon-box { background: var(--pro-violet-soft); color: var(--pro-violet); border-radius: 11px; }
+                    #pro-page .feature-info h4 { color: var(--pro-ink); }
+                    #pro-page .feature-info p, #pro-page .feature-arrow { color: var(--pro-muted); }
+                    #pro-page .pro-info-carousel { padding: 0 30px 24px; margin: 0; }
+                    #pro-page .pro-info-carousel > section { background: #161e2d; border-color: var(--pro-line); border-radius: 14px; color: var(--pro-ink); }
+                    #pro-page .pro-content-layout { grid-template-columns: minmax(0, 1fr) 310px; align-items: start; gap: 26px; min-width: 0; }
+                    #pro-page .pro-main-col { display: grid; gap: 22px; }
+                    #pro-page .pro-main-col,
+                    #pro-page .pro-page-sidebar,
+                    #pro-page .pro-card-premium,
+                    #pro-page .pro-about-card { min-width: 0; }
+                    #pro-page .pro-page-sidebar { position: static; align-self: start; gap: 12px; }
+                    #pro-page .pro-card-premium, #pro-page .sidebar-card-premium, #pro-page .pro-creation-card {
+                        background: #121826; color: var(--pro-ink); border-color: var(--pro-line); border-radius: 16px;
+                        box-shadow: 0 8px 22px rgba(0,0,0,.2);
+                    }
+                    #pro-page .pro-about-card { width: 100%; max-width: 100%; box-sizing: border-box; }
+                    #pro-page .pro-about-copy { max-width: 100%; overflow-wrap: anywhere; word-break: break-word; }
+                    #pro-page .pro-page-wrapper,
+                    #pro-page .pro-page-wrapper * { box-sizing: border-box; }
+                    #pro-page img { max-width: 100%; }
+                    #pro-page .pro-creation-card { padding: 16px; border-top: 3px solid var(--pro-violet); }
+                    #pro-page .pro-creation-input-shell { background: #0d1320; border-color: #273146; border-radius: 12px; margin-bottom: 11px; }
+                    #pro-page .pro-creation-input-shell button { color: var(--pro-muted); }
+                    #pro-page .pro-tab-item { color: var(--pro-muted); background: transparent; border-radius: 9px; min-height: 39px; }
+                    #pro-page .pro-tab-item:hover { background: var(--pro-violet-soft); color: #5130c7; }
+                    #pro-page .pro-section-header { margin: 0; padding: 0 2px; }
+                    #pro-page .pro-section-title { color: var(--pro-ink); font-size: 1.12rem; letter-spacing: -.45px; }
+                    #pro-page .btn-pill-small { border-radius: 9px; color: #5130c7; background: var(--pro-violet-soft); }
+                    #pro-page .btn-pill-small:hover { background: var(--pro-violet); }
+                    #pro-page .org-arcs-grid { grid-template-columns: repeat(auto-fit,minmax(240px,1fr)) !important; gap: 13px !important; margin: -7px 0 0 !important; }
+                    #pro-page .arc-card-pro-premium { background: #121826; color: var(--pro-ink); border-color: var(--pro-line); border-left: 3px solid var(--pro-violet); border-radius: 14px; padding: 18px; }
+                    #pro-page .arc-card-pro-premium:hover { background: #171f30; border-color: #6250aa; box-shadow: 0 10px 25px rgba(0,0,0,.25); transform: translateY(-2px); }
+                    #pro-page .pro-empty-state { border-color: #313b4e; background: #101624; color: var(--pro-ink); }
+                    #pro-page .pro-empty-text { color: var(--pro-muted); }
+                    #pro-page #company-updates-container { margin: -8px 0 0 !important; }
+                    #pro-page .employees-grid { margin: -7px 0 0 !important; }
+                    #pro-page .employees-grid .pro-card-premium:hover { border-color: #cfc5ff; transform: translateY(-2px); }
+                    #pro-page .sidebar-card-premium { padding: 20px; }
+                    #pro-page .sidebar-card-premium small { color: var(--pro-muted) !important; }
+                    #pro-page .pro-main-col > h3.pro-section-title { margin: 0 !important; }
+                    #pro-page .pro-main-col > .pro-card-premium { margin: -7px 0 0 !important; }
+                    #pro-page :is(button,a):focus-visible { outline: 3px solid rgba(109,61,245,.35); outline-offset: 3px; }
+                    @media (min-width: 901px) {
+                        #pro-page .pro-avatar-overlap { transform: translateY(-70px); }
+                    }
+                    @media (max-width: 900px) {
+                        #pro-page .pro-header-info { grid-template-columns: 1fr; padding: 0 22px 20px; }
+                        #pro-page .pro-secondary-details { border-left: 0; border-top: 1px solid var(--pro-line); padding: 16px 0 0; }
+                        #pro-page .pro-content-layout { grid-template-columns: 1fr; }
+                        #pro-page .pro-page-sidebar { position: static; }
+                        #pro-page .pro-features-grid { grid-template-columns: 1fr; }
+                    }
+                    @media (max-width: 620px) {
+                        #pro-page .pro-page-wrapper { padding: 0 0 42px; }
+                        #pro-page .pro-header-card { border-radius: 16px; }
+                        #pro-page .pro-banner-container { height: 150px; border-radius: 15px 15px 0 0; }
+                        #pro-page .pro-header-info { padding: 0 17px 17px; }
+                        #pro-page .pro-header-info > div:first-child { grid-template-columns: 82px minmax(0,1fr); gap: 14px; }
+                        #pro-page .pro-avatar-overlap { width: 82px; height: 82px; margin-top: -47px; border-radius: 17px; }
+                        #pro-page .pro-name-row h2 { font-size: 1.48rem; }
+                        #pro-page .pro-actions-row { padding: 16px 17px 20px; gap: 8px; }
+                        #pro-page .btn-pro-primary, #pro-page .btn-pro-secondary { flex: 1 1 auto; justify-content: center; padding: 10px; }
+                        #pro-page .pro-info-carousel { padding: 0 17px 18px; }
+                        #pro-page .pro-content-layout { gap: 20px; padding: 0 14px; }
+                        #pro-page .pro-card-premium, #pro-page .sidebar-card-premium, #pro-page .pro-creation-card { padding: 16px; }
+                    }
+
+                    /* Variante sombre par défaut : les surfaces internes restent calmes et très lisibles. */
+                    #pro-page { background: #090d16; }
+                    #pro-page .pro-page-wrapper {
+                        --pro-ink: #f5f3ff;
+                        --pro-muted: #aab2c3;
+                        --pro-line: #293244;
+                        --pro-violet: #946cff;
+                        --pro-violet-soft: #211947;
+                        background: #090d16;
+                    }
+                    #pro-page .pro-header-card,
+                    #pro-page .feature-card-pro,
+                    #pro-page .pro-card-premium,
+                    #pro-page .sidebar-card-premium,
+                    #pro-page .pro-creation-card,
+                    #pro-page .arc-card-pro-premium {
+                        background: #121826;
+                        border-color: var(--pro-line);
+                        box-shadow: 0 14px 32px rgba(0,0,0,.18);
+                    }
+                    #pro-page .pro-header-card { background: #101624; }
+                    #pro-page .pro-banner-container {
+                        background: linear-gradient(120deg, rgba(0,0,0,.25), rgba(116,76,224,.16)), linear-gradient(135deg, #080c14 0%, #17253c 58%, #493b82 100%);
+                    }
+                    #pro-page .pro-banner-img { display: block; position: relative; z-index: 1; }
+                    #pro-page .pro-banner-container.pro-banner-unavailable {
+                        background: #0b1120 !important;
+                    }
+                    #pro-page .pro-banner-container.pro-banner-unavailable::after { display: none; }
+                    #pro-page .pro-avatar-overlap { border-color: #101624; background: #101624; }
+                    #pro-page .pro-name-row h2,
+                    #pro-page .feature-info h4,
+                    #pro-page .pro-section-title,
+                    #pro-page .pro-secondary-details > .pro-role-label span { color: var(--pro-ink); }
+                    #pro-page .pro-interest-chip { background: #171f30; border-color: #344057; color: #d5d9e3; }
+                    #pro-page .pro-interest-chip:hover { background: #282051; border-color: #6e55c7; color: #f3efff; }
+                    #pro-page .pro-actions-row { border-top-color: var(--pro-line); }
+                    #pro-page .btn-pro-secondary { background: #171f2e; color: #e5e7ef; border-color: #38445a; }
+                    #pro-page .btn-pro-secondary:hover { background: #242d40; border-color: #7961d7; color: #fff; }
+                    #pro-page .feature-card-pro:hover,
+                    #pro-page .arc-card-pro-premium:hover { background: #171f30; border-color: #6250aa; box-shadow: 0 14px 30px rgba(0,0,0,.25); }
+                    #pro-page .pro-info-carousel > section { background: #161e2d; border-color: var(--pro-line); color: var(--pro-ink); }
+                    #pro-page .pro-creation-card { border-top-color: var(--pro-violet); }
+                    #pro-page .pro-creation-input-shell { background: #0d1320; border-color: #273146; }
+                    #pro-page .pro-tab-item:hover { background: #211947; color: #d8ccff; }
+                    #pro-page .btn-pill-small { background: #211947; color: #d8ccff; }
+                    #pro-page .btn-pill-small:hover { background: var(--pro-violet); color: #fff; }
+                    #pro-page .pro-empty-state { background: #101624; border-color: #313b4e; }
+                    #pro-page .pro-page-follow-count {
+                        display: inline-flex; align-items: center; min-height: 42px;
+                        padding: 0 13px; border: 1px solid #39455c; border-radius: 10px;
+                        color: var(--pro-muted); font-size: .84rem; gap: 4px;
+                    }
+                    #pro-page .pro-page-follow-count strong { color: #fff; }
+                    #pro-page .pro-public-stats {
+                        display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+                        margin: 0 30px 28px; border: 1px solid var(--pro-line); border-radius: 14px;
+                        background: #0c1220; overflow: hidden;
+                    }
+                    #pro-page .pro-stat-item { padding: 15px 17px; border-right: 1px solid var(--pro-line); }
+                    #pro-page .pro-stat-item:last-child { border-right: 0; }
+                    #pro-page .pro-stat-item strong { display: block; color: #fff; font-size: 1.18rem; letter-spacing: -.03em; }
+                    #pro-page .pro-stat-item span { display: block; margin-top: 3px; color: var(--pro-muted); font-size: .73rem; font-weight: 600; }
+                    /* Neutralise les couleurs héritées écrites en ligne sur les surfaces sombres. */
+                    #pro-page .arc-card-pro-premium p,
+                    #pro-page .pro-card-premium p,
+                    #pro-page .employees-grid .pro-card-premium [style*="color"],
+                    #pro-page .sidebar-card-premium [style*="color"] { color: var(--pro-muted) !important; }
+                    #pro-page .arc-card-pro-premium h4,
+                    #pro-page .employees-grid .pro-card-premium [style*="font-weight: 700"] { color: var(--pro-ink) !important; }
+                    #pro-page .arc-card-pro-premium .badge { background: #26203f !important; color: #ded5ff !important; border: 1px solid #4e3f83; }
+                    #pro-page .arc-card-pro-premium span[style*="color: #8b5cf6"],
+                    #pro-page .employees-grid .pro-card-premium [style*="color: #8b5cf6"] { color: #b9a6ff !important; }
+                    @media (max-width: 620px) {
+                        #pro-page .pro-page-wrapper { background: #090d16 !important; }
+                        #pro-page .pro-public-stats { grid-template-columns: repeat(2, minmax(0,1fr)); margin: 0 17px 20px; }
+                        #pro-page .pro-stat-item:nth-child(2) { border-right: 0; }
+                        #pro-page .pro-stat-item:nth-child(-n+2) { border-bottom: 1px solid var(--pro-line); }
+                    }
+
+                    /* Derniere garde responsive : le contenu doit toujours pouvoir
+                       retrecir avant de forcer une largeur au viewport. */
+                    #pro-page .pro-page-wrapper,
+                    #pro-page .pro-page-wrapper * { min-width: 0; }
+                    #pro-page .pro-page-wrapper h1,
+                    #pro-page .pro-page-wrapper h2,
+                    #pro-page .pro-page-wrapper h3,
+                    #pro-page .pro-page-wrapper h4,
+                    #pro-page .pro-page-wrapper p,
+                    #pro-page .pro-page-wrapper span,
+                    #pro-page .pro-page-wrapper a,
+                    #pro-page .pro-page-wrapper button {
+                        overflow-wrap: anywhere;
+                    }
+                    #pro-page .pro-actions-row {
+                        display: flex;
+                        flex-wrap: wrap;
+                        gap: 12px;
+                    }
+                    #pro-page .pro-actions-row > * {
+                        width: auto;
+                        flex: 0 1 auto;
+                        min-width: 0;
+                        max-width: 100%;
+                    }
+                    #pro-page .pro-actions-row .btn-icon {
+                        flex: 0 0 auto;
+                    }
+                    #pro-page .pro-public-stats {
+                        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+                    }
+                    #pro-page .pro-stat-item {
+                        min-width: 0;
+                        overflow-wrap: anywhere;
+                    }
+                    #pro-page .pro-info-carousel > section,
+                    #pro-page .pro-card-premium,
+                    #pro-page .sidebar-card-premium,
+                    #pro-page .arc-card-pro-premium,
+                    #pro-page .feature-card-pro {
+                        overflow-wrap: anywhere;
+                    }
+                    #pro-page .feature-card-pro {
+                        min-height: 0;
+                        height: auto;
+                        align-items: start;
+                    }
+                    #pro-page .feature-info {
+                        min-height: 0;
+                    }
+                    #pro-page .feature-info p {
+                        display: block;
+                        overflow: visible;
+                        text-overflow: clip;
+                        -webkit-line-clamp: unset;
+                        -webkit-box-orient: initial;
+                    }
+                    #pro-page .pro-info-carousel > section,
+                    #pro-page .pro-public-stats,
+                    #pro-page .pro-stat-item,
+                    #pro-page .org-arcs-grid,
+                    #pro-page .employees-grid {
+                        height: auto;
+                        grid-auto-rows: max-content;
+                    }
+                    #pro-page .pro-empty-state {
+                        min-height: 0;
+                    }
+                    #pro-page {
+                        max-width: 100%;
+                        overflow-x: clip;
+                    }
+                    #pro-page .pro-page-container,
+                    #pro-page .pro-page-wrapper,
+                    #pro-page .pro-content-layout,
+                    #pro-page .pro-main-col,
+                    #pro-page .pro-page-sidebar,
+                    #pro-page #company-updates-container {
+                        width: 100%;
+                        max-width: 100%;
+                        min-width: 0;
+                    }
+                    #pro-page .pro-posts-carousel {
+                        width: 100%;
+                        max-width: 100%;
+                        min-width: 0;
+                        overflow-x: auto;
+                        overflow-y: hidden;
+                        align-items: stretch;
+                    }
+                    #pro-page .pro-posts-carousel .pro-feed-card {
+                        flex: 0 1 min(640px, 100%);
+                        width: min(640px, 100%);
+                        max-width: 100%;
+                        min-width: 0;
+                    }
+                    #pro-page .pro-feed-card img,
+                    #pro-page .pro-feed-card video {
+                        display: block;
+                        width: 100%;
+                        max-width: 100%;
+                        height: auto;
+                    }
+                    #pro-page .pro-feed-card > div,
+                    #pro-page .pro-feed-card h3,
+                    #pro-page .pro-feed-card p,
+                    #pro-page .pro-feed-card .profile-update-stats {
+                        min-width: 0;
+                        max-width: 100%;
+                        overflow-wrap: anywhere;
+                    }
+                    #pro-page .pro-feed-card > div > div:first-of-type,
+                    #pro-page .pro-card-footer,
+                    #pro-page .pro-event-details {
+                        flex-wrap: wrap;
+                        gap: 12px;
+                    }
+                    #pro-page .pro-card-footer > *,
+                    #pro-page .pro-event-details > * {
+                        min-width: 0;
+                        max-width: 100%;
+                    }
+                    #pro-page .pro-info-carousel {
+                        width: 100%;
+                        max-width: 100%;
+                        min-width: 0;
+                        overflow-x: auto;
+                        overflow-y: hidden;
+                    }
+                    #pro-page .pro-info-carousel > section {
+                        flex: 0 1 min(420px, 100%);
+                        width: min(420px, 100%);
+                        max-width: 100%;
+                        min-width: min(280px, 100%);
+                    }
+                    #pro-page .pro-creation-input-shell button {
+                        min-width: 0;
+                        overflow-wrap: anywhere;
+                    }
+                    #pro-page .employees-grid {
+                        grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)) !important;
+                    }
+                    #pro-page .certified-team-view-all {
+                        display: flex; align-items: center; justify-content: center; gap: 10px;
+                        width: 100%; min-height: 48px; margin: -22px 0 40px; padding: 12px 18px;
+                        border: 1px solid #6650a9; border-radius: 12px; background: #211947;
+                        color: #eeeaff; font-weight: 800; cursor: pointer; transition: .2s ease;
+                    }
+                    #pro-page .certified-team-view-all:hover { background: #302365; border-color: #9d83ff; transform: translateY(-1px); }
+                    .certified-directory-loading { display: grid; place-items: center; min-height: 55vh; }
+                    .certified-directory { max-width: 1120px; margin: 0 auto; padding: 32px 20px 72px; color: #f5f3ff; }
+                    .certified-directory-topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
+                    .certified-directory-back { display: inline-flex; align-items: center; gap: 9px; border: 0; background: transparent; color: #b9b0d9; font-weight: 700; cursor: pointer; padding: 8px 0; }
+                    .certified-directory-back:hover { color: #fff; }
+                    .certified-directory-kicker { color: #a992ff; font-size: .72rem; font-weight: 900; letter-spacing: .14em; }
+                    .certified-directory-hero { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 30px; border: 1px solid #2b354b; border-radius: 24px; background: linear-gradient(135deg, #151d2c, #101522); box-shadow: 0 18px 45px rgba(0,0,0,.22); }
+                    .certified-directory-brand { display: flex; align-items: center; gap: 18px; min-width: 0; }
+                    .certified-directory-brand img { width: 76px; height: 76px; flex: 0 0 76px; object-fit: cover; border-radius: 20px; border: 1px solid #46516b; }
+                    .certified-directory-brand p { margin: 0 0 6px; color: #a992ff; font-size: .72rem; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
+                    .certified-directory-brand h1 { margin: 0 0 8px; font-size: clamp(1.5rem, 3vw, 2.5rem); line-height: 1.05; }
+                    .certified-directory-brand span { color: #aab2c3; }
+                    .certified-directory-total { min-width: 140px; padding-left: 24px; border-left: 1px solid #35405a; }
+                    .certified-directory-total strong { display: block; color: #c2b3ff; font-size: 2rem; }
+                    .certified-directory-total span { color: #aab2c3; font-size: .82rem; }
+                    .certified-directory-search { display: flex; align-items: center; gap: 12px; margin: 24px 0; padding: 0 18px; min-height: 58px; border: 1px solid #3a4660; border-radius: 14px; background: #0e1420; box-shadow: 0 12px 30px rgba(0,0,0,.14); }
+                    .certified-directory-search i { color: #a992ff; }
+                    .certified-directory-search input { width: 100%; border: 0; outline: 0; background: transparent; color: #fff; font-size: 1rem; }
+                    .certified-directory-search input::placeholder { color: #7f899d; }
+                    .certified-directory-results-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0 0 14px; }
+                    .certified-directory-results-head h2 { margin: 0; font-size: 1.1rem; }
+                    .certified-directory-results-head span { color: #8993a7; font-size: .86rem; }
+                    .certified-directory-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+                    .certified-directory-card { display: flex; align-items: center; gap: 13px; min-width: 0; padding: 16px; border: 1px solid #2b354b; border-radius: 16px; background: #151d2c; color: #f5f3ff; text-align: left; cursor: pointer; transition: .2s ease; }
+                    .certified-directory-card:hover { border-color: #8068d1; background: #1b2540; transform: translateY(-2px); }
+                    .certified-directory-card img { width: 54px; height: 54px; flex: 0 0 54px; border-radius: 50%; object-fit: cover; border: 2px solid #55468b; }
+                    .certified-directory-card-copy { display: flex; flex: 1; flex-direction: column; min-width: 0; gap: 3px; }
+                    .certified-directory-card-copy strong, .certified-directory-card-copy span, .certified-directory-card-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+                    .certified-directory-card-copy span { color: #c3b5ff; font-size: .84rem; font-weight: 700; }
+                    .certified-directory-card-copy small { color: #98a2b5; }
+                    .certified-directory-card > i { color: #8d78e3; font-size: .8rem; }
+                    .certified-directory-empty { display: grid; place-items: center; gap: 10px; min-height: 260px; padding: 30px; border: 1px dashed #39445c; border-radius: 18px; color: #9ba5b8; text-align: center; }
+                    .certified-directory-empty i { color: #8d78e3; font-size: 1.6rem; }
+                    @media (max-width: 700px) {
+                        #pro-page .employees-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px !important; }
+                        #pro-page .employees-grid .pro-card-premium { padding: 15px 8px !important; }
+                        #pro-page .employees-grid .pro-card-premium img { width: 58px !important; height: 58px !important; }
+                        .certified-directory { padding: 20px 16px 48px; }
+                        .certified-directory-topbar { align-items: flex-start; flex-direction: column-reverse; gap: 8px; }
+                        .certified-directory-hero { align-items: flex-start; flex-direction: column; padding: 22px 18px; }
+                        .certified-directory-total { width: 100%; padding: 14px 0 0; border-left: 0; border-top: 1px solid #35405a; }
+                        .certified-directory-grid { grid-template-columns: 1fr; }
+                    }
+                    .talent-explorer-page,
+                    .talent-explorer-page * { min-width: 0; box-sizing: border-box; }
+                    .talent-explorer-page h1,
+                    .talent-explorer-page p,
+                    .talent-explorer-page span,
+                    .talent-explorer-page button { overflow-wrap: anywhere; }
+                    .talent-explorer-page .talent-explorer-header > div[style*="justify-content: space-between"] {
+                        flex-wrap: wrap;
+                        gap: 20px;
+                    }
+                    .talent-explorer-page .talent-search-box {
+                        flex-wrap: wrap;
+                    }
+                    .talent-explorer-page .talent-search-box input {
+                        min-width: 0;
+                    }
+
+                    @media (max-width: 700px) {
+                        #pro-page .pro-page-wrapper { padding-bottom: 28px; }
+                        #pro-page .pro-actions-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+                        #pro-page .pro-public-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+                        #pro-page .pro-posts-carousel .pro-feed-card {
+                            flex-basis: 100%;
+                            width: 100%;
+                        }
+                        #pro-page .pro-feed-card > div { padding: 18px !important; }
+                        #pro-page .pro-feed-card h3 { font-size: clamp(1.05rem, 5vw, 1.35rem) !important; }
+                        #pro-page .pro-feed-card .pro-post-description { max-height: none; }
+                        #pro-page .pro-info-carousel > section { flex-basis: min(100%, 360px); }
+                        .talent-explorer-page { padding: 12px !important; }
+                        .talent-explorer-page .talent-explorer-header { padding: 22px !important; border-radius: 22px !important; margin-bottom: 22px !important; }
+                        .talent-explorer-page .talent-explorer-header h1 { font-size: clamp(1.75rem, 8vw, 2.35rem) !important; }
+                        .talent-explorer-page .talent-explorer-header p { font-size: 1rem !important; }
+                        .talent-explorer-page .talent-search-box { gap: 8px !important; }
+                        .talent-explorer-page .talent-search-box i { padding: 12px !important; }
+                        .talent-explorer-page .talent-search-box input { flex: 1 1 calc(100% - 54px) !important; font-size: 1rem !important; }
+                        .talent-explorer-page .talent-search-box button { flex: 1 1 100%; min-height: 46px; padding: 12px 20px !important; }
+                    }
+                    @media (max-width: 420px) {
+                        #pro-page .pro-actions-row { grid-template-columns: 1fr; }
+                        #pro-page .pro-public-stats { grid-template-columns: 1fr; }
+                        #pro-page .pro-stat-item { border-right: 0 !important; border-bottom: 1px solid var(--pro-line); }
+                        #pro-page .pro-stat-item:last-child { border-bottom: 0; }
+                        #pro-page .pro-name-row { align-items: flex-start; flex-direction: column; }
+                        #pro-page .pro-name-row h2 { font-size: 1.35rem; }
+                        #pro-page .pro-page-follow-count { justify-content: center; }
+                        #pro-page .pro-info-carousel { padding-left: 12px; padding-right: 12px; }
+                        #pro-page .pro-info-carousel > section { min-width: 100%; }
+                    }
+
+                    /* Regles finales: une seule source de verite pour les dimensions.
+                       Les carrousels sont les seuls blocs autorises a defiler. */
+                    body.is-pro { overflow-x: hidden; }
+                    #pro-page {
+                        width: 100%;
+                        max-width: none;
+                        margin-inline: auto;
+                        min-width: 0;
+                    }
+                    #pro-page .pro-page-container {
+                        width: 100%;
+                        max-width: none;
+                        margin-inline: auto;
+                        min-width: 0;
+                    }
+                    #pro-page .pro-page-wrapper {
+                        width: min(100%, 1180px);
+                        max-width: 1180px;
+                        min-width: 0;
+                    }
+                    #pro-page .pro-page-wrapper {
+                        margin-inline: auto;
+                        padding-inline: clamp(16px, 3vw, 32px);
+                        padding-bottom: clamp(32px, 6vw, 72px);
+                        box-sizing: border-box;
+                    }
+                    #pro-page .pro-header-card,
+                    #pro-page .pro-content-layout,
+                    #pro-page .pro-main-col,
+                    #pro-page .pro-page-sidebar,
+                    #pro-page .pro-card-premium,
+                    #pro-page .sidebar-card-premium,
+                    #pro-page .pro-creation-card,
+                    #pro-page .arc-card-pro-premium,
+                    #pro-page .feature-card-pro {
+                        min-width: 0;
+                        max-width: 100%;
+                    }
+                    #pro-page .pro-banner-container,
+                    #pro-page .pro-banner-img { max-width: 100%; }
+                    #pro-page .pro-header-info > div:first-child,
+                    #pro-page .pro-main-details,
+                    #pro-page .pro-secondary-details {
+                        min-width: 0;
+                        max-width: 100%;
+                    }
+                    #pro-page .pro-name-row,
+                    #pro-page .pro-interest-list,
+                    #pro-page .pro-actions-row {
+                        min-width: 0;
+                        max-width: 100%;
+                    }
+                    #pro-page .pro-name-row h2,
+                    #pro-page .pro-industry-label,
+                    #pro-page .pro-members-count,
+                    #pro-page .pro-role-label,
+                    #pro-page .pro-interest-chip,
+                    #pro-page .pro-about-copy,
+                    #pro-page .arc-card-pro-premium h4,
+                    #pro-page .arc-card-pro-premium p,
+                    #pro-page .employees-grid .pro-card-premium div {
+                        overflow-wrap: anywhere;
+                        word-break: break-word;
+                    }
+                    #pro-page .pro-content-layout {
+                        grid-template-columns: minmax(0, 1fr) minmax(240px, 310px);
+                    }
+                    #pro-page .org-arcs-grid,
+                    #pro-page .employees-grid,
+                    #pro-page .talent-grid-standalone {
+                        display: grid;
+                        grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)) !important;
+                        gap: clamp(12px, 2vw, 20px) !important;
+                        min-width: 0;
+                        max-width: 100%;
+                    }
+                    #pro-page .org-arcs-grid,
+                    #pro-page #company-updates-container,
+                    #pro-page .employees-grid {
+                        max-height: 65vh;
+                        overflow-y: auto;
+                        overflow-x: hidden;
+                        overscroll-behavior-y: contain;
+                        scrollbar-gutter: stable;
+                        padding: 2px;
+                    }
+                    #pro-page #company-updates-container:has(.pro-posts-carousel) {
+                        max-height: none;
+                        overflow: visible;
+                        padding: 0;
+                    }
+                    #pro-page .pro-actions-row {
+                        display: flex;
+                        flex-wrap: wrap;
+                        gap: 12px;
+                        align-items: center;
+                    }
+                    #pro-page .pro-actions-row > a,
+                    #pro-page .pro-actions-row > button {
+                        min-width: 0;
+                        max-width: 100%;
+                    }
+                    #pro-page .pro-public-stats {
+                        grid-template-columns: repeat(4, minmax(0, 1fr));
+                    }
+                    #pro-page .pro-stat-item {
+                        min-width: 0;
+                        overflow-wrap: anywhere;
+                    }
+                    #pro-page .pro-posts-carousel,
+                    #pro-page .pro-info-carousel {
+                        width: 100%;
+                        max-width: 100%;
+                        min-width: 0;
+                        overscroll-behavior-x: contain;
+                        scrollbar-gutter: stable;
+                    }
+                    #pro-page .pro-posts-carousel .pro-feed-card {
+                        flex: 0 0 min(640px, 100%);
+                        width: min(640px, 100%);
+                        max-width: 100%;
+                    }
+                    #pro-page .pro-info-carousel > section {
+                        flex: 0 0 clamp(260px, 34vw, 420px);
+                        width: clamp(260px, 34vw, 420px);
+                        max-width: 100%;
+                        min-width: 0;
+                        height: auto;
+                    }
+                    #pro-page .pro-feed-card img,
+                    #pro-page .pro-feed-card video,
+                    #pro-page .pro-card-premium img,
+                    #pro-page .arc-card-pro-premium img {
+                        max-width: 100%;
+                    }
+                    #pro-page .pro-card-footer,
+                    #pro-page .pro-event-details,
+                    #pro-page .pro-feed-card > div > div:first-of-type {
+                        display: flex;
+                        flex-wrap: wrap;
+                        min-width: 0;
+                        max-width: 100%;
+                    }
+                    #pro-page .pro-card-footer > *,
+                    #pro-page .pro-event-details > * { min-width: 0; max-width: 100%; }
+
+                    @media (max-width: 1040px) {
+                        #pro-page .pro-content-layout { grid-template-columns: 1fr; }
+                        #pro-page .pro-page-sidebar { order: 2; }
+                    }
+                    @media (max-width: 900px) {
+                        #pro-page .pro-page-wrapper { padding-inline: 18px; }
+                        #pro-page .pro-header-info { grid-template-columns: 1fr; }
+                        #pro-page .pro-secondary-details { border-left: 0; border-top: 1px solid var(--pro-line); padding: 16px 0 0; }
+                        #pro-page .pro-features-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+                        #pro-page .pro-public-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+                        #pro-page .pro-stat-item:nth-child(2n) { border-right: 0; }
+                        #pro-page .pro-stat-item:nth-child(-n+2) { border-bottom: 1px solid var(--pro-line); }
+                    }
+                    @media (max-width: 620px) {
+                        #pro-page .pro-page-wrapper { padding-inline: 16px; }
+                        #pro-page .pro-header-card { border-radius: 18px; border-inline: 1px solid var(--pro-line); }
+                        #pro-page .pro-content-layout { padding-inline: 0; }
+                        #pro-page .pro-actions-row { grid-template-columns: repeat(2, minmax(0, 1fr)); padding-inline: 17px; }
+                        #pro-page .pro-info-carousel { padding-inline: 14px; }
+                        #pro-page .pro-info-carousel > section { flex-basis: 100%; width: 100%; }
+                        #pro-page .pro-features-grid { grid-template-columns: 1fr; }
+                    }
+                    @media (max-width: 420px) {
+                        #pro-page .pro-actions-row { grid-template-columns: 1fr; }
+                        #pro-page .pro-public-stats { grid-template-columns: 1fr; }
+                        #pro-page .pro-stat-item { border-right: 0 !important; border-bottom: 1px solid var(--pro-line); }
+                        #pro-page .pro-stat-item:last-child { border-bottom: 0; }
+                        #pro-page .pro-header-info > div:first-child { grid-template-columns: 72px minmax(0, 1fr); gap: 12px; }
+                        #pro-page .pro-avatar-overlap { width: 72px; height: 72px; margin-top: -42px; }
+                        #pro-page .pro-name-row h2 { font-size: 1.28rem; }
+                    }
+
+                    /* Match the personal profile's true-black page canvas. */
+                    body.is-pro { background-color: #050505 !important; }
+                    #pro-page,
+                    #pro-page .pro-page-container,
+                    #pro-page .pro-page-wrapper {
+                        background: #050505 !important;
+                    }
                 `;
 
             try {
@@ -2440,199 +3497,239 @@ class XERAProfessionalManager {
             }
 
             proContainer.innerHTML = `
-                <div class="pro-page-wrapper">
-                    <!-- HEADER -->
-                    <div class="pro-header-card">
-                        <div class="pro-banner-container">
-                            ${banner ? `<img src="${banner}" class="pro-banner-img">` : ""}
-                            ${isOwner ? `<div class="pro-edit-banner-btn" onclick="window.professionalManager.openPageSettings('${page.id}')"><i class="fas fa-edit"></i></div>` : ""}
-                        </div>
+                <div class="min-h-screen bg-[#050505] text-slate-100">
+                    <main class="w-full max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+                    <div class="pro-page-wrapper pro-page-fade-in">
+                        <!-- HEADER -->
+                        <div class="pro-header-card">
+                            <div class="pro-banner-container">
+                                ${banner ? `<img src="${this.escapeHtml(banner)}" class="pro-banner-img" alt="${bannerAlt}" onerror="this.remove(); this.parentElement.classList.add('pro-banner-unavailable');">` : ""}
+                                ${isOwner ? `<div class="pro-edit-banner-btn" onclick="window.professionalManager.openPageSettings('${page.id}')"><i class="fas fa-edit"></i></div>` : ""}
+                            </div>
 
-                        <div class="pro-header-info">
-                            <div style="flex: 1;">
-                                <div class="pro-avatar-overlap">
-                                    <img src="${avatar}" alt="Avatar">
-                                </div>
-                                <div class="pro-main-details">
-                                    <div class="pro-industry-label">${page.industry}</div>
-                                    <div class="pro-name-row">
-                                        <h2>${typeof window.wrapUsernameLabel === "function" ? window.wrapUsernameLabel(page.name) : page.name}</h2>
-                                        ${pageVerifiedBadgeHtml}
+                            <div class="pro-header-info">
+                                <div style="flex: 1;">
+                                    <div class="pro-avatar-overlap">
+                                        <img src="${avatar}" alt="Avatar">
                                     </div>
-                                    <div class="pro-members-count"><strong>${employees.length}</strong> Membres certifiés</div>
-                                    ${pageVerificationCtaHtml}
-                                </div>
-                            </div>
-
-                            <div class="pro-secondary-details">
-                                <div class="pro-interests-label">Centres d'intérêt</div>
-                                <div class="pro-interest-list">
-                                    ${page.hiring_needs?.map((need) => `<span class="pro-interest-chip">${need}</span>`).join("") || `<span class="pro-interest-chip">Aucun</span>`}
-                                </div>
-                                <div class="pro-role-label">Rôle actuel: <span>Page Professionnelle</span></div>
-                            </div>
-                        </div>
-
-                        <div class="pro-actions-row">
-                            ${page.website_url ? `<a href="${page.website_url}" target="_blank" class="btn-pro-primary" style="text-decoration:none;"><i class="fas fa-globe"></i><span class="btn-pro-label-long">Visiter le site officiel</span><span class="btn-pro-label-short">Web</span></a>` : ""}
-                            ${
-                                isOwner
-                                    ? `
-                                <button class="btn-pro-secondary" onclick="window.professionalManager.openTeamManagement('${page.id}')"><i class="fas fa-users-cog"></i><span class="btn-pro-label-long">Gérer l'équipe</span><span class="btn-pro-label-short">Équipe</span></button>
-                                <button class="btn-pro-secondary" onclick="window.professionalManager.openPageSettings('${page.id}')"><i class="fas fa-cog"></i><span class="btn-pro-label-long">Réglages Page</span><span class="btn-pro-label-short">Réglages</span></button>
-                            `
-                                    : ""
-                            }
-                        </div>
-                        <div class="pro-info-carousel">
-                            ${recommendedProfilesHtml}
-                            ${officialComparisonHtml}
-                        </div>
-                    </div>
-
-                    <!-- QUICK ACTIONS -->
-                    <div class="pro-features-grid">
-                        <div class="feature-card-pro" onclick="window.professionalManager.openProfessionalCreateMenu('${page.id}', 'news')">
-                            <div class="feature-icon-box"><i class="fas fa-handshake"></i></div>
-                            <div class="feature-info">
-                                <h4>Prêt à collaborer</h4>
-                                <p>Montrez aux recruteurs que vous êtes ouvert aux opportunités.</p>
-                            </div>
-                            <div class="feature-arrow"><i class="fas fa-chevron-right"></i></div>
-                        </div>
-                        <div class="feature-card-pro" onclick="window.professionalManager.openCompanyPostMenu('${page.id}')">
-                            <div class="feature-icon-box"><i class="fas fa-share-alt"></i></div>
-                            <div class="feature-info">
-                                <h4>Partager des posts</h4>
-                                <p>Partagez vos dernières actualités et restez connecté avec votre réseau.</p>
-                            </div>
-                            <div class="feature-arrow"><i class="fas fa-chevron-right"></i></div>
-                        </div>
-                        <div class="feature-card-pro" onclick="window.professionalManager.openPageSettings('${page.id}')">
-                            <div class="feature-icon-box"><i class="fas fa-sync"></i></div>
-                            <div class="feature-info">
-                                <h4>Mettre à jour</h4>
-                                <p>Gardez votre profil à jour pour que les recruteurs vous trouvent facilement.</p>
-                            </div>
-                            <div class="feature-arrow"><i class="fas fa-chevron-right"></i></div>
-                        </div>
-                    </div>
-
-                    <div class="pro-content-layout">
-                        <!-- MAIN CONTENT -->
-                        <div class="pro-main-col">
-                            <!-- CREATION BAR -->
-                            ${
-                                isOwner
-                                    ? `
-                                <div class="pro-creation-card">
-                                    <div class="pro-creation-input-shell">
-                                        <img src="${avatar}" alt="Logo">
-                                        <button onclick="window.professionalManager.openProfessionalCreateMenu('${page.id}', 'news')">Commencer une actualité officielle...</button>
-                                    </div>
-                                    <div class="pro-creation-tabs">
-                                        <div class="pro-tab-item news" onclick="window.professionalManager.openProfessionalCreateMenu('${page.id}', 'news')">
-                                            <i class="fas fa-newspaper"></i>
-                                            <span>Actualité</span>
+                                    <div class="pro-main-details">
+                                        <div class="pro-industry-label">${page.industry}</div>
+                                        <div class="pro-name-row">
+                                            <h2>${typeof window.wrapUsernameLabel === "function" ? window.wrapUsernameLabel(page.name) : page.name}</h2>
+                                            ${pageVerifiedBadgeHtml}
                                         </div>
-                                        <div class="pro-tab-item event" onclick="window.professionalManager.openProfessionalCreateMenu('${page.id}', 'event')">
-                                            <i class="fas fa-calendar-alt"></i>
-                                            <span>Événement</span>
-                                        </div>
-                                        <div class="pro-tab-item project" onclick="window.professionalManager.openCreateOrgArc('${page.id}')">
-                                            <i class="fas fa-project-diagram"></i>
-                                            <span>Projet</span>
-                                        </div>
+                                        <div class="pro-members-count"><strong>${employees.length}</strong> Membres certifiés</div>
+                                        ${pageVerificationCtaHtml}
                                     </div>
                                 </div>
-                            `
-                                    : ""
-                            }
 
-                            <!-- ARCS -->
-                            <div class="pro-section-header">
-                                <h3 class="pro-section-title">Projets d'Organisation (ARCs)</h3>
-                                ${isOwner ? `<button class="btn-pill-small" onclick="window.professionalManager.openCreateOrgArc('${page.id}')">+ Nouveau Projet</button>` : ""}
+                                <div class="pro-secondary-details">
+                                    <div class="pro-interests-label">Centres d'intérêt</div>
+                                    <div class="pro-interest-list">
+                                        ${page.hiring_needs?.map((need) => `<span class="pro-interest-chip">${need}</span>`).join("") || `<span class="pro-interest-chip">Aucun</span>`}
+                                    </div>
+                                    <div class="pro-role-label">Rôle actuel: <span>Page Professionnelle</span></div>
+                                </div>
                             </div>
-                            <div class="org-arcs-grid" style="display: grid; grid-template-columns: 1fr; gap: 15px; margin-bottom: 40px;">
+
+                            <div class="pro-actions-row flex flex-wrap items-center gap-3">
+                                ${(() => {
+                                    const cta = getProfessionalCta(page);
+                                    if (!cta.url) return "";
+                                    const target =
+                                        cta.type === "phone"
+                                            ? ""
+                                            : ` target="_blank" rel="noopener noreferrer"`;
+                                    const icon =
+                                        cta.type === "phone"
+                                            ? "phone"
+                                            : "globe";
+                                    return `<a href="${this.escapeHtml(cta.url)}"${target} class="btn-pro-primary" style="text-decoration:none;"><i class="fas fa-${icon}"></i><span>${this.escapeHtml(cta.label)}</span></a>`;
+                                })()}
+                                <button class="btn-pro-secondary" type="button" onclick="window.startCompanyMessageFromPage && window.startCompanyMessageFromPage('${this.escapeHtml(page.id)}','${this.escapeHtml(page.slug || "")}','${this.escapeHtml(page.name || "Page Pro")}')"><i class="fas fa-comment-dots"></i><span class="btn-pro-label-long">Contacter</span><span class="btn-pro-label-short">Message</span></button>
+                                ${pageFollowHtml}
                                 ${
-                                    orgArcs && orgArcs.length > 0
-                                        ? orgArcs
-                                              .map(
-                                                  (arc) => `
-                                            <div class="arc-card-pro-premium" onclick="selectArc('${arc.id}', '${page.owner_id}')" style="cursor: pointer;">
-                                                <div style="font-size: 0.65rem; text-transform: uppercase; font-weight: 800; color: #8b5cf6; margin-bottom: 5px; letter-spacing: 1px;">ARC OFFICIEL</div>
-                                                <h4 style="margin: 0 0 10px 0; font-size: 1.1rem; font-weight: 700;">${arc.title}</h4>
-                                                <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 15px;">${arc.description || "Aucune description."}</p>
-                                                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem;">
-                                                    <span class="badge" style="background: rgba(255,255,255,0.05); color: #fff; padding: 4px 12px; border-radius: 6px;">${arc.status === "in_progress" ? "En cours" : "Terminé"}</span>
-                                                    <span style="font-weight: 700; color: #8b5cf6;">Voir la trajectoire →</span>
+                                    isOwner
+                                        ? `
+                                    <button class="btn-pro-secondary" onclick="window.professionalManager.openTeamManagement('${page.id}')"><i class="fas fa-users-cog"></i><span class="btn-pro-label-long">Gérer l'équipe</span><span class="btn-pro-label-short">Équipe</span></button>
+                                    <a href="commissions.html" class="btn-pro-secondary" style="text-decoration:none"><i class="fas fa-chart-line"></i><span class="btn-pro-label-long">Commissions</span><span class="btn-pro-label-short">Com.</span></a>
+                                    <button class="btn-pro-secondary" onclick="window.professionalManager.openPageSettings('${page.id}')"><i class="fas fa-cog"></i><span class="btn-pro-label-long">Réglages Page</span><span class="btn-pro-label-short">Réglages</span></button>
+                                `
+                                        : ""
+                                }
+                            </div>
+                            <div class="pro-public-stats" aria-label="Aperçu de la page">
+                                <div class="pro-stat-item"><strong>${employees.length}</strong><span>Membres certifiés</span></div>
+                                <div class="pro-stat-item"><strong>${pageFollowState.count}</strong><span>Abonnés</span></div>
+                                <div class="pro-stat-item"><strong>${orgArcs?.length || 0}</strong><span>Projets publics</span></div>
+                                <div class="pro-stat-item"><strong>${page.hiring_needs?.length || 0}</strong><span>Spécialités</span></div>
+                            </div>
+                            ${
+                                isOwner
+                                    ? `<div class="pro-info-carousel">
+                                ${recommendedProfilesHtml}
+                                ${officialComparisonHtml}
+                            </div>`
+                                    : ""
+                            }
+                        </div>
+
+                        <!-- QUICK ACTIONS -->
+                        ${
+                            isOwner
+                                ? `<div class="pro-features-grid">
+                            <div class="feature-card-pro" onclick="window.professionalManager.openProfessionalCreateMenu('${page.id}', 'news')">
+                                <div class="feature-icon-box"><i class="fas fa-handshake"></i></div>
+                                <div class="feature-info">
+                                    <h4>Publier une actualité</h4>
+                                    <p>Partagez une nouvelle officielle avec votre communauté.</p>
+                                </div>
+                                <div class="feature-arrow"><i class="fas fa-chevron-right"></i></div>
+                            </div>
+                            <div class="feature-card-pro" onclick="window.professionalManager.openCompanyPostMenu('${page.id}')">
+                                <div class="feature-icon-box"><i class="fas fa-share-alt"></i></div>
+                                <div class="feature-info">
+                                    <h4>Partager des posts</h4>
+                                    <p>Partagez vos dernières actualités et restez connecté avec votre réseau.</p>
+                                </div>
+                                <div class="feature-arrow"><i class="fas fa-chevron-right"></i></div>
+                            </div>
+                            <div class="feature-card-pro" onclick="window.professionalManager.openPageSettings('${page.id}')">
+                                <div class="feature-icon-box"><i class="fas fa-sync"></i></div>
+                                <div class="feature-info">
+                                    <h4>Mettre à jour</h4>
+                                    <p>Gardez votre profil à jour pour que les recruteurs vous trouvent facilement.</p>
+                                </div>
+                                <div class="feature-arrow"><i class="fas fa-chevron-right"></i></div>
+                            </div>
+                                </div>`
+                                : ""
+                        }
+
+                        <div class="pro-content-layout">
+                            <!-- MAIN CONTENT -->
+                            <div class="pro-main-col">
+                                <!-- CREATION BAR -->
+                                ${
+                                    isOwner
+                                        ? `
+                                    <div class="pro-creation-card">
+                                        <div class="pro-creation-input-shell">
+                                            <img src="${avatar}" alt="Logo">
+                                            <button onclick="window.professionalManager.openProfessionalCreateMenu('${page.id}', 'news')">Commencer une actualité officielle...</button>
+                                        </div>
+                                        <div class="pro-creation-tabs">
+                                            <div class="pro-tab-item news" onclick="window.professionalManager.openProfessionalCreateMenu('${page.id}', 'news')">
+                                                <i class="fas fa-newspaper"></i>
+                                                <span>Actualité</span>
+                                            </div>
+                                            <div class="pro-tab-item event" onclick="window.professionalManager.openProfessionalCreateMenu('${page.id}', 'event')">
+                                                <i class="fas fa-calendar-alt"></i>
+                                                <span>Événement</span>
+                                            </div>
+                                            <div class="pro-tab-item project" onclick="window.professionalManager.openCreateOrgArc('${page.id}')">
+                                                <i class="fas fa-project-diagram"></i>
+                                                <span>Projet</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                `
+                                        : ""
+                                }
+
+                                <!-- ARCS -->
+                                <div class="pro-section-header">
+                                    <h3 class="pro-section-title">Projets d'Organisation (ARCs)</h3>
+                                    ${isOwner ? `<button class="btn-pill-small" onclick="window.professionalManager.openCreateOrgArc('${page.id}')">+ Nouveau Projet</button>` : ""}
+                                </div>
+                                <div class="org-arcs-grid" style="margin-bottom: 40px;">
+                                    ${
+                                        orgArcs && orgArcs.length > 0
+                                            ? orgArcs
+                                                  .map(
+                                                      (arc) => `
+                                                <div class="arc-card-pro-premium" onclick="selectArc('${arc.id}', '${page.owner_id}')" style="cursor: pointer;">
+                                                    <div style="font-size: 0.65rem; text-transform: uppercase; font-weight: 800; color: #8b5cf6; margin-bottom: 5px; letter-spacing: 1px;">ARC OFFICIEL</div>
+                                                    <h4 style="margin: 0 0 10px 0; font-size: 1.1rem; font-weight: 700;">${arc.title}</h4>
+                                                    <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 15px;">${arc.description || "Aucune description."}</p>
+                                                    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem;">
+                                                        <span class="badge" style="background: rgba(255,255,255,0.05); color: #fff; padding: 4px 12px; border-radius: 6px;">${arc.status === "in_progress" ? "En cours" : "Terminé"}</span>
+                                                        <span style="font-weight: 700; color: #8b5cf6;">Voir la trajectoire →</span>
+                                                    </div>
                                                 </div>
+                                            `,
+                                                  )
+                                                  .join("")
+                                            : `
+                                            <div class="pro-empty-state">
+                                                <div class="pro-empty-icon"><i class="fas fa-folder-open"></i></div>
+                                                <div class="pro-empty-text">L'organisation n'a pas encore de projet public.<br>Ajoutez votre premier projet pour commencer.</div>
                                             </div>
-                                        `,
-                                              )
-                                              .join("")
-                                        : `
-                                        <div class="pro-empty-state">
-                                            <div class="pro-empty-icon"><i class="fas fa-folder-open"></i></div>
-                                            <div class="pro-empty-text">L'organisation n'a pas encore de projet public.<br>Ajoutez votre premier projet pour commencer.</div>
-                                        </div>
-                                        `
-                                }
-                            </div>
-
-                            <!-- UPDATES -->
-                            <div class="pro-section-header">
-                                <h3 class="pro-section-title">Actualités de l'entreprise</h3>
-                                ${isOwner ? `<button class="btn-pill-small" onclick="window.professionalManager.openCompanyPostMenu('${page.id}')">+ Publier une update</button>` : ""}
-                            </div>
-                            <div id="company-updates-container" style="margin-bottom: 40px;">
-                                <div class="loading-spinner"></div>
-                            </div>
-
-                            <!-- ABOUT -->
-                            <h3 class="pro-section-title" style="margin-bottom: 20px;">À propos</h3>
-                            <div class="pro-card-premium" style="margin-bottom: 40px;">
-                                <p style="white-space: pre-wrap; line-height: 1.7; color: var(--text-secondary); font-size: 0.95rem; margin: 0;">${page.description || "Bienvenue sur notre page professionnelle."}</p>
-                            </div>
-
-                            <!-- TEAM -->
-                            <h3 class="pro-section-title" style="margin-bottom: 20px;">Équipe Certifiée</h3>
-                            <div class="employees-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 15px; margin-bottom: 40px;">
-                                ${
-                                    employees.length > 0
-                                        ? employees
-                                              .map(
-                                                  (emp) => `
-                                            <div class="pro-card-premium" style="text-align: center; cursor: pointer; padding: 25px; transition: all 0.2s;" onclick="navigateToUserProfile('${emp.user_id}')">
-                                                <img src="${emp.user?.avatar || "https://placehold.co/100"}" style="width: 70px; height: 70px; border-radius: 50%; margin-bottom: 15px; object-fit: cover; border: 2px solid rgba(255,255,255,0.05);">
-                                                <div style="font-weight: 700; margin-bottom: 4px; font-size: 0.95rem;">${emp.user?.name}</div>
-                                                <div style="font-size: 0.8rem; color: #8b5cf6; font-weight: 600;">${emp.title}</div>
-                                                ${emp.department ? `<div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 4px; opacity: 0.8;">${emp.department}</div>` : ""}
-                                            </div>
-                                        `,
-                                              )
-                                              .join("")
-                                        : `<p style="color: var(--text-secondary); font-style: italic; font-size: 0.9rem;">Aucun membre certifié pour le moment.</p>`
-                                }
-                            </div>
-                        </div>
-
-                        <!-- SIDEBAR -->
-                        <div class="pro-page-sidebar">
-                            <h3 class="pro-section-title" style="margin-bottom: 16px; font-size: 1.05rem;">Informations</h3>
-                            <div class="sidebar-card-premium">
-                                <div style="margin-bottom: 20px;">
-                                    <small style="color: var(--text-secondary); text-transform: uppercase; font-weight: 700; font-size: 0.65rem; letter-spacing: 1px;">Domaines d'activité</small>
-                                    <div style="margin-top: 8px; font-weight: 600; font-size: 0.9rem; line-height: 1.4;">${page.industry}</div>
+                                            `
+                                    }
                                 </div>
-                                <div>
-                                    <small style="color: var(--text-secondary); text-transform: uppercase; font-weight: 700; font-size: 0.65rem; letter-spacing: 1px;">Créée le</small>
-                                    <div style="margin-top: 8px; font-weight: 600; font-size: 0.9rem;">${new Date(page.created_at).toLocaleDateString()}</div>
+
+                                <!-- UPDATES -->
+                                <div class="pro-section-header">
+                                    <h3 class="pro-section-title">Actualités de l'entreprise</h3>
+                                    ${isOwner ? `<button class="btn-pill-small" onclick="window.professionalManager.openCompanyPostMenu('${page.id}')">+ Publier une update</button>` : ""}
+                                </div>
+                                <div id="company-updates-container" style="margin-bottom: 40px;">
+                                    <div class="loading-spinner"></div>
+                                </div>
+
+                                <!-- ABOUT -->
+                                <h3 class="pro-section-title" style="margin-bottom: 20px;">À propos</h3>
+                                <div class="pro-card-premium pro-about-card" style="margin-bottom: 40px;">
+                                    <p class="pro-about-copy" style="white-space: pre-wrap; line-height: 1.7; color: var(--text-secondary); font-size: 0.95rem; margin: 0;">${page.description || "Bienvenue sur notre page professionnelle."}</p>
+                                </div>
+
+                                <!-- TEAM -->
+                                <h3 class="pro-section-title" style="margin-bottom: 20px;">Équipe Certifiée</h3>
+                                <div class="employees-grid" style="margin-bottom: 40px;">
+                                    ${
+                                        employees.length > 0
+                                            ? employees
+                                                  .slice(0, 6)
+                                                  .map(
+                                                      (emp) => `
+                                                <div class="pro-card-premium" style="text-align: center; cursor: pointer; padding: 25px; transition: all 0.2s;" onclick="navigateToUserProfile('${emp.user_id}')">
+                                                    <img src="${emp.user?.avatar || "https://placehold.co/100"}" style="width: 70px; height: 70px; border-radius: 50%; margin-bottom: 15px; object-fit: cover; border: 2px solid rgba(255,255,255,0.05);">
+                                                    <div style="font-weight: 700; margin-bottom: 4px; font-size: 0.95rem;">${emp.user?.name}</div>
+                                                    <div style="font-size: 0.8rem; color: #8b5cf6; font-weight: 600;">${emp.title}</div>
+                                                    ${emp.department ? `<div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 4px; opacity: 0.8;">${emp.department}</div>` : ""}
+                                                </div>
+                                            `,
+                                                  )
+                                                  .join("")
+                                            : `<p style="color: var(--text-secondary); font-style: italic; font-size: 0.9rem;">Aucun membre certifié pour le moment.</p>`
+                                    }
+                                </div>
+                                ${
+                                    employees.length > 6
+                                        ? `<button type="button" class="certified-team-view-all" onclick="window.professionalManager.openCertifiedTeamDirectory('${this.escapeHtml(page.slug)}')"><i class="fas fa-users"></i><span>Voir les ${employees.length} profils certifiés</span><i class="fas fa-arrow-right" aria-hidden="true"></i></button>`
+                                        : ""
+                                }
+                            </div>
+
+                            <!-- SIDEBAR -->
+                            <div class="pro-page-sidebar">
+                                <h3 class="pro-section-title" style="margin-bottom: 16px; font-size: 1.05rem;">Informations</h3>
+                                <div class="sidebar-card-premium">
+                                    <div style="margin-bottom: 20px;">
+                                        <small style="color: var(--text-secondary); text-transform: uppercase; font-weight: 700; font-size: 0.65rem; letter-spacing: 1px;">Domaines d'activité</small>
+                                        <div style="margin-top: 8px; font-weight: 600; font-size: 0.9rem; line-height: 1.4;">${page.industry}</div>
+                                    </div>
+                                    <div>
+                                        <small style="color: var(--text-secondary); text-transform: uppercase; font-weight: 700; font-size: 0.65rem; letter-spacing: 1px;">Créée le</small>
+                                        <div style="margin-top: 8px; font-weight: 600; font-size: 0.9rem;">${new Date(page.created_at).toLocaleDateString()}</div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
+                    </div>
+                </main>
                 </div>
             `;
 
@@ -2675,13 +3772,145 @@ class XERAProfessionalManager {
                 });
             }
         } catch (err) {
+            if (!isCurrentRender()) return;
+
+            document.body.classList.add("is-pro");
+            document.querySelectorAll(".page").forEach((pageSection) => {
+                pageSection.classList.toggle(
+                    "active",
+                    pageSection.id === "pro-page",
+                );
+            });
             proContainer.innerHTML = `
-                <div class="empty-state">
-                    <div class="empty-state-icon">⚠️</div>
-                    <h3>${err.message}</h3>
-                    <button class="btn btn-secondary" onclick="navigateTo('discover')" style="margin-top: 20px;">Retour au Discover</button>
+                <div class="w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+                    <div class="empty-state pro-page-not-found" role="alert">
+                        <div class="empty-state-icon" aria-hidden="true">!</div>
+                        <h3>Entreprise introuvable</h3>
+                        <p>Cette Page Professionnelle n'est plus disponible ou n'a pas pu être chargée.</p>
+                        <button class="btn btn-secondary" type="button" onclick="navigateTo('discover')" style="margin-top: 20px;">Retour au feed</button>
+                    </div>
                 </div>
             `;
+        }
+    }
+
+    async openCertifiedTeamDirectory(slug) {
+        this.syncUrl({ pro: slug, team: "1", explorer: null });
+        await this.renderCertifiedTeamDirectory(slug);
+    }
+
+    async closeCertifiedTeamDirectory(slug) {
+        this.syncUrl({ team: null });
+        await this.renderProPage(slug);
+    }
+
+    async renderCertifiedTeamDirectory(slug, initialQuery = "") {
+        const container = document.querySelector(".pro-page-container");
+        if (!container) return;
+
+        container.innerHTML = `<div class="certified-directory-loading"><div class="loading-spinner"></div></div>`;
+
+        try {
+            const { data: page, error: pageError } = await this.supabase
+                .from("professional_pages")
+                .select("id, name, slug, avatar_url, industry, description")
+                .eq("slug", slug)
+                .single();
+
+            if (pageError || !page) throw new Error("Page introuvable");
+            const employees = await this.getPageCertifications(page.id);
+            const pageAvatar = this.escapeHtml(
+                page.avatar_url || "icons/enterprise.svg",
+            );
+            const safePageName = this.escapeHtml(page.name || "Page Pro");
+            const normalizeSearchText = (value) =>
+                String(value || "")
+                    .normalize("NFD")
+                    .replace(/[\u0300-\u036f]/g, "")
+                    .toLowerCase();
+            const renderResults = (searchTerm = "") => {
+                const normalizedQuery = normalizeSearchText(searchTerm).trim();
+                const matches = (employees || []).filter((cert) => {
+                    const searchable = normalizeSearchText(
+                        [
+                            cert.user?.name,
+                            cert.title,
+                            cert.type,
+                            cert.department,
+                            cert.user?.title,
+                            cert.user?.account_subtype,
+                            cert.user?.bio,
+                        ].join(" "),
+                    );
+                    return (
+                        !normalizedQuery || searchable.includes(normalizedQuery)
+                    );
+                });
+                const results = document.getElementById(
+                    "certified-directory-results",
+                );
+                const count = document.getElementById(
+                    "certified-directory-count",
+                );
+                if (!results || !count) return;
+                count.textContent = `${matches.length} profil${matches.length > 1 ? "s" : ""}`;
+                results.innerHTML = matches.length
+                    ? matches
+                          .map((cert) => {
+                              const name = this.escapeHtml(
+                                  cert.user?.name || "Profil certifié",
+                              );
+                              const avatar = this.escapeHtml(
+                                  cert.user?.avatar ||
+                                      "https://placehold.co/120",
+                              );
+                              const role = this.escapeHtml(
+                                  cert.title ||
+                                      cert.user?.title ||
+                                      cert.type ||
+                                      "Membre certifié",
+                              );
+                              const talent = this.escapeHtml(
+                                  cert.user?.title ||
+                                      cert.user?.account_subtype ||
+                                      cert.department ||
+                                      "Talent XERA1",
+                              );
+                              return `<button type="button" class="certified-directory-card" onclick="navigateToUserProfile('${this.escapeHtml(cert.user_id)}')">
+                                  <img src="${avatar}" alt="Avatar de ${name}">
+                                  <span class="certified-directory-card-copy"><strong>${name}</strong><span>${role}</span><small>${talent}</small></span>
+                                  <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i>
+                              </button>`;
+                          })
+                          .join("")
+                    : `<div class="certified-directory-empty"><i class="fas fa-user-slash"></i><strong>Aucun profil trouvé</strong><span>Essayez un nom, un rôle ou une compétence.</span></div>`;
+            };
+
+            container.innerHTML = `
+                <section class="certified-directory" aria-labelledby="certified-directory-title">
+                    <div class="certified-directory-topbar"><button type="button" class="certified-directory-back" aria-label="Retour à la page professionnelle"><i class="fas fa-arrow-left"></i><span>Retour à la page</span></button><span class="certified-directory-kicker">RÉSEAU CERTIFIÉ</span></div>
+                    <header class="certified-directory-hero"><div class="certified-directory-brand"><img src="${pageAvatar}" alt="Logo de ${safePageName}"><div><p>Équipe vérifiée</p><h1 id="certified-directory-title">Profils certifiés par ${safePageName}</h1><span>${this.escapeHtml(page.industry || "Talents professionnels vérifiés")}</span></div></div><div class="certified-directory-total"><strong>${employees.length}</strong><span>profils certifiés</span></div></header>
+                    <div class="certified-directory-search"><i class="fas fa-search" aria-hidden="true"></i><input id="certified-directory-search" type="search" value="${this.escapeHtml(initialQuery)}" placeholder="Rechercher un nom, un rôle ou une compétence..." aria-label="Rechercher dans les profils certifiés"></div>
+                    <div class="certified-directory-results-head"><h2>Annuaire de l'équipe</h2><span id="certified-directory-count"></span></div>
+                    <div id="certified-directory-results" class="certified-directory-grid"></div>
+                </section>
+            `;
+
+            container
+                .querySelector(".certified-directory-back")
+                ?.addEventListener("click", () =>
+                    this.closeCertifiedTeamDirectory(slug),
+                );
+            const searchInput = document.getElementById(
+                "certified-directory-search",
+            );
+            searchInput?.addEventListener("input", (event) =>
+                renderResults(event.target.value),
+            );
+            renderResults(initialQuery);
+        } catch (error) {
+            console.error("Erreur chargement de l'annuaire certifié:", error);
+            container.innerHTML = `<div class="certified-directory-empty"><strong>Impossible de charger l'équipe certifiée.</strong><button type="button" class="btn btn-secondary" onclick="window.professionalManager.closeCertifiedTeamDirectory('${this.escapeHtml(slug)}')">Retour à la page</button></div>`;
         }
     }
 
@@ -2689,6 +3918,7 @@ class XERAProfessionalManager {
      * Ouvre l'explorateur de talents premium (Standalone Page)
      */
     async openTopTalentExplorer() {
+        this.syncUrl({ pro: null, explorer: "1" });
         await this.renderTalentExplorer();
     }
 
@@ -2755,7 +3985,7 @@ class XERAProfessionalManager {
 
                     <div style="position: relative; z-index: 1; display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 35px;">
                         <div>
-                            <h1 style="font-size: 2.8rem; margin: 0; font-family: var(--font-heading); color: var(--text-primary); letter-spacing: -1px;">XERA Talent Explorer</h1>
+                            <h1 style="font-size: 2.8rem; margin: 0; font-family: var(--font-heading); color: var(--text-primary); letter-spacing: -1px;">XERA1 Talent Explorer</h1>
                             <p style="color: var(--text-secondary); margin-top: 10px; font-size: 1.15rem; max-width: 600px;">Analysez le Momentum des élites et identifiez les meilleurs profils certifiés pour vos projets.</p>
                         </div>
                         <div style="text-align: right;">
@@ -2985,7 +4215,7 @@ class XERAProfessionalManager {
                     <div style="width: 100px; height: 100px; background: rgba(99, 102, 241, 0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 2.5rem; margin: 0 auto 30px; border: 1px solid rgba(99, 102, 241, 0.2); box-shadow: 0 10px 20px rgba(99,102,241,0.1);">🔒</div>
                     <h2 style="font-size: 2.5rem; margin-bottom: 20px; font-family: var(--font-heading); color: var(--text-primary);">Débloquez l'Explorateur de Talents Elite</h2>
                     <p style="max-width: 650px; color: var(--text-secondary); margin: 0 auto 45px; line-height: 1.7; font-size: 1.2rem;">
-                        Accédez à la base de données certifiée de XERA, filtrez les profils par Momentum, et visualisez les analytics exclusifs pour vos recrutements et partenariats stratégiques.
+                            Accédez à la base de données certifiée de XERA1, filtrez les profils par Momentum, et visualisez les analytics exclusifs pour vos recrutements et partenariats stratégiques.
                     </p>
 
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 25px; width: 100%; max-width: 800px; margin: 0 auto 50px;">
@@ -2998,7 +4228,7 @@ class XERAProfessionalManager {
                             <span style="position: absolute; top: -15px; right: 30px; background: #22c55e; color: #fff; padding: 6px 18px; border-radius: 99px; font-size: 0.75rem; font-weight: 900; box-shadow: 0 5px 15px rgba(34, 197, 94, 0.4);">OFFRE ANNUELLE -20%</span>
                             <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 15px; text-transform: uppercase; font-weight: 800; letter-spacing: 1px;">Abonnement Annuel</div>
                             <div style="font-size: 2.5rem; font-weight: 900; color: var(--primary-color);">384 USD<span style="font-size: 1rem; opacity: 0.5; font-weight: 400; color: var(--text-secondary);">/an</span></div>
-                            <p style="font-size: 0.9rem; color: var(--text-secondary); margin-top: 15px;">La puissance XERA au meilleur prix.</p>
+                            <p style="font-size: 0.9rem; color: var(--text-secondary); margin-top: 15px;">La puissance XERA1 au meilleur prix.</p>
                         </div>
                     </div>
 
@@ -3091,7 +4321,7 @@ class XERAProfessionalManager {
                         <h4 style="margin: 0 0 8px 0; font-size: 1.25rem; font-weight: 800; color: var(--text-primary);">${name}</h4>
                         <div style="font-size: 0.9rem; color: var(--primary-color); font-weight: 700; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 0.5px;">${title}</div>
                         <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.6; margin-bottom: 20px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; height: 3.8rem; font-style: italic;">
-                            "${user.bio || "Ce talent développe actuellement son Momentum sur XERA via des trajectoires certifiées."}"
+                            "${user.bio || "Ce talent développe actuellement son Momentum sur XERA1 via des trajectoires certifiées."}"
                         </p>
                         <div style="width: 100%; height: 1px; background: linear-gradient(to right, transparent, var(--border-color), transparent); margin-bottom: 20px;"></div>
                         <div style="display: flex; flex-direction: column; gap: 5px; width: 100%;">
@@ -3258,6 +4488,10 @@ class XERAProfessionalOnboarding {
             bannerUrl: "",
             hiringNeeds: [],
             websiteUrl: "",
+            professionalCta: {
+                label: "Nous contacter",
+                url: "",
+            },
         };
         this.overlay = null;
         this.tooltip = null;
@@ -3301,7 +4535,7 @@ class XERAProfessionalOnboarding {
         if (this.overlay) return;
 
         // Inject custom styles for the new premium design
-        const styleId = "xera-onboarding-custom-styles";
+        const styleId = "xera1-onboarding-custom-styles";
         if (!document.getElementById(styleId)) {
             const style = document.createElement("style");
             style.id = styleId;
@@ -3545,7 +4779,7 @@ class XERAProfessionalOnboarding {
                 title: "Nom de votre Page",
                 desc: "Choisissez un nom qui représente votre marque ou organisation officielle.",
                 icon: "fa-building",
-                content: `<input type="text" id="onboarding-name" class="form-input" placeholder="Ex: XERA Corp" value="${this.data.name}">`,
+                content: `<input type="text" id="onboarding-name" class="form-input" placeholder="Ex: MA PAGE corp" value="${this.data.name}">`,
             },
             {
                 title: "Secteurs d'activité",
@@ -3580,7 +4814,7 @@ class XERAProfessionalOnboarding {
             },
             {
                 title: "Logo Officiel",
-                desc: "L'identité visuelle qui s'affichera partout sur XERA.",
+                desc: "L'identité visuelle qui s'affichera partout sur XERA1.",
                 icon: "fa-image",
                 content: `
                     <label for="onboarding-avatar-file" class="custom-file-upload-premium">
@@ -3609,10 +4843,10 @@ class XERAProfessionalOnboarding {
                 content: `<input type="text" id="onboarding-interests" class="form-input" placeholder="Ex: React, AI, Design..." value="${this.data.hiringNeeds.join(", ")}">`,
             },
             {
-                title: "Lien Officiel",
-                desc: "Le point de contact principal pour votre audience.",
+                title: "Action principale",
+                desc: "Personnalisez un bouton qui ouvre un lien ou appelle un numéro.",
                 icon: "fa-link",
-                content: `<input type="url" id="onboarding-website" class="form-input" placeholder="https://votreorganisation.com" value="${this.data.websiteUrl || ""}">`,
+                content: `<input type="text" id="onboarding-cta-label" class="form-input" maxlength="40" placeholder="Ex: Nous contacter, Réserver" value="${this.data.professionalCta.label || ""}"><input type="text" id="onboarding-website" class="form-input" placeholder="https://... ou +243 800 000 000" value="${this.data.professionalCta.url || this.data.websiteUrl || ""}">`,
             },
         ];
 
@@ -3625,7 +4859,7 @@ class XERAProfessionalOnboarding {
                     <img src="icons/logo.png" style="width: 24px; height: 24px; filter: brightness(0) invert(1);">
                 </div>
                 <div class="onboarding-visual-text">
-                    <h2 style="font-family: 'Outfit', sans-serif !important;">XERA Pro Page</h2>
+                    <h2 style="font-family: 'Outfit', sans-serif !important;">XERA1 Pro Page</h2>
                     <p>Déployez votre entité professionnelle et commencez à recruter ou à collaborer.</p>
                 </div>
                 <div class="onboarding-step-counter-clean">
@@ -3840,7 +5074,16 @@ class XERAProfessionalOnboarding {
                 if (
                     !document.getElementById("onboarding-website").value.trim()
                 ) {
-                    alert("Lien officiel requis.");
+                    alert("Un lien ou un numéro est requis.");
+                    return false;
+                }
+                const ctaLabel = document
+                    .getElementById("onboarding-cta-label")
+                    .value.trim();
+                if (!ctaLabel || ctaLabel.length > 25) {
+                    alert(
+                        "Choisissez un intitulé valide (25 caractères maximum).",
+                    );
                     return false;
                 }
                 return true;
@@ -3884,8 +5127,15 @@ class XERAProfessionalOnboarding {
                     .filter(Boolean);
                 break;
             case 6:
-                this.data.websiteUrl =
-                    document.getElementById("onboarding-website").value;
+                this.data.websiteUrl = document
+                    .getElementById("onboarding-website")
+                    .value.trim();
+                this.data.professionalCta = {
+                    label: document
+                        .getElementById("onboarding-cta-label")
+                        .value.trim(),
+                    url: this.data.websiteUrl,
+                };
                 break;
         }
     }
@@ -3922,6 +5172,110 @@ class XERAProfessionalOnboarding {
     }
 }
 
+window.openProfessionalCtaModal = async function (pageId) {
+    const { data: page, error } = await window.supabase
+        .from("professional_pages")
+        .select("name, metadata")
+        .eq("id", pageId)
+        .single();
+    if (error || !page) return;
+
+    const cta = getProfessionalCta(page);
+    const overlay = document.createElement("div");
+    overlay.className = "modal-overlay";
+    overlay.innerHTML = `<div class="modal-content" style="max-width:460px;"><button type="button" class="modal-close" aria-label="Fermer">&times;</button><h3>${cta.label}</h3><p>Recevez une réponse de ${page.name}.</p><form id="professional-cta-lead-form"><input name="name" required placeholder="Nom complet" class="form-input"><input name="company" required placeholder="Entreprise / Fonds" class="form-input"><input name="email" type="email" required placeholder="Email professionnel" class="form-input"><button type="submit" class="btn-pro-primary">Envoyer ma demande</button></form></div>`;
+    document.body.appendChild(overlay);
+    overlay.querySelector(".modal-close").onclick = () => overlay.remove();
+    overlay.onclick = (event) => {
+        if (event.target === overlay) overlay.remove();
+    };
+    overlay.querySelector("form").onsubmit = async (event) => {
+        event.preventDefault();
+        const form = event.currentTarget;
+        const submit = form.querySelector("button[type=submit]");
+        submit.disabled = true;
+        const values = Object.fromEntries(new FormData(form));
+        const { error: insertError } = await window.supabase
+            .from("professional_cta_leads")
+            .insert({
+                page_id: pageId,
+                objective: cta.objective,
+                name: values.name,
+                company: values.company,
+                email: values.email,
+            });
+        if (insertError) {
+            submit.disabled = false;
+            window.showToast?.("Impossible d'envoyer la demande.", "error");
+            return;
+        }
+        window.showToast?.("Votre demande a bien été envoyée !");
+        overlay.remove();
+    };
+};
+
+window.resolvePageProMessageTarget = function resolvePageProMessageTarget(
+    page = {},
+) {
+    const ownerId =
+        page.owner_id || page.ownerId || page.user_id || page.userId || null;
+    const companySlug = page.slug || page.pageSlug || page.companySlug || null;
+
+    return {
+        userId: ownerId,
+        companySlug,
+        kind: "company",
+    };
+};
+
+window.startCompanyMessageFromPage = async function startCompanyMessageFromPage(
+    pageId,
+    pageSlug,
+    pageName,
+) {
+    try {
+        if (!window.supabase) {
+            window.showToast?.("Connexion Supabase indisponible.", "error");
+            return;
+        }
+
+        const targetPage = await window.supabase
+            .from("professional_pages")
+            .select("id, owner_id, slug, name")
+            .or(pageId ? `id.eq.${pageId}` : `slug.eq.${pageSlug}`)
+            .maybeSingle();
+
+        const page = targetPage?.data || null;
+        const resolved = window.resolvePageProMessageTarget(
+            page || { id: pageId, slug: pageSlug, name: pageName },
+        );
+
+        if (!resolved.userId) {
+            window.showToast?.(
+                "Impossible d’ouvrir cette discussion.",
+                "error",
+            );
+            return;
+        }
+
+        if (typeof window.openMessagesWithUser === "function") {
+            window.openMessagesWithUser(resolved.userId);
+            return;
+        }
+
+        const url = new URL("index.html", window.location.href);
+        url.searchParams.set("messages", "1");
+        url.searchParams.set("dm", resolved.userId);
+        window.location.href = url.toString();
+    } catch (error) {
+        console.error("Start company message failed:", error);
+        window.showToast?.(
+            "Conversation indisponible pour cette Page Pro.",
+            "error",
+        );
+    }
+};
+
 // Export pour usage global avec initialisation automatique
 if (typeof window !== "undefined") {
     // 1. Définition immédiate des utilitaires de navigation pour éviter le "?.()" qui ne fait rien
@@ -3931,6 +5285,27 @@ if (typeof window !== "undefined") {
             await new Promise((resolve) => setTimeout(resolve, 100));
         }
         return window.professionalManager;
+    };
+
+    // Les publications d'une Page Pro ouvrent toujours la Page Pro elle-même,
+    // indépendamment du compte qui en assure la gestion.
+    window.openProfessionalPageById = async function (pageId) {
+        if (!pageId) return;
+        const proId = String(pageId);
+        const currentProId = new URLSearchParams(
+            window.location.search,
+        ).get("pro");
+        if (currentProId === proId) return;
+
+        if (window.XeraRouter?.navigate) {
+            window.XeraRouter.navigate("pagepro", {
+                query: { pro: proId },
+            });
+        } else {
+            window.location.assign(
+                `profile.html?pro=${encodeURIComponent(proId)}`,
+            );
+        }
     };
 
     window.navigateToProfessionalPage = async function (event) {
@@ -3985,27 +5360,7 @@ if (typeof window !== "undefined") {
             console.log("[Pro] Supabase client found, initializing manager...");
             window.professionalManager = new XERAProfessionalManager(client);
             window.professionalManager.initNavigation().catch(console.warn);
-            console.log("XERA Professional Manager initialized.");
-
-            // Delegated click handler so the nav button works even if re-rendered
-            if (!window._proNavDelegationHooked) {
-                document.addEventListener(
-                    "click",
-                    (ev) => {
-                        const btn = ev.target.closest
-                            ? ev.target.closest("#nav-pro-page")
-                            : null;
-                        if (btn) {
-                            console.log(
-                                "[Pro] Global click intercepted on #nav-pro-page",
-                            );
-                            window.navigateToProfessionalPage(ev);
-                        }
-                    },
-                    true,
-                );
-                window._proNavDelegationHooked = true;
-            }
+            console.log("XERA1 Professional Manager initialized.");
         } else {
             // Si pas encore de client, on réessaie (peut arriver si le CDN est lent)
             setTimeout(initManager, 200);

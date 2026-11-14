@@ -1,4 +1,4 @@
-// Lightweight analytics bootstrapper for XERA
+// Lightweight analytics bootstrapper for XERA1
 // - Defaults to Google Analytics 4 if a measurement ID is provided (meta[name="ga-measurement-id"] or window.GA_MEASUREMENT_ID)
 // - Falls back silently when no ID is configured to avoid runtime errors
 
@@ -37,7 +37,7 @@
     if (provider === "ga") {
         if (!measurementId) {
             console.info(
-                "[XERA] Google Analytics non configuré (measurementId manquant).",
+                "[XERA1] Google Analytics non configuré (measurementId manquant).",
             );
             return;
         }

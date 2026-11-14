@@ -1,5 +1,5 @@
 /* ========================================
-   MONÉTISATION XERA - Gestion des abonnements, paiements et revenus
+   MONÉTISATION XERA1 - Gestion des abonnements, paiements et revenus
    ======================================== */
 
 // Configuration des plans
@@ -17,7 +17,6 @@ const PLANS = {
             "Notifications automatiques aux followers",
         ],
         canReceiveTips: false,
-        canMonetizeVideos: false,
     },
     MEDIUM: {
         id: "PLAN_MEDIUM",
@@ -37,7 +36,6 @@ const PLANS = {
             "Priorité dans les recommandations",
         ],
         canReceiveTips: true,
-        canMonetizeVideos: false,
         minFollowers: 1000,
         exclusiveFeatures: {
             detailedAnalytics: true,
@@ -57,7 +55,6 @@ const PLANS = {
             "Analytics avancés",
             "Lives en HD",
             "Lives privés réservés aux followers",
-            "Monétisation vidéo ($0.40 par 1000 vues)",
             "Outils de collaboration avancés",
             "Accès anticipé aux nouvelles fonctionnalités",
             "Personnalisation complète de la page profil",
@@ -66,11 +63,8 @@ const PLANS = {
             "Visibilité maximale dans Discover",
         ],
         canReceiveTips: true,
-        canMonetizeVideos: true,
         minFollowers: 1000,
-        rpmRate: 0.4,
         exclusiveFeatures: {
-            videoMonetization: true,
             advancedCollaborationTools: true,
             earlyAccessFeatures: true,
             fullProfileCustomization: true,
@@ -95,12 +89,10 @@ const PLANS = {
             "Accès complet au Talent Explorer",
         ],
         canReceiveTips: true,
-        canMonetizeVideos: true,
         minFollowers: 0,
         exclusiveFeatures: {
             talentExplorer: true,
             monthlyAnalytics: true,
-            videoMonetization: true,
             advancedCollaborationTools: true,
             fullProfileCustomization: true,
             realtimeAnalytics: true,
@@ -112,12 +104,21 @@ const PLANS = {
 
 // Règles de paiement (Mobile Money)
 const PAYMENT_RULES = {
-    commissionRate: 0.2,
+    commissionRate: 0.25,
     minTipAmount: 1.0,
     maxTipAmount: 1000.0,
 };
 
-const VIDEO_MONETIZATION_MIN_DURATION_SECONDS = 60;
+const INDEFINITE_GIFT_SUPPORT_STATUSES = new Set([
+    "",
+    "active",
+    "gifted",
+    "offered",
+    "granted",
+    "admin_granted",
+    "complimentary",
+]);
+
 const MONETIZATION_TRANSIENT_NETWORK_PATTERNS = [
     "failed to fetch",
     "networkerror",
@@ -165,26 +166,15 @@ function normalizeMonetizationQueryError(error) {
     };
 }
 
-function normalizeVideoDurationSeconds(value) {
-    const duration = Number.parseFloat(value);
-    if (!Number.isFinite(duration) || duration <= 0) return 0;
-    return duration;
-}
-
-function isEligibleVideoDuration(value) {
-    return (
-        normalizeVideoDurationSeconds(value) >
-        VIDEO_MONETIZATION_MIN_DURATION_SECONDS
-    );
-}
-
 /* ========================================
    FONCTIONS UTILITAIRES
    ======================================== */
 
 function isPlanActiveForUser(user) {
     if (!user) return false;
-    const status = String(user.plan_status || "").toLowerCase();
+    const status = String(user.plan_status || user.planStatus || "")
+        .trim()
+        .toLowerCase();
     if (status !== "active") return false;
     const planEnd = user.plan_ends_at || user.planEndsAt || null;
     if (!planEnd) return true;
@@ -194,7 +184,7 @@ function isPlanActiveForUser(user) {
 }
 
 function getNormalizedUserPlan(user) {
-    return String(user?.plan || "").toLowerCase();
+    return String(user?.plan || "").trim().toLowerCase();
 }
 
 function getFollowerCountFromUser(user) {
@@ -204,12 +194,19 @@ function getFollowerCountFromUser(user) {
 }
 
 function hasMonetizationFlag(user) {
-    return user?.is_monetized === true || user?.isMonetized === true;
+    return (
+        user?.is_monetized === true ||
+        user?.isMonetized === true ||
+        String(user?.is_monetized || user?.isMonetized || "").toLowerCase() ===
+            "true"
+    );
 }
 
 function hasActiveMonetizationPlan(user) {
     const plan = getNormalizedUserPlan(user);
-    return ["medium", "pro", "elite"].includes(plan) && isPlanActiveForUser(user);
+    return (
+        ["medium", "pro", "elite"].includes(plan) && isPlanActiveForUser(user)
+    );
 }
 
 // Vérifier si l'utilisateur peut utiliser la personnalisation avancée du profil (Medium+)
@@ -217,7 +214,9 @@ function hasAdvancedProfileCustomization(user) {
     if (!user) return false;
     const plan = getNormalizedUserPlan(user);
     // Medium, Pro et Elite ont accès à la personnalisation avancée
-    return ["medium", "pro", "elite"].includes(plan) && isPlanActiveForUser(user);
+    return (
+        ["medium", "pro", "elite"].includes(plan) && isPlanActiveForUser(user)
+    );
 }
 
 // Vérifier si l'utilisateur peut utiliser la personnalisation complète du profil (Pro+)
@@ -571,11 +570,29 @@ function getMonetizationFollowerGap(user) {
     return Math.max(0, 1000 - getFollowerCountFromUser(user));
 }
 
+function hasIndefiniteGiftedSupportPlan(user) {
+    if (!user) return false;
+    const plan = getNormalizedUserPlan(user).trim();
+    if (!["medium", "pro"].includes(plan)) return false;
+    if (user.plan_ends_at || user.planEndsAt) return false;
+
+    const status = String(user.plan_status || user.planStatus || "")
+        .trim()
+        .toLowerCase();
+    return INDEFINITE_GIFT_SUPPORT_STATUSES.has(status);
+}
+
 // Vérifier si un créateur peut recevoir des soutiens
 function canReceiveSupport(user) {
     if (!user) return false;
-    if (!hasActiveMonetizationPlan(user)) return false;
+    if (
+        !hasActiveMonetizationPlan(user) &&
+        !hasIndefiniteGiftedSupportPlan(user)
+    ) {
+        return false;
+    }
     if (isGiftedPro(user)) return true;
+    if (["medium", "pro"].includes(getNormalizedUserPlan(user))) return true;
     return hasMonetizationFlag(user) || getFollowerCountFromUser(user) >= 1000;
 }
 
@@ -586,15 +603,6 @@ function isGiftedPro(user) {
     const status = String(user.plan_status || "").toLowerCase();
     const planEnd = user.plan_ends_at || user.planEndsAt || null;
     return plan === "pro" && status === "active" && !planEnd;
-}
-
-// Vérifier si un créateur peut monétiser ses vidéos
-function canMonetizeVideos(user) {
-    if (!user) return false;
-    if (getNormalizedUserPlan(user) !== "pro") return false;
-    if (!isPlanActiveForUser(user)) return false;
-    if (isGiftedPro(user)) return true;
-    return hasMonetizationFlag(user) || getFollowerCountFromUser(user) >= 1000;
 }
 
 // Obtenir le plan actuel de l'utilisateur
@@ -871,7 +879,6 @@ async function calculateCreatorRevenue(creatorId) {
         const summary = {
             totalRevenue: 0,
             supportRevenue: 0,
-            videoRevenue: 0,
             transactionCount: data ? data.length : 0,
         };
 
@@ -880,10 +887,6 @@ async function calculateCreatorRevenue(creatorId) {
                 summary.totalRevenue += parseFloat(tx.amount_net_creator || 0);
                 if (tx.type === "support") {
                     summary.supportRevenue += parseFloat(
-                        tx.amount_net_creator || 0,
-                    );
-                } else if (tx.type === "video_rpm") {
-                    summary.videoRevenue += parseFloat(
                         tx.amount_net_creator || 0,
                     );
                 }
@@ -896,7 +899,6 @@ async function calculateCreatorRevenue(creatorId) {
         return { success: false, error: error.message };
     }
 }
-
 /* ========================================
    FONCTIONS SUPABASE - VIDÉOS ET VUES
    ======================================== */
@@ -1238,21 +1240,36 @@ function buildSupportReturnPath(sourceElement = null) {
 
 let supportCheckoutInProgress = false;
 
+function isCanonicalUuid(value) {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        String(value ?? "").trim(),
+    );
+}
+
 async function redirectToSupportCheckout({
     creatorId,
     creatorName = "",
     amount,
     description = "",
+    message = "",
     returnPath = "",
     sourceElement = null,
+    paymentMethod = "card",
+    walletId = null,
+    provider = null,
 }) {
     if (supportCheckoutInProgress) {
-        return { success: false, error: "Le paiement est déjà en cours d'initialisation." };
+        return {
+            success: false,
+            error: "Le paiement est déjà en cours d'initialisation.",
+        };
     }
     const normalizedAmount = Number.parseFloat(amount);
+    const safeCreatorId = String(creatorId || "").trim();
 
-    if (!creatorId) {
-        return { success: false, error: "Créateur introuvable." };
+    if (!safeCreatorId || !isCanonicalUuid(safeCreatorId)) {
+        supportCheckoutInProgress = false;
+        return { success: false, error: "Identifiant du créateur invalide." };
     }
     if (!Number.isFinite(normalizedAmount)) {
         return { success: false, error: "Montant invalide." };
@@ -1283,13 +1300,22 @@ async function redirectToSupportCheckout({
         const user = session?.user;
         const accessToken = session?.access_token;
 
-        if (!user || !accessToken) {
-            window.location.href = "login.html?redirect=" + encodeURIComponent(window.location.href);
-            return { success: false, error: "Non connecté" };
+        if (!user || !accessToken || !isCanonicalUuid(user.id)) {
+            supportCheckoutInProgress = false;
+            window.location.href =
+                "login.html?redirect=" +
+                encodeURIComponent(window.location.href);
+            return {
+                success: false,
+                error: "Session invalide. Veuillez vous reconnecter.",
+            };
         }
 
         if (typeof window.showToast === "function") {
-            window.showToast("Initialisation du soutien sécurisé...", "info");
+            window.showToast(
+                "Initialisation du soutien sécurisé...",
+                "info",
+            );
         }
 
         if (!window.XeraMobileMoney?.openCheckout) {
@@ -1302,6 +1328,11 @@ async function redirectToSupportCheckout({
             });
         }
 
+        const normalizedMessage = String(message || "")
+            .replace(/\s+/g, " ")
+            .trim()
+            .slice(0, 200);
+
         if (window.XeraMobileMoney?.openCheckout) {
             window.XeraMobileMoney.openCheckout({
                 type: "support",
@@ -1312,6 +1343,7 @@ async function redirectToSupportCheckout({
                     amount_usd: normalizedAmount,
                     description: description || `Soutien pour ${creatorName || "ce créateur"}`,
                     sender_name: user.user_metadata?.name || user.email || "Utilisateur",
+                    message: normalizedMessage || undefined,
                 },
                 accessToken,
                 onSuccess: () => {
@@ -1331,10 +1363,14 @@ async function redirectToSupportCheckout({
         console.error("[Monetization] Direct support checkout error:", error);
 
         // Final fallback: show error
+        const errorMsg =
+            error.message || "Erreur lors de l'initialisation du paiement.";
         if (typeof window.showToast === "function") {
-            window.showToast("Erreur lors de l'initialisation du paiement.", "error");
+            window.showToast(errorMsg, "error");
+        } else if (typeof showGlobalNotification === "function") {
+            showGlobalNotification(errorMsg, "error");
         }
-        return { success: false, error: error.message };
+        return { success: false, error: errorMsg };
     }
 }
 
@@ -1415,6 +1451,8 @@ function renderSupportAmounts() {
 
 // Expose functions to global scope for UI usage
 if (typeof window !== "undefined") {
+    window.canReceiveSupport = canReceiveSupport;
+    window.isGiftedPro = isGiftedPro;
     window.hasAdvancedProfileCustomization = hasAdvancedProfileCustomization;
     window.hasFullProfileCustomization = hasFullProfileCustomization;
     window.hasHDStreaming = hasHDStreaming;
@@ -1436,12 +1474,8 @@ if (typeof module !== "undefined" && module.exports) {
     module.exports = {
         PLANS,
         PAYMENT_RULES,
-        VIDEO_MONETIZATION_MIN_DURATION_SECONDS,
-        normalizeVideoDurationSeconds,
-        isEligibleVideoDuration,
         canReceiveSupport,
         isGiftedPro,
-        canMonetizeVideos,
         getUserPlan,
         formatCurrency,
         getUserActiveSubscription,
@@ -1452,12 +1486,8 @@ if (typeof module !== "undefined" && module.exports) {
         getCreatorTransactions,
         getSentTransactions,
         calculateCreatorRevenue,
-        recordVideoView,
-        getCreatorVideoStats,
-        getCreatorVideoPayouts,
         createSupportPaymentSession,
         buildSupportReturnPath,
-        buildSupportPaymentPageUrl,
         redirectToSupportCheckout,
         renderPlanBadge,
         renderSupportButton,

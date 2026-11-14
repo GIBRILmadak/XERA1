@@ -3,25 +3,31 @@
     "version": "1.0.0",
     "description": "## Avant (Monolithique)",
     "main": "index.js",
+    "engines": {
+        "node": "22.x"
+    },
     "scripts": {
-        "test": "echo \"Error: no test specified\" && exit 1",
+        "test": "node tests/c2pa-utils.test.js && node tests/subscription-benefits.test.js && node tests/profile-workspace.test.js && node tests/profile-immersive.test.js && node tests/fata-integration.test.js && node tests/fata-api-routing.test.js && node --test tests/fata*.test.js",
         "api": "node server/monetization-server.js",
         "start": "node server/optimized-server.js",
         "dev:server": "node server/optimized-server.js",
         "dev:client": "cd client && npm run dev",
         "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
-        "build": "cd client && npm install && npm run build"
+        "build": "cd client && npm install && npm run build",
+        "build:css": "npx --yes tailwindcss@3.4.17 -c tailwind.config.js -i css/tailwind.input.css -o css/tailwind.css --minify"
     },
     "keywords": [],
     "author": "",
     "license": "ISC",
     "dependencies": {
+        "@contentauth/toolkit": "^0.13.14",
         "@supabase/ssr": "^0.12.0",
         "@supabase/supabase-js": "^2.110.0",
         "cors": "^2.8.5",
         "dotenv": "^16.4.7",
         "express": "^4.19.2",
         "firebase-admin": "^14.1.0",
+        "openid-client": "6.8.8",
         "web-push": "^3.6.7"
     },
     "devDependencies": {

@@ -15,7 +15,7 @@
 ### Architecture du système de followers
 
 ```
-L'app XERA utilise une architecture à deux niveaux:
+L'app XERA1 utilise une architecture à deux niveaux:
 
 1. TABLE: followers
    ├─ Rows: les relations "User A suit User B"
@@ -77,7 +77,7 @@ Ce script SQL fait:
 ```
 1. Allez à https://app.supabase.com
 2. Connectez-vous avec vos identifiants
-3. Cliquez sur le projet "XERA"
+3. Cliquez sur le projet "XERA1"
 4. Sur la gauche, cherchez l'icône "{}" (SQL Editor)
 5. Cliquez dessus
 ```
@@ -93,7 +93,7 @@ Ce script SQL fait:
 ### Étape 3: Copie du script
 
 ```
-1. Retournez au projet XERA dans VS Code
+1. Retournez au projet XERA1 dans VS Code
 2. Ouvrez le fichier: sql/FOLLOWERS-COMPLETE-FIX.sql
 3. Sélectionnez TOUT (Cmd/Ctrl + A)
 4. Copiez (Cmd/Ctrl + C)
@@ -112,7 +112,7 @@ Ce script SQL fait:
 ### Étape 5: Test
 
 ```
-1. Retournez à votre app XERA
+1. Retournez à votre app XERA1
 2. Appuyez Cmd/Ctrl + F5 (forcer la rafraîchissement)
 3. Allez sur un profil d'un autre utilisateur
 4. Cliquez le bouton "S'abonner"
@@ -190,7 +190,7 @@ Le problème pourrait être:
 1. Attendez 5 minutes puis réessayez (cache)
 2. Essayez dans un **navigateur différent** (pas de cache client)
 3. Videz le cache du navigateur (Cmd/Ctrl + Shift + Delete)
-4. Redémarrez l'app XERA complètement
+4. Redémarrez l'app XERA1 complètement
 
 ---
 

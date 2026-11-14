@@ -1,0 +1,19 @@
+{
+  "name": "fata-partner-demo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Reference partner application for Fata: OIDC account linking + durable, idempotent delivery of action completions",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.0",
+    "express": "^5.1.0",
+    "openid-client": "^6.8.0"
+  }
+}

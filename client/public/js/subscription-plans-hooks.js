@@ -178,7 +178,10 @@
 
             if (!user || !accessToken) {
                 const loginUrl = new URL("login.html", window.location.origin);
-                loginUrl.searchParams.set("redirect", "subscription-plans.html");
+                loginUrl.searchParams.set(
+                    "redirect",
+                    "subscription-plans.html",
+                );
                 window.location.href = loginUrl.toString();
                 return;
             }
@@ -193,6 +196,10 @@
                 });
             }
 
+            const discountCode = document
+                .getElementById("subscription-discount-code")
+                ?.value?.trim();
+
             if (window.XeraMobileMoney?.openCheckout) {
                 const planName = typeof Data.getPlanDisplayName === "function"
                     ? Data.getPlanDisplayName(normalizedPlanId)
@@ -205,6 +212,7 @@
                         plan: normalizedPlanId,
                         billing_cycle: normalizedBillingCycle,
                         user_id: user.id,
+                        discount_code: discountCode || undefined,
                     },
                     accessToken,
                     onSuccess: () => {
@@ -226,7 +234,10 @@
             }
 
             if (typeof window.showToast === "function") {
-                window.showToast("Erreur lors de l'initialisation du paiement sécurisé.", "error");
+                window.showToast(
+                    "Erreur lors de l'initialisation du paiement sécurisé.",
+                    "error",
+                );
             }
         } catch (error) {
             console.error("[Subscription] Direct checkout error:", error);
@@ -491,11 +502,10 @@
                 type: ACTIONS.SET_SELECTED_PLAN,
                 payload: normalizedPlanId,
             });
-
-            await navigateToSubscriptionPayment(
-                normalizedPlanId,
-                state.billingCycle,
-            );
+            dispatch({
+                type: ACTIONS.SET_CONFIRM_MODAL_OPEN,
+                payload: true,
+            });
             return true;
         }
 

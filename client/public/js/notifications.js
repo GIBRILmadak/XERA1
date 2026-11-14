@@ -4,12 +4,21 @@
 
 let notificationChannel = null;
 let notifications = [];
-const NOTIF_PERMISSION_KEY = "xera-notif-permission-requested";
-const PUSH_SUBSCRIBE_URL = "/api/push/subscribe";
+const NOTIF_PERMISSION_KEY = "xera1-notif-permission-requested";
+function getPushSubscribeUrl() {
+    if (typeof window === "undefined") return "/api/push/subscribe";
+
+    const isLocalHost = ["localhost", "127.0.0.1"].includes(
+        window.location.hostname,
+    );
+    return isLocalHost
+        ? `${window.location.protocol}//${window.location.hostname}:5050/api/push/subscribe`
+        : "/api/push/subscribe";
+}
 const VAPID_PUBLIC_KEY =
     (typeof window !== "undefined" && window.VAPID_PUBLIC_KEY) ||
     "BKWmLmM6lYCuTb/YPmxIdeWJvMNjI1QDi0Kc36PiTKmEfybk4wky7VxsM6H/lK3dUXl1WQNXAB1zCbiTNGckdhM=";
-const RETURN_REMINDER_SLOTS_KEY = "xera-return-reminder-slots";
+const RETURN_REMINDER_SLOTS_KEY = "xera1-return-reminder-slots";
 const RETURN_REMINDER_HOURS = [10, 18];
 const RETURN_REMINDER_WINDOW_MINUTES = 15;
 const notifUserCache = new Map();
@@ -21,6 +30,26 @@ let pushMessageListenerBound = false;
 let notificationsPollingTimer = null;
 let notificationsRealtimeWarned = false;
 let notificationOutsideClickBound = false;
+
+function setNotificationNavBadgeCount(count) {
+    const unreadCount = Math.max(0, Number(count) || 0);
+    const badge = document.getElementById("notification-badge");
+    const button = document.getElementById("notification-btn");
+    const label = unreadCount > 0
+        ? `${unreadCount} notification${unreadCount > 1 ? "s" : ""} non lue${unreadCount > 1 ? "s" : ""}`
+        : "Notifications";
+
+    if (badge) {
+        badge.textContent = unreadCount > 99 ? "99+" : String(unreadCount || "");
+        badge.style.display = unreadCount > 0 ? "flex" : "none";
+        badge.setAttribute("aria-hidden", "true");
+    }
+    if (button) {
+        button.classList.toggle("has-unread", unreadCount > 0);
+        button.setAttribute("aria-label", label);
+        button.title = label;
+    }
+}
 
 // Initialiser les notifications
 async function initializeNotifications() {
@@ -147,20 +176,8 @@ async function setupPushNotifications() {
                                     }
                                 }
 
-                                // Update DOM badge as fallback
-                                const badgeEl =
-                                    document.getElementById(
-                                        "notification-badge",
-                                    );
-                                if (badgeEl) {
-                                    if (Number.isFinite(n) && n > 0) {
-                                        badgeEl.textContent =
-                                            n > 99 ? "99+" : String(n);
-                                        badgeEl.style.display = "flex";
-                                    } else {
-                                        badgeEl.style.display = "none";
-                                    }
-                                }
+                                // Update the navigation indicator as a fallback.
+                                setNotificationNavBadgeCount(n);
                             } catch (e) {
                                 // ignore
                             }
@@ -241,20 +258,17 @@ function handleNewNotification(notification) {
         normalized.read = true;
     }
     notifications.unshift(normalized);
-    hydrateNotificationMetadata([normalized]).catch(() => {});
-
-    if (!shouldQuietLiveChat) {
-        // Afficher une notification toast
-        showNotificationToast(normalized);
-
-        // Afficher une notification navigateur si permis
-        showBrowserNotification(normalized);
-
-        // Jouer un son (optionnel)
-        playNotificationSound(normalized.type);
-    } else {
-        void markNotificationAsReadSilently(normalized.id);
-    }
+    hydrateNotificationMetadata([normalized])
+        .catch(() => {})
+        .finally(() => {
+            if (!shouldQuietLiveChat) {
+                showNotificationToast(normalized);
+                showBrowserNotification(normalized);
+                playNotificationSound(normalized.type);
+            } else {
+                void markNotificationAsReadSilently(normalized.id);
+            }
+        });
 
     // Mettre à jour le badge
     updateNotificationBadge();
@@ -266,6 +280,7 @@ function showNotificationToast(notification) {
 
     const title = getNotificationTitle(notification);
     const message = notification.message || "";
+    const actor = notification.actor;
     const type = [
         "encouragement",
         "peer_validation",
@@ -285,7 +300,7 @@ function showNotificationToast(notification) {
     const toast = document.createElement("div");
     toast.className = "toast show";
     toast.innerHTML = `
-        <div class="toast-icon">${getNotificationIcon(notification.type)}</div>
+        ${renderNotificationAvatar(actor, title, "toast")}
         <div class="toast-content">
             <div class="toast-title">${title}</div>
             <div class="toast-message">${message}</div>
@@ -305,6 +320,44 @@ function showNotificationToast(notification) {
         toast.classList.remove("show");
         setTimeout(() => toast.remove(), 300);
     });
+}
+
+function escapeNotificationHtml(value) {
+    return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+function getNotificationInitials(actor, fallback = "X") {
+    const name = String(actor?.name || actor?.username || fallback).trim();
+    return (
+        name
+            .split(/\s+/)
+            .filter(Boolean)
+            .slice(0, 2)
+            .map((part) => part[0])
+            .join("")
+            .toUpperCase() || "X"
+    );
+}
+
+function renderNotificationAvatar(actor, fallbackName, variant = "panel") {
+    const name =
+        actor?.name || actor?.username || fallbackName || "Membre XERA";
+    const avatar = String(actor?.avatar || actor?.avatar_url || "").trim();
+    const className =
+        variant === "toast"
+            ? "notification-toast-avatar"
+            : "notification-avatar";
+
+    if (avatar) {
+        return `<img class="${className}" src="${escapeNotificationHtml(avatar)}" alt="Avatar de ${escapeNotificationHtml(name)}" loading="lazy" />`;
+    }
+
+    return `<div class="${className} notification-avatar-fallback" aria-hidden="true">${escapeNotificationHtml(getNotificationInitials(actor, name))}</div>`;
 }
 
 // Obtenir l'icône selon le type de notification
@@ -334,25 +387,25 @@ function getNotificationIcon(type) {
 // Obtenir le titre de la notification (Optimisé Neuro-Psychologie: Identité & Statut)
 function getNotificationTitle(notification) {
     const titles = {
-        support: "Soutien reçu",
-        follow: "Nouvelle connexion",
-        arc_follow: "Projet suivi",
-        new_update: "Mise à jour d'ARC",
-        new_arc: "Nouveau chantier lancé",
-        stream: "Live en cours",
-        live_start: "Live en cours",
+        support: window.t ? window.t("notifications.newSupport", {}, "Soutien reçu") : "Soutien reçu",
+        follow: window.t ? window.t("notifications.newFollower", {}, "Nouvelle connexion") : "Nouvelle connexion",
+        arc_follow: window.t ? window.t("profile.activeArcs", {}, "Projet suivi") : "Projet suivi",
+        new_update: window.t ? window.t("discover.publishUpdate", {}, "Mise à jour d'ARC") : "Mise à jour d'ARC",
+        new_arc: window.t ? window.t("profile.createNewArc", {}, "Nouveau chantier lancé") : "Nouveau chantier lancé",
+        stream: window.t ? window.t("stream.liveActive", {}, "Live en cours") : "Live en cours",
+        live_start: window.t ? window.t("stream.liveActive", {}, "Live en cours") : "Live en cours",
         encouragement: "Boost d'énergie",
         peer_validation: "Validation par un pair",
         peer_validation_high: "⚡️ SIGNAL HAUT DÉTECTÉ",
         announcement_reply: "Réponse reçue",
         collaboration: "Opportunité de duo",
-        like: "Approbation",
-        comment: "Feedback reçu",
+        like: window.t ? window.t("notifications.newLike", {}, "Approbation") : "Approbation",
+        comment: window.t ? window.t("notifications.newComment", {}, "Feedback reçu") : "Feedback reçu",
         live_chat: "Message en direct",
         mention: "Tu as été cité",
         achievement: "Palier franchi",
     };
-    return titles[notification.type] || "XERA";
+    return titles[notification.type] || "XERA1";
 }
 
 function getCurrentPageStreamId() {
@@ -515,7 +568,7 @@ function showBrowserNotification(notification) {
 }
 
 async function showDeviceNotification({
-    title = "XERA",
+    title = "XERA1",
     body = "",
     icon = "icons/logo.png",
     tag = undefined,
@@ -621,7 +674,7 @@ function getNextReminderDate(fromDate = new Date()) {
     return candidates[0] || null;
 }
 
-// Rappel quotidien pour revenir sur XERA (Géré côté serveur via Push pour plus de fiabilité)
+// Rappel quotidien pour revenir sur XERA1 (Géré côté serveur via Push pour plus de fiabilité)
 function scheduleReturnReminder() {
     // Cette fonction locale est conservée uniquement pour les rappels immédiats si l'onglet est ouvert,
     // mais le vrai travail est maintenant fait par le serveur via Web Push (background).
@@ -633,7 +686,7 @@ async function showReturnReminderNotification(reminderDate = new Date()) {
     const isMorning = hour < 14;
 
     // Neuro-Psychologie : Framing d'identité et de momentum
-    const title = isMorning ? "XERA • L'Intention" : "XERA • La Trace";
+    const title = isMorning ? "XERA1 • L'Intention" : "XERA1 • La Trace";
 
     const body = isMorning
         ? "Quelle est ta micro-victoire d'aujourd'hui ? Fixe l'intention."
@@ -648,7 +701,7 @@ async function showReturnReminderNotification(reminderDate = new Date()) {
         title,
         body,
         icon: "icons/logo.png",
-        tag: `xera-return-reminder-${String(hour).padStart(2, "0")}`,
+        tag: `xera1-return-reminder-${String(hour).padStart(2, "0")}`,
         link,
         renotify: false,
         silent: false,
@@ -657,17 +710,8 @@ async function showReturnReminderNotification(reminderDate = new Date()) {
 
 // Mettre à jour le badge de notifications
 function updateNotificationBadge() {
-    const badge = document.getElementById("notification-badge");
-    if (!badge) return;
-
     const unreadCount = notifications.filter((n) => !n.read).length;
-
-    if (unreadCount > 0) {
-        badge.textContent = unreadCount > 99 ? "99+" : unreadCount;
-        badge.style.display = "flex";
-    } else {
-        badge.style.display = "none";
-    }
+    setNotificationNavBadgeCount(unreadCount);
 
     // Try to update the native app badge (Badging API) when supported
     try {
@@ -797,9 +841,10 @@ function renderNotifications() {
     if (!container) return;
 
     if (notifications.length === 0) {
+        const emptyText = window.t ? window.t("notifications.noNotifications", {}, "Aucune notification pour l'instant") : "Aucune notification pour l'instant";
         container.innerHTML = `
             <div class="notification-empty">
-                <p>Aucune notification</p>
+                <p>${emptyText}</p>
             </div>
         `;
         return;
@@ -807,25 +852,19 @@ function renderNotifications() {
 
     container.innerHTML = notifications
         .map((notif) => {
-            const avatar = notif.actor?.avatar;
-            const icon = getNotificationIcon(notif.type);
             const displayName =
                 notif.actor?.name || getNotificationTitle(notif);
             return `
-        <div class="notification-item ${notif.read ? "" : "unread"}" data-type="${notif.type}" onclick="handleNotificationClick('${notif.id}')" style="display:flex;gap:12px;align-items:flex-start;">
-            <div class="notification-leading" style="width:42px;flex-shrink:0;display:flex;align-items:center;justify-content:center;">
-                ${
-                    avatar
-                        ? `<img class="notification-avatar" src="${avatar}" alt="${displayName}" loading="lazy" style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:1px solid var(--border-color, rgba(255,255,255,0.12));" />`
-                        : `<div class="notification-icon" style="width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--surface-alt, #1f2937);font-size:18px;">${icon}</div>`
-                }
+        <div class="notification-item ${notif.read ? "" : "unread"}" data-type="${escapeNotificationHtml(notif.type)}" onclick="handleNotificationClick('${escapeNotificationHtml(notif.id)}')">
+            <div class="notification-leading">
+                ${renderNotificationAvatar(notif.actor, displayName)}
             </div>
-            <div class="notification-content" style="flex:1;min-width:0;">
-                <div class="notification-title" style="font-weight:700;">${getNotificationTitle(notif)}</div>
-                <div class="notification-message" style="color:var(--text-secondary,#b5b5c3);">${notif.message}</div>
-                <div class="notification-meta" style="display:flex;gap:8px;align-items:center;color:var(--text-muted,#9ca3af);font-size:0.85rem;margin-top:4px;">
+            <div class="notification-content">
+                <div class="notification-title">${escapeNotificationHtml(getNotificationTitle(notif))}</div>
+                <div class="notification-message">${escapeNotificationHtml(notif.message)}</div>
+                <div class="notification-meta">
                     <span class="notification-time">${formatNotificationTime(notif.created_at)}</span>
-                    ${displayName ? `<span class="notification-actor" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${displayName}</span>` : ""}
+                    ${displayName ? `<span class="notification-actor">${escapeNotificationHtml(displayName)}</span>` : ""}
                 </div>
             </div>
         </div>
@@ -1094,25 +1133,48 @@ function urlBase64ToUint8Array(base64String) {
 // Envoyer l'abonnement push au backend
 async function sendSubscriptionToServer(subscription) {
     if (!currentUser || !subscription) return;
+    if (!subscription.endpoint || typeof subscription.endpoint !== "string") {
+        console.warn("Abonnement push invalide, enregistrement ignoré.");
+        return;
+    }
+
+    const requestConfig = {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            userId: currentUser.id,
+            subscription,
+            timezone: (() => {
+                try {
+                    return (
+                        Intl.DateTimeFormat().resolvedOptions().timeZone ||
+                        "UTC"
+                    );
+                } catch (e) {
+                    return "UTC";
+                }
+            })(),
+            reminderEnabled: true,
+        }),
+        credentials: "include",
+    };
+
     try {
-        let timezone = "UTC";
-        try {
-            timezone =
-                Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-        } catch (e) {
-            timezone = "UTC";
+        if (
+            requestConfig.method &&
+            requestConfig.method.toUpperCase() !== "POST"
+        ) {
+            throw new Error("Méthode HTTP invalide pour l'abonnement push.");
         }
-        await fetch(PUSH_SUBSCRIBE_URL, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                userId: currentUser.id,
-                subscription,
-                timezone,
-                reminderEnabled: true,
-            }),
-            credentials: "include",
-        });
+
+        const response = await fetch(getPushSubscribeUrl(), requestConfig);
+        if (!response || !response.ok) {
+            const text = await response.text().catch(() => "");
+            throw new Error(
+                text ||
+                    `HTTP ${response?.status || "inconnu"} lors de l'inscription push`,
+            );
+        }
     } catch (error) {
         console.warn("Impossible d'enregistrer l'abonnement push", error);
     }
@@ -1124,13 +1186,14 @@ function startNotificationsPollingFallback() {
         notificationsPollingTimer = null;
     }
 
+    // MINIMIZED: Poll every 60 seconds as fallback
     notificationsPollingTimer = setInterval(() => {
         if (!currentUser) return;
         if (document.hidden) return;
         loadNotifications().catch((error) => {
             console.warn("Notifications fallback refresh failed:", error);
         });
-    }, 12000);
+    }, 60000);
 }
 
 // Demande d'envoi d'un push test depuis le serveur (pour debug/utilisateur)
@@ -1191,6 +1254,14 @@ function normalizeNotifications(list) {
 function normalizeNotification(notif) {
     const n = { ...notif };
     n.link = normalizeNotificationLink(n);
+    n.actorId =
+        n.actor_id ||
+        n.actorId ||
+        n.sender_id ||
+        n.senderId ||
+        n.from_user_id ||
+        n.fromUserId ||
+        null;
     return n;
 }
 
@@ -1198,7 +1269,7 @@ window.showDeviceNotification = showDeviceNotification;
 
 document.addEventListener("visibilitychange", () => {
     if (document.hidden) return;
-    if (!currentUser) return;
+    if (!window.currentUser) return;
     loadNotifications().catch((error) => {
         console.warn("Notifications visibility refresh failed:", error);
     });
@@ -1252,6 +1323,15 @@ function extractStreamId(link = "") {
 }
 
 function extractUserIdFromLink(link = "") {
+    try {
+        const parsed = new URL(link, window.location.href);
+        const queryUserId =
+            parsed.searchParams.get("user") || parsed.searchParams.get("u");
+        if (queryUserId) return queryUserId;
+    } catch (error) {
+        // Fall back to legacy link formats below.
+    }
+
     const m =
         link.match(/profile\.html\?[^#]*user=([a-f0-9-]{8,})/i) ||
         link.match(/profile\.html\?user=([a-f0-9-]{8,})/i) ||
@@ -1272,6 +1352,7 @@ async function hydrateNotificationMetadata(list) {
         const userId = extractUserIdFromLink(link);
         if (streamId) streamIds.add(streamId);
         if (userId) userIds.add(userId);
+        if (n.actorId) userIds.add(n.actorId);
     });
 
     let streamMap = {};
@@ -1314,7 +1395,7 @@ async function hydrateNotificationMetadata(list) {
         const streamId = extractStreamId(n.link);
         const userIdFromLink = extractUserIdFromLink(n.link);
         const stream = streamId ? streamMap[streamId] : null;
-        const actorId = userIdFromLink || stream?.user_id || null;
+        const actorId = n.actorId || userIdFromLink || stream?.user_id || null;
         if (actorId && userMap[actorId]) {
             n.actor = userMap[actorId];
         }

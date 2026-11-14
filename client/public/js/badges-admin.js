@@ -1,3 +1,103 @@
+const ToastManager = window.ToastManager || null;
+
+function setupProfessionalPageSearch({ supabase, inputId, suggestionsId }) {
+    const input = document.getElementById(inputId);
+    const suggestions = document.getElementById(suggestionsId);
+    if (!input || !suggestions || !supabase) return;
+
+    let debounceTimer = null;
+    let lastQuery = "";
+
+    const renderResults = (pages) => {
+        if (!pages.length) {
+            suggestions.innerHTML =
+                '<div class="verification-empty">Aucune Page Pro trouvée</div>';
+            return;
+        }
+
+        suggestions.innerHTML = pages
+            .map((page) => {
+                const name = escapeHtml(page.name || "Page Pro");
+                const slug = escapeHtml(page.slug || "");
+                const id = escapeHtml(page.id || "");
+                const avatar = escapeHtml(
+                    page.avatar_url || "icons/enterprise.svg",
+                );
+                return `<button type="button" class="admin-page-search-result" data-page-id="${id}">
+                    <img src="${avatar}" alt="" aria-hidden="true">
+                    <span><strong>${name}</strong><small>${slug || id}</small></span>
+                    <span class="admin-page-search-arrow">→</span>
+                </button>`;
+            })
+            .join("");
+
+        suggestions.querySelectorAll("[data-page-id]").forEach((button) => {
+            button.addEventListener("click", () => {
+                input.value = button.dataset.pageId || "";
+                suggestions.innerHTML = "";
+            });
+        });
+    };
+
+    const search = async () => {
+        const query = String(input.value || "").trim();
+        suggestions.innerHTML = "";
+        if (!query) return;
+        lastQuery = query;
+        suggestions.innerHTML =
+            '<div class="verification-empty">Recherche en cours...</div>';
+
+        try {
+            const pattern = `%${query}%`;
+            const isUuid =
+                /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+                    query,
+                );
+            const [nameResult, slugResult, idResult] = await Promise.all([
+                supabase
+                    .from("professional_pages")
+                    .select("id, name, slug, avatar_url")
+                    .ilike("name", pattern)
+                    .limit(8),
+                supabase
+                    .from("professional_pages")
+                    .select("id, name, slug, avatar_url")
+                    .ilike("slug", pattern)
+                    .limit(8),
+                isUuid
+                    ? supabase
+                          .from("professional_pages")
+                          .select("id, name, slug, avatar_url")
+                          .eq("id", query)
+                          .limit(1)
+                    : Promise.resolve({ data: [], error: null }),
+            ]);
+            if (lastQuery !== query) return;
+            const errors = [nameResult, slugResult, idResult].filter(
+                (result) => result.error,
+            );
+            if (errors.length) throw errors[0].error;
+
+            const uniquePages = new Map();
+            [
+                ...(idResult.data || []),
+                ...(nameResult.data || []),
+                ...(slugResult.data || []),
+            ].forEach((page) => uniquePages.set(page.id, page));
+            renderResults(Array.from(uniquePages.values()).slice(0, 8));
+        } catch (error) {
+            console.error("Erreur recherche Page Pro:", error);
+            suggestions.innerHTML =
+                '<div class="verification-empty">Erreur de recherche</div>';
+        }
+    };
+
+    input.addEventListener("input", () => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(search, 220);
+    });
+}
+
 export function initBadgeAdminPage({
     supabase,
     addVerifiedUserId,
@@ -12,6 +112,25 @@ export function initBadgeAdminPage({
 
     let pendingRequestsCache = [];
 
+    const fetchVerifiedProfiles = async (ids) => {
+        const uniqueIds = Array.from(new Set(ids.filter(Boolean)));
+        if (!uniqueIds.length) return [];
+
+        try {
+            const { data, error } = await supabase
+                .from("users")
+                .select("id, name, avatar")
+                .in("id", uniqueIds);
+            if (error) throw error;
+            return data || [];
+        } catch (error) {
+            console.error("Erreur chargement profils vérifiés:", error);
+            return (window.allUsers || []).filter((user) =>
+                uniqueIds.includes(user.id),
+            );
+        }
+    };
+
     const renderList = async () => {
         const list = document.getElementById("badge-admin-list");
         if (!list) return;
@@ -20,16 +139,12 @@ export function initBadgeAdminPage({
         const staff = sets ? Array.from(sets.staff || []) : [];
         const pages = sets ? Array.from(sets.pages || []) : [];
         const ids = [...creators, ...staff];
-        const profilesResult = window.fetchUsersByIds
-            ? await window.fetchUsersByIds(ids)
-            : { success: false, data: [] };
-        const profileMap = new Map(
-            (profilesResult.data || []).map((u) => [u.id, u]),
-        );
+        const profiles = await fetchVerifiedProfiles(ids);
+        const profileMap = new Map(profiles.map((u) => [u.id, u]));
         const item = (id, typeLabel, typeKey) => {
             const p = profileMap.get(id) || {};
-            const name = p.name || id;
-            const avatar = p.avatar || "https://placehold.co/40?text=👤";
+            const name = escapeHtml(p.name || "Utilisateur vérifié");
+            const avatar = escapeHtml(p.avatar || "icons/artist.svg");
             return `
             <div class="verification-request-item" style="justify-content:space-between; gap:0.75rem;">
                 <div style="display:flex; align-items:center; gap:0.6rem; min-width:0;">
@@ -68,17 +183,24 @@ export function initBadgeAdminPage({
                 const pagesHtml = pages
                     .map((pid) => {
                         const pg = pageMap.get(pid) || {
-                            name: pid,
+                            name: "Page Pro vérifiée",
                             slug: pid,
                             avatar_url: "icons/enterprise.svg",
                         };
+                        const pageName = escapeHtml(
+                            pg.name || "Page Pro vérifiée",
+                        );
+                        const pageSlug = escapeHtml(pg.slug || pg.id || pid);
+                        const pageAvatar = escapeHtml(
+                            pg.avatar_url || "icons/enterprise.svg",
+                        );
                         return `
                             <div class="verification-request-item" style="justify-content:space-between; gap:0.75rem;">
                                 <div style="display:flex; align-items:center; gap:0.6rem; min-width:0;">
-                                    <img src="${pg.avatar_url || "icons/enterprise.svg"}" alt="${pg.name}" style="width:32px; height:32px; border-radius:6px; object-fit:cover;">
+                                    <img src="${pageAvatar}" alt="${pageName}" style="width:32px; height:32px; border-radius:6px; object-fit:cover;">
                                     <div style="display:flex; flex-direction:column; min-width:0;">
-                                        <span class="verification-request-name" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${pg.name}</span>
-                                        <span class="verification-request-id" style="color:var(--text-secondary); font-size:0.8rem;">${pg.slug || pg.id}</span>
+                                        <span class="verification-request-name" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${typeof window.renderVerifiedPageName === "function" ? window.renderVerifiedPageName(pageName, pg.id || pid) : pageName}</span>
+                                        <span class="verification-request-id" style="color:var(--text-secondary); font-size:0.8rem;">${pageSlug}</span>
                                     </div>
                                 </div>
                                 <div style="display:flex; align-items:center; gap:0.5rem;">
@@ -187,16 +309,23 @@ export function initBadgeAdminPage({
             <div class="settings-header" style="border:none; margin-bottom:1rem; padding-bottom:0;">
                 <div style="display:flex; justify-content:space-between; align-items:center; gap: 1rem; flex-wrap: wrap;">
                     <div style="display:flex; align-items:center; gap: 0.75rem;">
-                        <h2>Gestion des badges</h2>
-                        <span class="admin-badge">Admin vérification</span>
+                        <div>
+                            <p class="admin-eyebrow">XERA1 / TRUST OPERATIONS</p>
+                            <h1>Badges & vérification</h1>
+                        </div>
+                        <span class="admin-status-pill"><span></span> Admin vérification</span>
                     </div>
-                    <a class="btn-secondary" href="admin.html" style="text-decoration:none;">Retour admin</a>
+                    <a class="admin-top-action" href="admin.html" style="text-decoration:none;">Retour au contrôle <span>→</span></a>
                 </div>
-                <p>Attribuer ou retirer des badges créateur / staff et traiter les demandes.</p>
+                <p>Attribuez les signaux de confiance, traitez les demandes et contrôlez la visibilité des Pages Pro.</p>
             </div>
 
-            <div class="verification-admin-block">
-                <h4>Rechercher un utilisateur</h4>
+            <div class="verification-admin-block admin-workspace-block">
+                <div>
+                    <p class="admin-eyebrow">01 / IDENTITÉ</p>
+                    <h4>Attribuer un badge utilisateur</h4>
+                </div>
+                <p class="admin-helper">Recherchez par nom ou identifiant, choisissez le niveau, puis appliquez ou retirez le badge.</p>
                 <div class="verification-input-row" style="flex-wrap:wrap; gap:0.75rem;">
                     <input type="text" id="badge-admin-search" class="form-input" placeholder="ID ou nom d'utilisateur">
                     <select id="badge-admin-type" class="form-input">
@@ -217,7 +346,8 @@ export function initBadgeAdminPage({
                     <button type="button" class="btn-verify" id="badge-admin-apply">Attribuer</button>
                     <button type="button" class="btn-cancel" id="badge-admin-remove">Retirer</button>
                 </div>
-                <div style="margin-top:0.75rem;">
+                <div class="admin-page-verification">
+                    <p class="admin-eyebrow">02 / PAGE PRO</p>
                     <h4>Gérer la vérification d'une Page Pro</h4>
                     <div style="display:flex; gap:0.5rem; align-items:center; margin-top:0.5rem;">
                         <input type="text" id="badge-admin-page" class="form-input" placeholder="ID ou slug de la page Pro">
@@ -229,12 +359,12 @@ export function initBadgeAdminPage({
             </div>
 
             <div class="verification-admin-block" style="margin-top: 1.5rem;">
-                <h4>Badges actuels</h4>
+                <div class="admin-section-heading"><div><p class="admin-eyebrow">03 / REGISTRE</p><h4>Badges actuels</h4></div><span class="admin-section-note">Identités vérifiées</span></div>
                 <div id="badge-admin-list" class="verification-requests"></div>
             </div>
 
             <div class="verification-admin-block" style="margin-top: 1.5rem;">
-                <h4>Demandes de vérification</h4>
+                <div class="admin-section-heading"><div><p class="admin-eyebrow">04 / FILE D'ATTENTE</p><h4>Demandes de vérification</h4></div><span class="admin-section-note">Décision requise</span></div>
                 <div id="badge-admin-requests" class="verification-requests"></div>
                 <div class="verification-actions" style="margin-top:0.75rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
                     ${
@@ -264,6 +394,11 @@ export function initBadgeAdminPage({
         },
         { showAvatar: true },
     );
+    setupProfessionalPageSearch({
+        supabase,
+        inputId: "badge-admin-page",
+        suggestionsId: "badge-admin-suggestions",
+    });
 
     const applyBtn = document.getElementById("badge-admin-apply");
     const removeBtn = document.getElementById("badge-admin-remove");
@@ -340,9 +475,17 @@ export function initBadgeAdminPage({
             try {
                 document.getElementById("badge-admin-apply-page").disabled =
                     true;
-                await window.addVerifiedPageId(pid);
+                if (typeof window.addVerifiedPageId !== "function") {
+                    throw new Error(
+                        "Le module de vérification n'est pas chargé.",
+                    );
+                }
+                const verifiedPageId = await window.addVerifiedPageId(pid);
                 await fetchVerifiedBadges();
                 await renderList();
+                const pageInput = document.getElementById("badge-admin-page");
+                if (pageInput) pageInput.value = "";
+                console.info("Page Pro vérifiée:", verifiedPageId);
             } catch (e) {
                 console.error("Erreur add page verified:", e);
                 ToastManager?.error(
@@ -442,6 +585,16 @@ export function initBadgeAdminPage({
         .getElementById("badge-reject")
         ?.addEventListener("click", () => handleBulkAction("reject"));
 
-    renderList();
-    refreshRequests();
+    const list = document.getElementById("badge-admin-list");
+    if (list) {
+        list.innerHTML =
+            '<div class="verification-empty">Synchronisation des badges vérifiés...</div>';
+    }
+
+    Promise.all([fetchVerifiedBadges(), refreshRequests()])
+        .then(() => renderList())
+        .catch((error) => {
+            console.error("Erreur initialisation registre badges:", error);
+            renderList();
+        });
 }

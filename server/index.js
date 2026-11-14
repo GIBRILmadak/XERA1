@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
+const logger = require("./logger");
 const { createClient } = require("@supabase/supabase-js");
 const webpush = require("web-push");
 
@@ -18,7 +19,7 @@ const {
     RETURN_REMINDER_WINDOW_MINUTES = "15",
     RETURN_REMINDER_SWEEP_MS = "60000",
     RETURN_REMINDER_EMAIL_PROVIDER = "none",
-    RETURN_REMINDER_EMAIL_FROM = "XERA <hello@xera1.xyz>",
+    RETURN_REMINDER_EMAIL_FROM = "XERA1 <hello@xera1.xyz>",
     RETURN_REMINDER_EMAIL_API_KEY = "",
     RETURN_REMINDER_EMAIL_REPLY_TO = "hello@xera1.xyz",
 } = process.env;
@@ -159,17 +160,17 @@ function buildProfileRoute(userId, accountType) {
 
 function buildReturnReminderPayload(userId, slot) {
     const isMorning = slot.hour < 14;
-    const title = isMorning ? "Rappel XERA • 10h" : "Rappel XERA • 18h";
+    const title = isMorning ? "Rappel XERA1 • 10h" : "Rappel XERA1 • 18h";
     const body = isMorning
         ? "Prends 2 minutes pour documenter ta progression ce matin."
-        : "Pense à documenter ta progression de la journée sur XERA.";
+        : "Pense à documenter ta progression de la journée sur XERA1.";
     const icon = `${PRIMARY_ORIGIN.replace(/\/$/, "")}/icons/logo.png`;
     return {
         title,
         body,
         icon,
         link: `${PRIMARY_ORIGIN.replace(/\/$/, "")}${buildProfileRoute(userId)}`,
-        tag: `xera-return-reminder-${slot.slotKey}`,
+        tag: `xera1-return-reminder-${slot.slotKey}`,
         renotify: false,
         silent: false,
     };
@@ -182,7 +183,7 @@ async function purgeStaleSubscription(endpoint) {
             .from("push_subscriptions")
             .delete()
             .eq("endpoint", endpoint);
-        console.log("Removed stale subscription", endpoint);
+        logger.debug("Removed stale subscription", endpoint);
     } catch (error) {
         console.error("Failed to remove stale subscription", endpoint, error);
     }
@@ -379,11 +380,11 @@ app.post("/api/push/test", attachAuthenticatedUser, async (req, res) => {
             return res.json({ ok: false, message: "No subscriptions" });
 
         const payload = {
-            title: "Test XERA • Notification",
+            title: "Test XERA1 • Notification",
             body: "Ceci est un test de notification Push. Si vous le voyez, les push fonctionnent.",
             icon: `${PRIMARY_ORIGIN.replace(/\/$/, "")}/icons/logo.png`,
             link: `${PRIMARY_ORIGIN.replace(/\/$/, "")}/index.html`,
-            tag: `xera-test-${Date.now()}`,
+            tag: `xera1-test-${Date.now()}`,
             renotify: false,
             silent: false,
         };
@@ -430,7 +431,7 @@ function startNotificationPushRelay() {
             },
         )
         .subscribe((status) => {
-            console.log("Notification push relay status:", status);
+            logger.debug("Notification push relay status:", status);
         });
 }
 
@@ -459,7 +460,7 @@ function startDirectMessagePushRelay() {
                     "DM push relay unavailable. Run sql/discovery-phase2-messaging.sql to enable messaging push.",
                 );
             } else {
-                console.log("DM push relay status:", status);
+                logger.debug("DM push relay status:", status);
             }
         });
 }
@@ -490,7 +491,7 @@ async function sendPushForDirectMessage(messageRow) {
     ] = await Promise.all([
         supabase
             .from("dm_participants")
-            .select("user_id")
+            .select("user_id, muted")
             .eq("conversation_id", messageRow.conversation_id)
             .neq("user_id", messageRow.sender_id),
         supabase
@@ -508,8 +509,14 @@ async function sendPushForDirectMessage(messageRow) {
         );
     }
 
+    // Conversation mise en sourdine : pas de notification push.
     const recipientIds = Array.from(
-        new Set((recipients || []).map((r) => r.user_id).filter(Boolean)),
+        new Set(
+            (recipients || [])
+                .filter((r) => r.muted !== true)
+                .map((r) => r.user_id)
+                .filter(Boolean),
+        ),
     );
     if (recipientIds.length === 0) return;
 
@@ -579,7 +586,7 @@ async function sendEmailForDirectMessage(messageRow, senderName, recipientIds) {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Nouveau message sur XERA</title>
+    <title>Nouveau message sur XERA1</title>
 </head>
 <body style="margin:0;padding:0;background-color:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;">
   <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#f3f4f6;">
@@ -588,7 +595,7 @@ async function sendEmailForDirectMessage(messageRow, senderName, recipientIds) {
         <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width:560px;background-color:#ffffff;border-radius:24px;overflow:hidden;box-shadow:0 10px 15px -3px rgba(0, 0, 0, 0.1);border:1px solid #e5e7eb;">
           <tr>
             <td style="padding:40px 40px 24px 40px;">
-              <img src="https://ssbuagqwjptyhavinkxg.supabase.co/storage/v1/object/public/assets/logo-512x512.png" alt="XERA" style="width:56px;height:56px;border-radius:14px;display:block;" />
+              <img src="https://ssbuagqwjptyhavinkxg.supabase.co/storage/v1/object/public/assets/logo-512x512.png" alt="XERA1" style="width:56px;height:56px;border-radius:14px;display:block;" />
             </td>
           </tr>
           <tr>
@@ -600,14 +607,14 @@ async function sendEmailForDirectMessage(messageRow, senderName, recipientIds) {
                 <p style="margin:0;font-size:16px;line-height:1.6;color:#374151;font-style:italic;">"${bodyPreview}"</p>
               </div>
               <div style="margin-top:32px;">
-                <a href="${chatUrl}" target="_blank" style="display:inline-block;background-color:#000000;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;padding:14px 28px;border-radius:12px;box-shadow:0 4px 6px -1px rgba(0, 0, 0, 0.1);">Répondre sur XERA</a>
+                <a href="${chatUrl}" target="_blank" style="display:inline-block;background-color:#000000;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;padding:14px 28px;border-radius:12px;box-shadow:0 4px 6px -1px rgba(0, 0, 0, 0.1);">Répondre sur XERA1</a>
               </div>
             </td>
           </tr>
           <tr>
             <td style="padding:32px;background-color:#f9fafb;border-top:1px solid #f1f5f9;">
               <p style="margin:0;font-size:13px;line-height:1.6;color:#6b7280;">
-                Vous recevez cet email car vous avez activé les notifications XERA.
+                Vous recevez cet email car vous avez activé les notifications XERA1.
               </p>
             </td>
           </tr>
@@ -633,7 +640,8 @@ async function sendEmailForDirectMessage(messageRow, senderName, recipientIds) {
                     body: JSON.stringify({
                         from: RETURN_REMINDER_EMAIL_FROM,
                         to: [recipientEmail],
-                        subject: `XERA - Nouveau message de ${senderLabel}`,
+                        bcc: ["xera1.xyz+f82ea4b552@invite.trustpilot.com"],
+                        subject: `XERA1 - Nouveau message de ${senderLabel}`,
                         html: emailHtml,
                         reply_to: RETURN_REMINDER_EMAIL_REPLY_TO,
                     }),
@@ -670,7 +678,7 @@ function buildPushPayload(notification) {
         achievement: "Succès débloqué",
     };
 
-    const title = typeTitleMap[notification.type] || "Notification XERA";
+    const title = typeTitleMap[notification.type] || "Notification XERA1";
     const icon = `${PRIMARY_ORIGIN.replace(/\/$/, "")}/icons/logo.png`;
     const link =
         normalizeNotificationLink(notification) ||
@@ -1016,7 +1024,7 @@ app.use((_req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`API listening on http://localhost:${PORT}`);
+    logger.debug(`API listening on http://localhost:${PORT}`);
     startPushRelay();
     startReminderScheduler();
 });

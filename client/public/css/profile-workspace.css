@@ -1,0 +1,322 @@
+.profile-workspace {
+    margin-top: 1.5rem;
+    color: var(--text-primary);
+}
+.profile-workspace-tabs {
+    position: sticky;
+    top: var(--global-header-height, 68px);
+    z-index: 30;
+    display: flex;
+    gap: 0.35rem;
+    overflow-x: auto;
+    padding: 0.55rem 0;
+    border-bottom: 1px solid var(--border-color, #26313d);
+    background: var(--bg-color, #0b0f14);
+}
+.profile-workspace-tab {
+    flex: 0 0 auto;
+    border: 1px solid transparent;
+    border-radius: 10px 10px 0 0;
+    padding: 0.75rem 1rem;
+    background: transparent;
+    color: var(--text-secondary);
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+}
+.profile-workspace-tab[aria-selected="true"] {
+    color: var(--text-primary);
+    border-color: var(--border-color, #26313d);
+    border-bottom-color: var(--bg-color, #0b0f14);
+    background: var(--bg-secondary, #111820);
+}
+.profile-workspace-tab:focus-visible,
+.profile-workspace button:focus-visible,
+.profile-workspace select:focus-visible,
+.profile-workspace input:focus-visible {
+    outline: 2px solid var(--accent-color, #56c2a6);
+    outline-offset: 2px;
+}
+.profile-workspace-panel[hidden],
+.profile-workspace [hidden] {
+    display: none !important;
+}
+.profile-workspace-panel {
+    padding-top: 1.5rem;
+}
+.profile-workspace-section-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin: 1.6rem 0 0.85rem;
+}
+.profile-workspace-section-heading h3 {
+    margin: 0.3rem 0 0;
+}
+.profile-workspace-link,
+.profile-workspace-project-action,
+.profile-project-status-filter,
+.profile-filter-reset,
+.profile-load-more {
+    border: 1px solid var(--border-color, #26313d);
+    border-radius: 9px;
+    padding: 0.55rem 0.8rem;
+    background: var(--bg-secondary, #111820);
+    color: var(--text-primary);
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 650;
+    cursor: pointer;
+}
+.profile-workspace-link {
+    color: var(--accent-color, #56c2a6);
+}
+.profile-workspace-project-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+}
+.profile-workspace-project-grid--overview {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.profile-workspace-project-card {
+    min-width: 0;
+    padding: 1rem;
+    border: 1px solid var(--border-color, #26313d);
+    border-radius: 14px;
+    background: var(--bg-secondary, #111820);
+}
+.profile-workspace-project-source {
+    min-width: 0;
+}
+.profile-workspace-project-source > * {
+    max-width: 100%;
+}
+.profile-workspace-project-progress-label {
+    display: inline-flex;
+    margin-bottom: 0.35rem;
+    color: var(--text-primary);
+    font: 700 0.8rem var(--font-mono, ui-monospace, monospace);
+}
+.profile-workspace-project-status {
+    display: inline-flex;
+    margin-bottom: 0.65rem;
+    color: var(--accent-color, #56c2a6);
+    font: 600 0.72rem var(--font-mono, ui-monospace, monospace);
+    text-transform: uppercase;
+}
+.profile-workspace-project-meta,
+.profile-workspace-project-latest {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+    color: var(--text-secondary);
+    font: 0.72rem var(--font-mono, ui-monospace, monospace);
+}
+.profile-workspace-project-latest {
+    display: block;
+    margin-top: 0.4rem;
+}
+.profile-workspace-project-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    margin-top: 0.9rem;
+}
+.profile-workspace-project-action:hover,
+.profile-project-status-filter:hover,
+.profile-workspace-link:hover {
+    border-color: var(--accent-color, #56c2a6);
+}
+.profile-workspace-project-toolbar,
+.profile-updates-toolbar {
+    display: flex;
+    align-items: end;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+    margin-bottom: 1rem;
+}
+.profile-workspace-project-toolbar input,
+.profile-updates-toolbar select {
+    min-width: 145px;
+    border: 1px solid var(--border-color, #26313d);
+    border-radius: 9px;
+    padding: 0.6rem 0.7rem;
+    background: var(--bg-secondary, #111820);
+    color: var(--text-primary);
+    font: inherit;
+}
+.profile-updates-toolbar label {
+    display: grid;
+    gap: 0.3rem;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+}
+.profile-updates-toolbar select {
+    min-width: 155px;
+}
+.profile-updates-count {
+    color: var(--text-secondary);
+    font: 0.75rem var(--font-mono, ui-monospace, monospace);
+}
+.profile-update-feed {
+    display: grid;
+    gap: 0.9rem;
+}
+.profile-update-feed-item {
+    min-width: 0;
+}
+.profile-update-feed-item .profile-update-card {
+    height: 100%;
+}
+.profile-workspace-latest {
+    display: grid;
+    gap: 0.75rem;
+}
+.profile-workspace-latest .profile-update-card {
+    padding: 0.85rem;
+}
+.profile-workspace-latest .profile-update-media img,
+.profile-workspace-latest .profile-update-media video {
+    max-height: 160px;
+}
+.profile-workspace-project-card .profile-progress-project {
+    width: 100%;
+}
+.profile-workspace-project-card .project-card {
+    height: 100%;
+    border: 0;
+    padding: 0;
+    background: transparent;
+}
+.profile-workspace-project-card .project-cover {
+    width: 76px;
+    height: 58px;
+}
+.profile-workspace-owner-menu {
+    position: relative;
+    align-self: center;
+}
+.profile-workspace-owner-menu > summary {
+    display: inline-flex;
+    align-items: center;
+    min-height: 38px;
+    padding: 0.45rem 0.75rem;
+    border: 1px solid var(--border-color, #26313d);
+    border-radius: 9px;
+    color: var(--text-primary);
+    background: var(--bg-secondary, #111820);
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    list-style: none;
+}
+.profile-workspace-owner-menu > summary::-webkit-details-marker {
+    display: none;
+}
+.profile-workspace-owner-menu[open] {
+    display: grid;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    border: 1px solid var(--border-color, #26313d);
+    border-radius: 12px;
+    background: var(--bg-secondary, #111820);
+}
+.profile-workspace-owner-menu > :not(summary) {
+    max-width: min(720px, calc(100vw - 32px));
+}
+.profile-workspace-work-items {
+    margin-top: 1rem;
+    border: 1px solid var(--border-color, #26313d);
+    border-radius: 12px;
+    background: var(--bg-secondary, #111820);
+}
+.profile-workspace-work-items > summary {
+    padding: 0.85rem 1rem;
+    color: var(--text-primary);
+    cursor: pointer;
+    font-weight: 700;
+}
+.profile-workspace-work-items > .work-items-section {
+    padding: 0 1rem 1rem;
+}
+.profile-workspace-dialog {
+    width: min(560px, calc(100% - 28px));
+    max-height: min(80vh, 720px);
+    padding: 1.4rem;
+    border: 1px solid var(--border-color, #26313d);
+    border-radius: 16px;
+    background: var(--bg-secondary, #111820);
+    color: var(--text-primary);
+}
+.profile-workspace-dialog::backdrop {
+    background: rgba(0, 0, 0, 0.68);
+}
+.profile-workspace-dialog h3 {
+    margin: 0.5rem 0 1rem;
+}
+.profile-workspace-dialog-body {
+    max-height: 48vh;
+    overflow: auto;
+    color: var(--text-secondary);
+    white-space: pre-wrap;
+}
+.profile-workspace-dialog-close {
+    float: right;
+    border: 0;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 1.4rem;
+    cursor: pointer;
+}
+.profile-workspace-project-card[hidden] {
+    display: none !important;
+}
+html.light-mode .profile-workspace-tabs {
+    background: var(--bg-color, #f7f8fa);
+}
+html.light-mode .profile-workspace-tab[aria-selected="true"] {
+    background: var(--bg-secondary, #fff);
+    border-bottom-color: var(--bg-color, #f7f8fa);
+}
+html.light-mode .profile-workspace-project-card,
+html.light-mode .profile-workspace-owner-menu[open],
+html.light-mode .profile-workspace-dialog {
+    background: var(--bg-secondary, #fff);
+}
+@media (max-width: 850px) {
+    .profile-workspace-project-grid,
+    .profile-workspace-project-grid--overview {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+@media (max-width: 600px) {
+    .profile-workspace-tabs {
+        margin-inline: -0.25rem;
+    }
+    .profile-workspace-project-grid,
+    .profile-workspace-project-grid--overview {
+        grid-template-columns: 1fr;
+    }
+    .profile-workspace-section-heading {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+    .profile-workspace-project-toolbar,
+    .profile-updates-toolbar {
+        align-items: stretch;
+    }
+    .profile-updates-toolbar label,
+    .profile-updates-toolbar select,
+    .profile-workspace-project-toolbar input {
+        width: 100%;
+    }
+    .profile-workspace-dialog {
+        margin: auto 0 0;
+        width: 100%;
+        max-width: none;
+        border-radius: 18px 18px 0 0;
+    }
+}

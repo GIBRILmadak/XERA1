@@ -1,8 +1,8 @@
-# Guide du Serveur XERA Optimisé
+# Guide du Serveur XERA1 Optimisé
 
 ## 🚀 Vue d'ensemble
 
-Ce guide explique comment utiliser le nouveau serveur optimisé XERA qui résout les problèmes de rechargement automatique et améliore significativement les performances.
+Ce guide explique comment utiliser le nouveau serveur optimisé XERA1 qui résout les problèmes de rechargement automatique et améliore significativement les performances.
 
 ## ✨ Améliorations Apportées
 

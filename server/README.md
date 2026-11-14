@@ -1,4 +1,4 @@
-Backend XERA
+Backend XERA1
 
 Setup
 
@@ -24,6 +24,12 @@ Endpoints actifs
     - body minimal: `{ userId, subscription }`
     - body recommandé: `{ userId, subscription, timezone, reminderEnabled }`
 
+Partenariats et commissions
+
+- Exécuter `sql/20260907_partner_commissions_complete.sql` dans l'éditeur SQL Supabase après les migrations existantes.
+- Cette migration crée les tables de codes partenaires, affiliations, pages rattachées, commissions, retraits et audit utilisées par l'API.
+- En local, lancer `npm run api` pour exposer les routes `/api/partners/*` sur le port `5050`. `npm start` lance le serveur optimisé statique, qui ne fournit pas encore ces routes partenaires.
+
 Note
 
 - Toute la logique de paiement historique a été retirée. On réintroduira un provider plus tard.
@@ -35,7 +41,7 @@ Notifications push (nouvelle infra)
     - VAPID_PUBLIC_KEY=<clé_publique>
     - VAPID_PRIVATE_KEY=<clé_privée>
     - PUSH_CONTACT_EMAIL=mailto:votre_email (optionnel)
-- Exécuter le SQL `sql/push-subscriptions.sql` sur la base Supabase pour créer la table `push_subscriptions`.
+- Exécuter le SQL `sql/push-subscriptions.sql` sur la base Supabase pour créer la table `push_subscriptions`. Sans cette migration, l'API ignore proprement l'inscription push jusqu'à l'installation du schéma.
 - Démarrer l'API (`npm run api`) : le backend s'abonne en temps réel à `public.notifications` et envoie un push à chaque insertion.
 
 Rappels programmés (10h / 18h)
@@ -56,8 +62,8 @@ Rappels email (optionnels)
 - Variables d'environnement optionnelles:
     - `RETURN_REMINDER_EMAIL_ENABLED=1`
     - `RETURN_REMINDER_EMAIL_PROVIDER=resend` ou `webhook`
-    - `RETURN_REMINDER_EMAIL_FROM="XERA <hello@xera1.xyz>"`
-    - `RETURN_REMINDER_EMAIL_REPLY_TO=team@xera.app`
+    - `RETURN_REMINDER_EMAIL_FROM="XERA1 <hello@xera1.xyz>"`
+    - `RETURN_REMINDER_EMAIL_REPLY_TO=team@xera1.app`
     - `RETURN_REMINDER_EMAIL_API_KEY=<cle API>` (si provider `resend`)
     - `RETURN_REMINDER_EMAIL_WEBHOOK_URL=https://...` (si provider `webhook`)
     - `RETURN_REMINDER_EMAIL_WEBHOOK_TOKEN=<token optionnel>`
@@ -66,6 +72,7 @@ Rappels email (optionnels)
     - `GET /api/cron/sweep-subscriptions`
     - header recommande: `Authorization: Bearer <CRON_SECRET>`
 - Si vous passez plus tard sur `Vercel Pro`, vous pouvez reintroduire des crons Vercel avec le meme `CRON_SECRET`.
+- Les confirmations de paiement KPay utilisent le meme fournisseur email (`resend` ou `webhook`) mais restent transactionnelles : `RETURN_REMINDER_EMAIL_ENABLED` peut rester a `0` sans bloquer l'email d'activation. Configurez le fournisseur, l'expediteur et sa cle API.
 - Campagnes email actuellement gerees:
     - rappel de post du jour avec lien direct vers l'ouverture du formulaire
     - reactivation apres 7 jours sans update

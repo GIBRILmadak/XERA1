@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="fr">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1" />
+        <title>Commissions | XERA1</title>
+        <link rel="icon" type="image/png" href="icons/logo.png" />
+        <link rel="apple-touch-icon" href="icons/logo.png" />
+        <link rel="stylesheet" href="css/style.css?v=20261006-1" />
+        <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.111.0/dist/umd/supabase.js"></script>
+    </head>
+    <body class="commissions-page">
+        <main class="commissions-shell">
+            <header class="commissions-header">
+                <a class="commissions-back" href="index.html">
+                    <span aria-hidden="true">←</span> Retour à XERA1
+                </a>
+                <div class="commissions-brand" aria-label="XERA1 commissions">
+                    <span class="commissions-brand-mark">X</span>
+                    <span>XERA1 <b>Partner Console</b></span>
+                </div>
+                <span class="commissions-status"
+                    ><span></span> Espace sécurisé</span
+                >
+                <div class="lang-switcher-nav">
+                <select id="header-lang-select" class="nav-lang-select" aria-label="Language selection">
+                    <option value="fr">FR</option>
+                    <option value="en">EN</option>
+                </select>
+            </div>
+</header>
+            <div id="commissions-root" class="commissions-root">
+                <div class="commissions-loading" role="status">
+                    <span class="commissions-loading-dot"></span> Chargement de
+                    votre espace…
+                </div>
+            </div>
+        </main>
+        <script src="js/supabase-config.js?v=20261006-1"></script>
+        <script src="js/kpay-mobile-money.js"></script>
+        <script src="js/commissions.js"></script>
+        <script src="js/i18n.js"></script>
+    <script src="js/seo-schema.js"></script>
+</body>
+</html>

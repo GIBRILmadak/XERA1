@@ -4,21 +4,51 @@
     "functions": {
         "api/*.js": {
             "includeFiles": "client/dist/**"
+        },
+        "api/router.js": {
+            "maxDuration": 60
         }
     },
     "rewrites": [
         { "source": "/sitemap.xml", "destination": "/api/sitemap" },
         { "source": "/api/:path*", "destination": "/api/router?path=:path*" },
+        { "source": "/", "destination": "/api/home" },
+        { "source": "/share/:path*", "destination": "/index.html" },
+        { "source": "/login", "destination": "/login.html" },
+        { "source": "/messages", "destination": "/messages.html" },
+        { "source": "/profile", "destination": "/api/profile" },
+        { "source": "/profile/:path*", "destination": "/api/profile" },
+        { "source": "/pagepro", "destination": "/api/profile" },
+        { "source": "/pagepro/:path*", "destination": "/api/profile" },
+        { "source": "/analytics", "destination": "/analytics.html" },
+        { "source": "/commissions", "destination": "/commissions.html" },
+        { "source": "/admin", "destination": "/admin.html" },
+        { "source": "/badges-admin", "destination": "/badges-admin.html" },
+        { "source": "/create-stream", "destination": "/create-stream.html" },
+        {
+            "source": "/creator-dashboard",
+            "destination": "/creator-dashboard.html"
+        },
+        { "source": "/credits", "destination": "/credits.html" },
+        { "source": "/stream", "destination": "/stream.html" },
+        {
+            "source": "/subscription-plans",
+            "destination": "/subscription-plans.html"
+        },
+        { "source": "/verification", "destination": "/verification.html" },
+        { "source": "/cgu", "destination": "/cgu.html" },
+        { "source": "/privacy", "destination": "/privacy.html" },
+        { "source": "/404", "destination": "/404.html" },
         { "source": "/((?!api/|icons/|css/|js/|medias/|favicon.svg|manifest.json|robots.txt|sw.js).*)", "destination": "/index.html" }
     ],
     "crons": [
         {
-            "path": "/api/cron/send-reminders",
+            "path": "/api/cron/daily",
             "schedule": "0 10 * * *"
         },
         {
-            "path": "/api/cron/sweep-subscriptions",
-            "schedule": "5 0 * * *"
+            "path": "/api/cron/fata-worker",
+            "schedule": "0 11 * * *"
         }
     ]
 }

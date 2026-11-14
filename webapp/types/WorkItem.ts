@@ -4,7 +4,13 @@ export interface WorkItem {
     id: string; // UUID
     userId: string;
     source: SourceType;
-    type: "commit" | "frame" | "video" | "design_update" | "document_update";
+    type:
+        | "commit"
+        | "frame"
+        | "video"
+        | "design_update"
+        | "document_update"
+        | "project_update";
     timestamp: string; // ISO Date string
     title: string;
     description?: string;

@@ -1,8 +1,8 @@
-# XERA Retention & Organic Virality Playbook
+# XERA1 Retention & Organic Virality Playbook
 
-**Objectif:** augmenter la retention et faire grandir XERA sans demander explicitement aux utilisateurs "invite quelqu'un".
+**Objectif:** augmenter la retention et faire grandir XERA1 sans demander explicitement aux utilisateurs "invite quelqu'un".
 
-**Principe:** XERA ne doit pas pousser une invitation. XERA doit rendre la progression plus forte quand elle est vue, validee ou rejointe par une autre personne.
+**Principe:** XERA1 ne doit pas pousser une invitation. XERA1 doit rendre la progression plus forte quand elle est vue, validee ou rejointe par une autre personne.
 
 **Implementation V1:** `js/arcs.js`, `js/app-supabase.js`, `css/arcs.css`, `server/recommendation-engine.js`, `sql/witness-loop-schema.sql`.
 
@@ -12,7 +12,7 @@
 
 Le mecanisme principal s'appelle **Witness Loop**.
 
-Sur XERA, chaque ARC peut avoir:
+Sur XERA1, chaque ARC peut avoir:
 
 - un **builder**: la personne qui execute;
 - un **temoin**: quelqu'un qui suit la progression et valide certains jalons;
@@ -72,7 +72,7 @@ Le produit ne dit pas "invite". Le produit cree une situation ou l'utilisateur s
 
 ### Feature A: Proof Card partageable
 
-Apres une trace importante, XERA genere une carte partageable:
+Apres une trace importante, XERA1 genere une carte partageable:
 
 - titre de l'ARC;
 - jour de progression;
@@ -96,7 +96,7 @@ KPI:
 
 ### Feature B: Temoin de jalon
 
-Quand l'utilisateur cree ou complete un jalon, XERA propose:
+Quand l'utilisateur cree ou complete un jalon, XERA1 propose:
 
 - "Ajouter un temoin"
 - "Demander une validation"
@@ -142,7 +142,7 @@ KPI:
 
 ### Feature D: Weekly Trajectory Recap
 
-Chaque semaine, XERA genere un recap:
+Chaque semaine, XERA1 genere un recap:
 
 - traces publiees;
 - momentum;
@@ -359,7 +359,7 @@ Qualite:
 
 ## 10. La regle produit a ne jamais casser
 
-XERA ne doit pas devenir une machine a spam.
+XERA1 ne doit pas devenir une machine a spam.
 
 La viralite doit venir de la preuve:
 
@@ -377,4 +377,4 @@ La bonne question est:
 
 > A quel moment sa progression devient-elle plus forte avec quelqu'un d'autre?
 
-C'est la que XERA gagne.
+C'est la que XERA1 gagne.

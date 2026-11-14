@@ -1,10 +1,10 @@
 /**
- * XERA Interactive Tutorial Module - Conversion & Onboarding Edition
+ * XERA1 Interactive Tutorial Module - Conversion & Onboarding Edition
  * Guides both guests and new users through the vision and the product.
  */
 
-const XERA_TUTORIAL_KEY = "xera-tutorial-completed";
-const XERA_GUEST_TUTORIAL_KEY = "xera-guest-vision-completed";
+const XERA_TUTORIAL_KEY = "xera1-tutorial-completed";
+const XERA_GUEST_TUTORIAL_KEY = "xera1-guest-vision-completed";
 
 // Étapes pour les visiteurs (Convaincre de s'inscrire)
 const GUEST_TUTORIAL_STEPS = [
@@ -12,7 +12,7 @@ const GUEST_TUTORIAL_STEPS = [
         id: "vision",
         title: "Standardiser la Confiance",
         message:
-            "Le but de XERA est de standardiser la confiance technique et d'éliminer l'asymétrie d'information entre les créateurs de technologie et le marché mondial. Prouvez votre valeur par l'action grâce à la <strong>Proof of Building</strong>.",
+            "Le but de XERA1 est de standardiser la confiance technique et d'éliminer l'asymétrie d'information entre les créateurs de technologie et le marché mondial. Prouvez votre valeur par l'action grâce à la <strong>Proof of Building</strong>.",
         element: null,
         position: "center",
     },
@@ -284,6 +284,17 @@ class XeraTutorial {
     }
 
     positionTooltip(targetRect, position) {
+        if (
+            window.matchMedia &&
+            window.matchMedia("(max-width: 768px)").matches
+        ) {
+            this.tooltip.style.position = "fixed";
+            this.tooltip.style.top = "50%";
+            this.tooltip.style.left = "50%";
+            this.tooltip.style.transform = "translate(-50%, -50%)";
+            return;
+        }
+
         const gap = 20;
         const tooltipWidth = 340;
         let top, left;

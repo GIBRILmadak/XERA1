@@ -37,7 +37,11 @@
     display: none;
     align-items: center;
     justify-content: center;
-    background: radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.08), rgba(0, 0, 0, 0.65));
+    background: radial-gradient(
+        circle at 50% 30%,
+        rgba(255, 255, 255, 0.08),
+        rgba(0, 0, 0, 0.65)
+    );
     backdrop-filter: blur(2px);
     z-index: 2;
 }
@@ -64,7 +68,11 @@
 }
 
 .stream-ended {
-    background: radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.06), rgba(0, 0, 0, 0.8));
+    background: radial-gradient(
+        circle at 50% 30%,
+        rgba(255, 255, 255, 0.06),
+        rgba(0, 0, 0, 0.8)
+    );
 }
 
 .stream-overlay {
@@ -73,7 +81,11 @@
     left: 0;
     right: 0;
     padding: 1.5rem;
-    background: linear-gradient(180deg, rgba(0,0,0,0.7) 0%, transparent 100%);
+    background: linear-gradient(
+        180deg,
+        rgba(0, 0, 0, 0.7) 0%,
+        transparent 100%
+    );
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
@@ -132,7 +144,9 @@
     cursor: pointer;
     backdrop-filter: blur(6px);
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
-    transition: transform 0.2s ease, opacity 0.2s ease;
+    transition:
+        transform 0.2s ease,
+        opacity 0.2s ease;
     z-index: 4;
 }
 .unmute-overlay:hover {
@@ -469,7 +483,11 @@ button.stream-viewers:disabled {
     align-items: center;
     gap: 0.4rem;
     padding: 0.2rem 0.6rem;
-    background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(16, 185, 129, 0.05));
+    background: linear-gradient(
+        135deg,
+        rgba(16, 185, 129, 0.1),
+        rgba(16, 185, 129, 0.05)
+    );
     border: 1px solid rgba(16, 185, 129, 0.2);
     border-radius: 999px;
     color: #10b981;
@@ -490,9 +508,18 @@ button.stream-viewers:disabled {
 }
 
 @keyframes momentum-pulse {
-    0% { opacity: 0.4; transform: scale(0.8); }
-    50% { opacity: 1; transform: scale(1.1); }
-    100% { opacity: 0.4; transform: scale(0.8); }
+    0% {
+        opacity: 0.4;
+        transform: scale(0.8);
+    }
+    50% {
+        opacity: 1;
+        transform: scale(1.1);
+    }
+    100% {
+        opacity: 0.4;
+        transform: scale(0.8);
+    }
 }
 
 /* ========================================
@@ -502,6 +529,552 @@ button.stream-viewers:disabled {
 body.analytics-page {
     background: linear-gradient(180deg, #040405 0%, #0c0d10 100%);
     min-height: 100dvh;
+}
+
+body.account-intelligence-page {
+    --analytics-ink: #17233f;
+    --analytics-muted: #667085;
+    --analytics-paper: #f4f2ed;
+    --analytics-line: #e4e1d9;
+    --analytics-coral: #e35d4a;
+    --analytics-blue: #4674a8;
+    --analytics-green: #269774;
+    color: var(--analytics-ink);
+    background:
+        radial-gradient(
+            circle at 80% 0%,
+            rgba(227, 93, 74, 0.12),
+            transparent 28%
+        ),
+        linear-gradient(rgba(244, 242, 237, 0.94), rgba(244, 242, 237, 0.94)),
+        repeating-linear-gradient(
+            0deg,
+            transparent 0 31px,
+            rgba(23, 35, 63, 0.04) 32px
+        ),
+        var(--analytics-paper);
+}
+
+body.account-intelligence-page .analytics-prestige-container {
+    max-width: 1240px;
+    padding: 116px 28px 64px;
+}
+
+body.account-intelligence-page .analytics-header-redesign {
+    align-items: flex-end;
+    padding: 36px 42px;
+    border: 1px solid rgba(23, 35, 63, 0.08);
+    border-radius: 4px;
+    background: linear-gradient(125deg, #17233f, #315b70 62%, #269774);
+    box-shadow: 0 22px 48px rgba(23, 35, 63, 0.18);
+}
+
+body.account-intelligence-page .analytics-header-redesign h1 {
+    color: #fff;
+    background: none;
+    -webkit-text-fill-color: currentColor;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: clamp(32px, 5vw, 54px);
+    font-weight: 500;
+    letter-spacing: 0;
+    line-height: 1;
+}
+
+body.account-intelligence-page .analytics-eyebrow {
+    color: #abdcca;
+}
+
+body.account-intelligence-page .analytics-controls-prestige {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+body.account-intelligence-page .prestige-select,
+body.account-intelligence-page .analytics-action-btn {
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.account-analysis-section {
+    margin: 0 0 34px;
+}
+
+.account-analysis-heading {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 20px;
+    margin-bottom: 18px;
+}
+
+.account-analysis-heading h2 {
+    margin: 4px 0 8px;
+    color: var(--analytics-ink);
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: clamp(28px, 4vw, 42px);
+    font-weight: 500;
+    letter-spacing: 0;
+}
+
+.account-analysis-heading p {
+    margin: 0;
+    color: var(--analytics-muted);
+}
+
+.account-analysis-live {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 11px;
+    color: var(--analytics-green);
+    border: 1px solid rgba(38, 151, 116, 0.24);
+    border-radius: 999px;
+    background: rgba(38, 151, 116, 0.08);
+    font-size: 12px;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.account-analysis-live i {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+    box-shadow: 0 0 0 4px rgba(38, 151, 116, 0.13);
+}
+
+.account-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.account-kpi {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    min-width: 0;
+    min-height: 142px;
+    padding: 20px;
+    border: 1px solid var(--analytics-line);
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.78);
+    box-shadow: 0 12px 28px rgba(23, 35, 63, 0.05);
+}
+
+.account-kpi-icon {
+    display: grid;
+    width: 40px;
+    height: 40px;
+    flex: 0 0 40px;
+    place-items: center;
+    border-radius: 3px;
+    color: #fff;
+    font-size: 21px;
+    font-weight: 700;
+}
+
+.account-kpi-coral .account-kpi-icon {
+    background: var(--analytics-coral);
+}
+.account-kpi-blue .account-kpi-icon {
+    background: var(--analytics-blue);
+}
+.account-kpi-green .account-kpi-icon {
+    background: var(--analytics-green);
+}
+.account-kpi-ink .account-kpi-icon {
+    background: var(--analytics-ink);
+}
+
+.account-kpi > div {
+    min-width: 0;
+}
+.account-kpi > div > span,
+.account-kpi > div > small {
+    display: block;
+    color: var(--analytics-muted);
+}
+.account-kpi > div > span {
+    margin-bottom: 8px;
+    font-size: 12px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+.account-kpi strong {
+    display: block;
+    margin-bottom: 4px;
+    color: var(--analytics-ink);
+    font-size: clamp(24px, 3vw, 34px);
+    line-height: 1;
+    overflow-wrap: anywhere;
+}
+.account-kpi small {
+    font-size: 12px;
+    line-height: 1.35;
+}
+
+.account-analysis-columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+}
+
+.account-insight-panel {
+    min-width: 0;
+    padding: 24px;
+    border: 1px solid var(--analytics-line);
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.78);
+    box-shadow: 0 12px 28px rgba(23, 35, 63, 0.05);
+}
+
+.account-panel-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.account-panel-label {
+    color: var(--analytics-coral);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+.account-panel-heading h3 {
+    margin: 5px 0 0;
+    color: var(--analytics-ink);
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 24px;
+    font-weight: 500;
+}
+.account-panel-total {
+    color: var(--analytics-muted);
+    font-size: 12px;
+    white-space: nowrap;
+}
+.account-breakdown-list {
+    display: grid;
+    gap: 0;
+}
+.account-breakdown-list > div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 15px;
+    padding: 15px 0;
+    border-bottom: 1px solid var(--analytics-line);
+    color: var(--analytics-ink);
+}
+.account-breakdown-list > div:last-child {
+    border-bottom: 0;
+}
+.account-breakdown-list > div > span {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--analytics-muted);
+    font-size: 14px;
+}
+.account-breakdown-list strong {
+    color: var(--analytics-ink);
+    font-size: 15px;
+}
+.account-breakdown-list strong small {
+    margin-left: 4px;
+    color: var(--analytics-muted);
+    font-weight: 500;
+}
+.signal-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+}
+.signal-coral {
+    background: var(--analytics-coral);
+}
+.signal-blue {
+    background: var(--analytics-blue);
+}
+.signal-green {
+    background: var(--analytics-green);
+}
+.signal-ink {
+    background: var(--analytics-ink);
+}
+.signal-gold {
+    background: #c8994e;
+}
+.account-top-content-list {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+}
+.account-top-content-card {
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid var(--analytics-line);
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.04);
+}
+.account-content-media-wrap {
+    position: relative;
+    aspect-ratio: 4 / 3;
+    overflow: hidden;
+    background: #111118;
+}
+.account-content-media {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.account-content-rank {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    display: grid;
+    width: 27px;
+    height: 27px;
+    place-items: center;
+    border-radius: 50%;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.7);
+    font-size: 12px;
+    font-weight: 800;
+}
+.account-content-type {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    padding: 4px 7px;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 3px;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.62);
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+.account-top-content-card-copy {
+    display: grid;
+    min-height: 82px;
+    gap: 5px;
+    padding: 11px;
+}
+.account-top-content-card-copy strong {
+    display: -webkit-box;
+    overflow: hidden;
+    color: var(--analytics-ink);
+    font-size: 13px;
+    line-height: 1.3;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+.account-top-content-card-copy > span:not(.account-content-bar) {
+    color: var(--analytics-muted);
+    font-size: 11px;
+}
+.account-content-bar {
+    height: 6px;
+    margin-top: 4px;
+    overflow: hidden;
+    border-radius: 99px;
+    background: #e9e6df;
+}
+.account-content-bar i {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, var(--analytics-coral), #ef9c74);
+}
+.account-empty-state {
+    color: var(--analytics-muted);
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+body.account-intelligence-page .momentum-grid,
+body.account-intelligence-page .chart-prestige-wrap {
+    border-color: var(--analytics-line);
+}
+body.account-intelligence-page .momentum-card-prestige,
+body.account-intelligence-page .insight-pill {
+    border-color: var(--analytics-line);
+    background: rgba(255, 255, 255, 0.78);
+}
+body.account-intelligence-page .momentum-card-prestige {
+    color: var(--analytics-ink);
+}
+body.account-intelligence-page .momentum-desc,
+body.account-intelligence-page .insight-text,
+body.account-intelligence-page .analytics-system-message {
+    color: var(--analytics-muted);
+}
+body.account-intelligence-page .chart-prestige-wrap {
+    min-height: 360px;
+    background: #17233f;
+}
+
+@media (max-width: 900px) {
+    .account-kpi-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .account-analysis-columns {
+        grid-template-columns: 1fr;
+    }
+    .account-top-content-list {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 600px) {
+    body.account-intelligence-page .analytics-prestige-container {
+        padding: 92px 14px 36px;
+    }
+    body.account-intelligence-page .analytics-header-redesign {
+        align-items: stretch;
+        flex-direction: column;
+        padding: 28px 22px;
+    }
+    body.account-intelligence-page .analytics-controls-prestige {
+        justify-content: stretch;
+    }
+    body.account-intelligence-page .prestige-select {
+        flex: 1;
+        min-width: 0;
+    }
+    .account-analysis-heading {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+    .account-kpi-grid {
+        grid-template-columns: 1fr;
+    }
+    .account-insight-panel {
+        padding: 19px 16px;
+    }
+}
+
+/* XERA1 theme: black, white and violet. Dark is the default. */
+body.account-intelligence-page {
+    --analytics-ink: #f7f7fb;
+    --analytics-muted: #a7a7b5;
+    --analytics-paper: #050507;
+    --analytics-line: rgba(255, 255, 255, 0.11);
+    --analytics-coral: #a855f7;
+    --analytics-blue: #c084fc;
+    --analytics-green: #d8b4fe;
+    color: var(--analytics-ink);
+    background:
+        radial-gradient(
+            circle at 80% 0%,
+            rgba(168, 85, 247, 0.16),
+            transparent 28%
+        ),
+        linear-gradient(180deg, #050507 0%, #0b0b10 52%, #050507 100%);
+}
+
+body.account-intelligence-page .analytics-header-redesign {
+    background: linear-gradient(125deg, #08080b 0%, #16111f 62%, #3b1764 100%);
+    border-color: rgba(192, 132, 252, 0.24);
+    box-shadow: 0 22px 48px rgba(0, 0, 0, 0.4);
+}
+
+body.account-intelligence-page .analytics-eyebrow,
+body.account-intelligence-page .account-panel-label {
+    color: #d8b4fe;
+}
+
+body.account-intelligence-page .account-analysis-heading h2,
+body.account-intelligence-page .account-panel-heading h3,
+body.account-intelligence-page .account-kpi strong,
+body.account-intelligence-page .account-breakdown-list strong,
+body.account-intelligence-page .account-kpi > div > span,
+body.account-intelligence-page .account-kpi > div > small,
+body.account-intelligence-page .account-analysis-heading p,
+body.account-intelligence-page .account-panel-total,
+body.account-intelligence-page .account-breakdown-list > div > span,
+body.account-intelligence-page .account-top-content-info strong,
+body.account-intelligence-page
+    .account-top-content-info
+    > span:not(.account-content-bar),
+body.account-intelligence-page .account-empty-state {
+    color: var(--analytics-ink);
+}
+
+body.account-intelligence-page .account-kpi,
+body.account-intelligence-page .account-insight-panel,
+body.account-intelligence-page .momentum-card-prestige,
+body.account-intelligence-page .insight-pill {
+    color: var(--analytics-ink);
+    background: rgba(17, 17, 23, 0.94);
+    border-color: var(--analytics-line);
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.24);
+}
+
+body.account-intelligence-page .account-kpi-coral .account-kpi-icon,
+body.account-intelligence-page .account-kpi-blue .account-kpi-icon,
+body.account-intelligence-page .account-kpi-green .account-kpi-icon {
+    background: #7e22ce;
+}
+
+body.account-intelligence-page .account-kpi-ink .account-kpi-icon,
+body.account-intelligence-page .signal-ink {
+    background: #f7f7fb;
+    color: #08080b;
+}
+
+body.account-intelligence-page .signal-coral,
+body.account-intelligence-page .signal-blue,
+body.account-intelligence-page .signal-green,
+body.account-intelligence-page .signal-gold {
+    background: #a855f7;
+}
+
+body.account-intelligence-page .account-content-bar {
+    background: rgba(255, 255, 255, 0.1);
+}
+body.account-intelligence-page .account-content-bar i {
+    background: linear-gradient(90deg, #7e22ce, #d8b4fe);
+}
+body.account-intelligence-page .account-rank {
+    color: #d8b4fe;
+}
+body.account-intelligence-page .account-analysis-live {
+    color: #d8b4fe;
+    background: rgba(168, 85, 247, 0.12);
+    border-color: rgba(192, 132, 252, 0.28);
+}
+body.account-intelligence-page .account-analysis-live i {
+    background: currentColor;
+    box-shadow: 0 0 0 4px rgba(168, 85, 247, 0.16);
+}
+body.account-intelligence-page .chart-prestige-wrap {
+    background: #0d0b12;
+    border-color: rgba(192, 132, 252, 0.2);
+}
+
+html.light-mode body.account-intelligence-page {
+    --analytics-ink: #17121f;
+    --analytics-muted: #6f6679;
+    --analytics-paper: #f7f5fa;
+    --analytics-line: #e5ddeb;
+    background: linear-gradient(180deg, #f7f5fa 0%, #fff 100%);
+}
+
+html.light-mode body.account-intelligence-page .account-kpi,
+html.light-mode body.account-intelligence-page .account-insight-panel,
+html.light-mode body.account-intelligence-page .momentum-card-prestige,
+html.light-mode body.account-intelligence-page .insight-pill {
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 12px 30px rgba(55, 24, 82, 0.08);
 }
 
 .analytics-prestige-container {
@@ -547,7 +1120,7 @@ body.analytics-page {
 }
 
 .prestige-select {
-    background: rgba(255,255,255,0.04);
+    background: rgba(255, 255, 255, 0.04);
     border: 1px solid var(--border-color);
     color: #fff;
     padding: 0.6rem 1rem;
@@ -571,8 +1144,12 @@ body.analytics-page {
 }
 
 .momentum-card-prestige {
-    background: linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
-    border: 1px solid rgba(255,255,255,0.08);
+    background: linear-gradient(
+        135deg,
+        rgba(255, 255, 255, 0.06),
+        rgba(255, 255, 255, 0.02)
+    );
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 20px;
     padding: 2rem;
     display: flex;
@@ -587,7 +1164,11 @@ body.analytics-page {
     content: "";
     position: absolute;
     inset: 0;
-    background: radial-gradient(circle at top right, rgba(16, 185, 129, 0.12), transparent 60%);
+    background: radial-gradient(
+        circle at top right,
+        rgba(16, 185, 129, 0.12),
+        transparent 60%
+    );
     pointer-events: none;
 }
 
@@ -631,12 +1212,12 @@ body.analytics-page {
     margin: 10px auto;
     max-width: 100%;
     max-height: 250px;
-    filter: drop-shadow(0 4px 12px rgba(0,0,0,0.2));
+    filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.2));
 }
 
 .circle-bg {
     fill: none;
-    stroke: rgba(255,255,255,0.05);
+    stroke: rgba(255, 255, 255, 0.05);
     stroke-width: 3;
 }
 
@@ -670,10 +1251,14 @@ body.analytics-page {
 }
 
 .chart-prestige-wrap {
-    background: linear-gradient(135deg, rgba(0,0,0,0.3), rgba(15, 18, 24, 0.2));
+    background: linear-gradient(
+        135deg,
+        rgba(0, 0, 0, 0.3),
+        rgba(15, 18, 24, 0.2)
+    );
     padding: 2rem;
     border-radius: 20px;
-    border: 1px solid rgba(255,255,255,0.05);
+    border: 1px solid rgba(255, 255, 255, 0.05);
     position: relative;
     overflow: hidden;
 }
@@ -685,7 +1270,12 @@ body.analytics-page {
     left: 0;
     right: 0;
     height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255, 255, 255, 0.1),
+        transparent
+    );
 }
 
 .insights-container-prestige {
@@ -700,8 +1290,8 @@ body.analytics-page {
     flex-direction: column;
     gap: 0.5rem;
     padding: 1.25rem;
-    background: rgba(255,255,255,0.03);
-    border: 1px solid rgba(255,255,255,0.06);
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
     border-radius: 16px;
     transition: all 0.3s ease;
     backdrop-filter: blur(8px);
@@ -721,7 +1311,7 @@ body.analytics-page {
     align-items: center;
     justify-content: center;
     border-radius: 12px;
-    background: rgba(255,255,255,0.05);
+    background: rgba(255, 255, 255, 0.05);
 }
 
 .insight-text {
@@ -734,7 +1324,7 @@ body.analytics-page {
 .insight-command {
     margin-top: 0.5rem;
     padding: 0.6rem 1rem;
-    background: rgba(0,0,0,0.3);
+    background: rgba(0, 0, 0, 0.3);
     border-radius: 10px;
     font-family: monospace;
     font-size: 0.85rem;
@@ -744,28 +1334,32 @@ body.analytics-page {
 }
 
 .insight-pill:hover {
-    background: rgba(255,255,255,0.05);
+    background: rgba(255, 255, 255, 0.05);
     transform: translateX(5px);
 }
 
-.insight-high { 
-    border-left: 4px solid #10b981; 
+.insight-high {
+    border-left: 4px solid #10b981;
 }
-.insight-mid { 
-    border-left: 4px solid #6366f1; 
+.insight-mid {
+    border-left: 4px solid #6366f1;
 }
-.insight-low { 
-    border-left: 4px solid #f59e0b; 
+.insight-low {
+    border-left: 4px solid #f59e0b;
 }
-.insight-warning { 
-    border-left: 4px solid #ef4444; 
+.insight-warning {
+    border-left: 4px solid #ef4444;
 }
 
 .chart-prestige-wrap {
-    background: linear-gradient(135deg, rgba(0,0,0,0.3), rgba(15, 18, 24, 0.2));
+    background: linear-gradient(
+        135deg,
+        rgba(0, 0, 0, 0.3),
+        rgba(15, 18, 24, 0.2)
+    );
     padding: 2rem;
     border-radius: 20px;
-    border: 1px solid rgba(255,255,255,0.05);
+    border: 1px solid rgba(255, 255, 255, 0.05);
     position: relative;
     overflow: hidden;
 }
@@ -777,7 +1371,12 @@ body.analytics-page {
     left: 0;
     right: 0;
     height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255, 255, 255, 0.1),
+        transparent
+    );
 }
 
 .analytics-dashboard {
@@ -896,8 +1495,8 @@ body.analytics-page {
     gap: 0.5rem;
     padding: 0.5rem 1rem;
     border-radius: 10px;
-    background: rgba(255,255,255,0.04);
-    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     color: var(--text-primary);
     font-size: 0.85rem;
     font-weight: 500;
@@ -906,7 +1505,7 @@ body.analytics-page {
 }
 
 .analytics-action-btn:hover {
-    background: rgba(255,255,255,0.08);
+    background: rgba(255, 255, 255, 0.08);
     transform: translateY(-1px);
 }
 
@@ -933,15 +1532,15 @@ body.analytics-page {
     font-size: 0.85rem;
     font-weight: 500;
     box-shadow: none;
-    border: 1px solid rgba(255,255,255,0.1);
-    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.03);
     border-radius: 10px;
     cursor: pointer;
     transition: all 0.2s ease;
 }
 
 .analytics-share-action:hover {
-    background: rgba(255,255,255,0.06);
+    background: rgba(255, 255, 255, 0.06);
     transform: translateY(-1px);
 }
 
@@ -1073,12 +1672,12 @@ body.analytics-page {
     .stream-container {
         flex-direction: column;
     }
-    
+
     .stream-chat {
         width: 100%;
         max-height: 400px;
     }
-    
+
     .analytics-charts {
         grid-template-columns: 1fr;
     }
@@ -1141,7 +1740,7 @@ body.analytics-page {
     .analytics-stats-grid {
         grid-template-columns: repeat(2, 1fr);
     }
-    
+
     .live-streams-grid {
         grid-template-columns: 1fr;
     }
@@ -1352,7 +1951,11 @@ body.is-stream-host #follow-btn {
     scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
     background:
         linear-gradient(180deg, rgba(10, 14, 18, 0.94), rgba(10, 14, 18, 0.82)),
-        radial-gradient(circle at top left, rgba(56, 189, 248, 0.12), transparent 38%);
+        radial-gradient(
+            circle at top left,
+            rgba(56, 189, 248, 0.12),
+            transparent 38%
+        );
 }
 
 .stream-host-panel::-webkit-scrollbar {
@@ -1473,8 +2076,11 @@ body.is-stream-host .stream-host-panel {
 .stream-host-search,
 .stream-host-role-row select,
 .stream-host-textarea {
-    transition: border-color 0.18s ease, background 0.18s ease,
-        transform 0.18s ease, box-shadow 0.18s ease;
+    transition:
+        border-color 0.18s ease,
+        background 0.18s ease,
+        transform 0.18s ease,
+        box-shadow 0.18s ease;
 }
 
 .stream-host-inline-btn:hover,
@@ -1889,11 +2495,19 @@ body.is-stream-host .stream-host-panel {
 .stream-host-chart-bar {
     flex: 1 1 0;
     border-radius: 999px 999px 4px 4px;
-    background: linear-gradient(180deg, rgba(56, 189, 248, 0.95), rgba(14, 165, 233, 0.22));
+    background: linear-gradient(
+        180deg,
+        rgba(56, 189, 248, 0.95),
+        rgba(14, 165, 233, 0.22)
+    );
 }
 
 .stream-host-chart--tempo .stream-host-chart-bar {
-    background: linear-gradient(180deg, rgba(244, 63, 94, 0.92), rgba(244, 63, 94, 0.22));
+    background: linear-gradient(
+        180deg,
+        rgba(244, 63, 94, 0.92),
+        rgba(244, 63, 94, 0.22)
+    );
 }
 
 .stream-host-compose label,
@@ -1916,34 +2530,36 @@ body.is-stream-host .stream-host-panel {
     word-break: break-word;
 }
 
-
 .stream-action-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 0.35rem;
     padding: 0.35rem 0.55rem;
-    background: rgba(255,255,255,0.04);
+    background: rgba(255, 255, 255, 0.04);
     border: 1px solid var(--border-color);
     border-radius: 10px;
     color: var(--text-primary);
     text-decoration: none;
     font-size: 0.8rem;
     font-weight: 600;
-    transition: transform 0.12s ease, border-color 0.2s ease, background 0.2s ease;
+    transition:
+        transform 0.12s ease,
+        border-color 0.2s ease,
+        background 0.2s ease;
     cursor: pointer;
 }
 
 .stream-action-btn:hover {
-    background: rgba(255,255,255,0.07);
+    background: rgba(255, 255, 255, 0.07);
     transform: translateY(-1px);
-    border-color: rgba(255,255,255,0.14);
+    border-color: rgba(255, 255, 255, 0.14);
 }
 
 .stream-action-btn.active {
-    background: rgba(255,255,255,0.12);
+    background: rgba(255, 255, 255, 0.12);
     color: var(--text-primary);
-    border-color: rgba(255,255,255,0.2);
+    border-color: rgba(255, 255, 255, 0.2);
 }
 
 .stream-action-danger {
@@ -2010,7 +2626,7 @@ body.is-stream-host .stream-host-panel {
 
 .viewer-list-close {
     background: transparent;
-    border: 1px solid rgba(255,255,255,0.08);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     color: var(--text-primary);
     width: 32px;
     height: 32px;
@@ -2032,8 +2648,8 @@ body.is-stream-host .stream-host-panel {
     gap: 0.6rem;
     padding: 0.5rem 0.65rem;
     border-radius: 10px;
-    background: rgba(255,255,255,0.04);
-    border: 1px solid rgba(255,255,255,0.06);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .viewer-list-avatar {
@@ -2091,7 +2707,8 @@ body.is-stream-host .stream-host-panel {
     opacity: 1;
 }
 
-.fullscreen-btn, .audio-control-btn {
+.fullscreen-btn,
+.audio-control-btn {
     background: rgba(0, 0, 0, 0.8);
     border: none;
     border-radius: 8px;
@@ -2101,7 +2718,8 @@ body.is-stream-host .stream-host-panel {
     transition: all 0.2s ease;
 }
 
-.fullscreen-btn:hover, .audio-control-btn:hover {
+.fullscreen-btn:hover,
+.audio-control-btn:hover {
     background: rgba(0, 0, 0, 0.9);
     transform: scale(1.05);
 }
@@ -2126,8 +2744,16 @@ body.stream-page {
     --stream-muted: rgba(226, 232, 240, 0.72);
     min-height: 100dvh;
     background:
-        radial-gradient(1200px 520px at -8% -16%, rgba(34, 211, 238, 0.09), transparent 58%),
-        radial-gradient(980px 500px at 108% -18%, rgba(148, 163, 184, 0.08), transparent 60%),
+        radial-gradient(
+            1200px 520px at -8% -16%,
+            rgba(34, 211, 238, 0.09),
+            transparent 58%
+        ),
+        radial-gradient(
+            980px 500px at 108% -18%,
+            rgba(148, 163, 184, 0.08),
+            transparent 60%
+        ),
         linear-gradient(180deg, var(--stream-bg-b), var(--stream-bg-a));
     color: #f8fafc;
     overflow: hidden;
@@ -2173,7 +2799,11 @@ body.stream-page .stream-video-container {
         0 32px 70px rgba(0, 0, 0, 0.52),
         inset 0 0 0 1px rgba(255, 255, 255, 0.03);
     background:
-        radial-gradient(circle at 50% 14%, rgba(255, 255, 255, 0.08), transparent 56%),
+        radial-gradient(
+            circle at 50% 14%,
+            rgba(255, 255, 255, 0.08),
+            transparent 56%
+        ),
         #000;
     aspect-ratio: auto;
     min-height: 0;
@@ -2182,7 +2812,12 @@ body.stream-page .stream-video-container {
 
 body.stream-page .stream-overlay {
     padding: 0.9rem;
-    background: linear-gradient(180deg, rgba(0, 0, 0, 0.72), rgba(0, 0, 0, 0.15) 62%, transparent 100%);
+    background: linear-gradient(
+        180deg,
+        rgba(0, 0, 0, 0.72),
+        rgba(0, 0, 0, 0.15) 62%,
+        transparent 100%
+    );
 }
 
 body.stream-page .stream-status,
@@ -2257,7 +2892,10 @@ body.stream-page .stream-chat-header {
 body.stream-page .stream-chat-messages {
     padding: 0.9rem;
     gap: 0.6rem;
-    background-image: linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+    background-image: linear-gradient(
+        rgba(255, 255, 255, 0.02) 1px,
+        transparent 1px
+    );
     background-size: 100% 34px;
 }
 
@@ -2582,7 +3220,9 @@ body.stream-page .stream-chat-send:hover {
     font-size: 0.95rem;
     border: none;
     cursor: pointer;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    transition:
+        transform 0.2s ease,
+        box-shadow 0.2s ease;
     box-shadow: 0 4px 12px rgba(59, 130, 246, 0.35);
 }
 

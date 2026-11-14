@@ -100,7 +100,7 @@ const TOPIC_ALIASES = {
 
 const SHARED_HASHTAGS = [
     "#buildinpublic",
-    "#xera",
+    "#xera1",
     "#progression",
     "#consistance",
 ];
@@ -928,7 +928,7 @@ function toHashInt(seed, max) {
     if (!Number.isFinite(max) || max <= 0) return 0;
     const hex = crypto
         .createHash("sha1")
-        .update(String(seed || "xera"))
+        .update(String(seed || "xera1"))
         .digest("hex")
         .slice(0, 8);
     return parseInt(hex, 16) % max;
@@ -1064,15 +1064,23 @@ function buildDescription(style, ctx) {
 }
 
 function normalizeHashtag(tag) {
-    const compact = String(tag || "").trim().replace(/\s+/g, "");
+    const compact = String(tag || "")
+        .trim()
+        .replace(/\s+/g, "");
     if (!compact) return "";
     return compact.startsWith("#") ? compact : `#${compact}`;
 }
 
 function buildHashtags(profile, topic, seed) {
-    const topicTags = (profile.hashtags || []).map(normalizeHashtag).filter(Boolean);
-    const pickedTopicTags = pickUniqueSeeded(topicTags, 3, `${seed}:topic-tags`);
-    const shared = pickSeeded(SHARED_HASHTAGS, `${seed}:shared-tag`, "#xera");
+    const topicTags = (profile.hashtags || [])
+        .map(normalizeHashtag)
+        .filter(Boolean);
+    const pickedTopicTags = pickUniqueSeeded(
+        topicTags,
+        3,
+        `${seed}:topic-tags`,
+    );
+    const shared = pickSeeded(SHARED_HASHTAGS, `${seed}:shared-tag`, "#xera1");
     const topicTag = normalizeHashtag(`#${topic}`);
     const tags = [...pickedTopicTags, shared, topicTag]
         .map(normalizeHashtag)
@@ -1097,9 +1105,7 @@ function buildMediaUrl(profile, seed) {
 function dedupeStrings(values = []) {
     return Array.from(
         new Set(
-            values
-                .map((value) => String(value || "").trim())
-                .filter(Boolean),
+            values.map((value) => String(value || "").trim()).filter(Boolean),
         ),
     );
 }
@@ -1330,10 +1336,15 @@ async function buildMediaAsset(profile, topic, seed, options = {}) {
     const shouldUseVideo = roll < 30;
 
     if (shouldUseVideo) {
-        const remoteVideo = await findRemoteVideoAsset(safeProfile, topic, seed, {
-            ...options,
-            recentMediaUrls: Array.from(recentMediaUrls),
-        });
+        const remoteVideo = await findRemoteVideoAsset(
+            safeProfile,
+            topic,
+            seed,
+            {
+                ...options,
+                recentMediaUrls: Array.from(recentMediaUrls),
+            },
+        );
         if (remoteVideo) return remoteVideo;
     }
 

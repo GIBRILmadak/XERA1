@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="fr">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
+        <title>XERA1 | Messages</title>
+        <meta name="theme-color" content="#09090b" />
+        <link rel="icon" type="image/png" href="icons/logo.png" />
+        <link rel="shortcut icon" href="icons/logo.png" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@500;600;700;800&display=swap"
+            rel="stylesheet"
+        />
+        <link rel="stylesheet" href="css/style.css?v=20261006-1" />
+        <link rel="stylesheet" href="css/search-notification.css" />
+        <link rel="stylesheet" href="css/arcs.css" />
+        <link rel="stylesheet" href="css/streaming-analytics.css" />
+        <link rel="stylesheet" href="css/messages-ui.css?v=20261005-2" />
+        <link
+            rel="stylesheet"
+            href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+        />
+        <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.111.0/dist/umd/supabase.js"></script>
+    </head>
+    <body class="has-mobile-nav messages-screen">
+        <nav
+            style="
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 12px 20px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            "
+        >
+            <a
+                class="logo"
+                href="index.html"
+                style="
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    text-decoration: none;
+                    color: white;
+                "
+            >
+                <div class="logo-img">
+                    <img
+                        src="icons/logo.png"
+                        alt="XERA1 - Logo"
+                        style="width: 28px; height: 28px"
+                    />
+                </div>
+                <span>XΞRA1</span>
+            </a>
+            <div class="lang-switcher-nav">
+                <select
+                    id="header-lang-select"
+                    class="nav-lang-select"
+                    aria-label="Language selection"
+                >
+                    <option value="fr">FR</option>
+                    <option value="en">EN</option>
+                </select>
+            </div>
+        </nav>
+        <section id="messages" class="page active">
+            <div class="container messages-container">
+                <div class="messages-mount"></div>
+            </div>
+        </section>
+
+        <script src="js/logger-client.js"></script>
+        <script src="js/router.js?v=20261004-3"></script>
+        <script src="js/supabase-config.js?v=20261006-1"></script>
+        <script src="js/ux-enhancements.js"></script>
+        <script src="js/messages.js?v=20261006-1"></script>
+        <script>
+            // Page autonome : app-supabase.js n'est pas chargé ici, donc
+            // personne d'autre ne résout la session avant la messagerie.
+            document.addEventListener("DOMContentLoaded", async () => {
+                let user = null;
+                try {
+                    user = await window.checkAuth?.();
+                } catch (error) {
+                    console.error("Messages auth error:", error);
+                }
+                if (!user?.id) {
+                    const back = `${window.location.pathname}${window.location.search}`;
+                    window.location.replace(
+                        `login.html?redirect=${encodeURIComponent(back)}`,
+                    );
+                    return;
+                }
+                await window.initializeMessaging?.();
+            });
+        </script>
+        <script src="js/i18n.js"></script>
+        <script src="js/seo-schema.js"></script>
+    </body>
+</html>

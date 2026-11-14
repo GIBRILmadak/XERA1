@@ -3,6 +3,8 @@
    ======================================== */
 
 let isSignUpMode = false;
+let pendingProvider = null;
+let pendingTermsAcceptance = null;
 const redirectTarget = new URLSearchParams(window.location.search).get(
     "redirect",
 );
@@ -68,6 +70,23 @@ const confirmPasswordToggle = document.getElementById(
 );
 const rememberMeContainer = document.getElementById("remember-me-container");
 const rememberMeCheckbox = document.getElementById("remember-me");
+const consentModal = document.getElementById("account-consent-modal");
+const consentPrivacy = document.getElementById("account-consent-privacy");
+const consentCgu = document.getElementById("account-consent-cgu");
+const consentSubmit = document.getElementById("account-consent-submit");
+const consentCancel = document.getElementById("account-consent-cancel");
+const consentClose = document.getElementById("account-consent-close");
+const passwordResetModal = document.getElementById("password-reset-modal");
+const passwordResetForm = document.getElementById("password-reset-form");
+const passwordResetEmail = document.getElementById("password-reset-email");
+const passwordResetClose = document.getElementById("password-reset-close");
+const passwordResetCancel = document.getElementById("password-reset-cancel");
+const passwordResetSubmit = document.getElementById("password-reset-submit");
+const passwordResetSubmitText = document.getElementById(
+    "password-reset-submit-text",
+);
+const passwordResetLoader = document.getElementById("password-reset-loader");
+const passwordResetStatus = document.getElementById("password-reset-status");
 
 // Wizard SignUp elements
 const signupStep1 = document.getElementById("signup-step-1");
@@ -190,6 +209,30 @@ async function checkExistingSession() {
 
         const user = await checkAuth();
         if (user) {
+            const storedConsent = sessionStorage.getItem(
+                "xera-google-terms-consent",
+            );
+            if (
+                storedConsent &&
+                user?.id &&
+                typeof upsertUserProfile === "function"
+            ) {
+                try {
+                    const consent = JSON.parse(storedConsent);
+                    const result = await upsertUserProfile(user.id, {
+                        accepted_terms: consent.accepted_terms === true,
+                        accepted_terms_at: consent.accepted_terms_at,
+                    });
+                    if (result?.success) {
+                        sessionStorage.removeItem("xera-google-terms-consent");
+                    }
+                } catch (error) {
+                    console.warn(
+                        "Impossible d'enregistrer le consentement Google:",
+                        error,
+                    );
+                }
+            }
             // Rediriger vers la page principale
             window.location.href = resolveRedirectTarget();
         }
@@ -341,17 +384,17 @@ function toggleMode(keepMessages = false) {
                 currentStep: 1,
             };
             showSignupStep(1);
-            if (formTitle) formTitle.textContent = "Créer votre compte";
+            if (formTitle) formTitle.textContent = window.t ? window.t("auth.createAccountLink", {}, "Créer un compte") : "Créer votre compte";
             if (formSubtitle)
-                formSubtitle.textContent = "Rejoignez la communauté XERA";
+                formSubtitle.textContent = window.t ? window.t("auth.description", {}, "Rejoignez une communauté de builders") : "Rejoignez la communauté XERA1";
             if (usernameGroup) usernameGroup.style.display = "block";
             if (confirmPasswordGroup)
                 confirmPasswordGroup.style.display = "block";
             if (forgotPasswordLink) forgotPasswordLink.style.display = "none";
             if (rememberMeContainer) rememberMeContainer.style.display = "none";
-            if (btnText) btnText.textContent = "Créer mon compte";
-            if (toggleText) toggleText.textContent = "Déjà un compte ?";
-            if (toggleLink) toggleLink.textContent = "Se connecter";
+            if (btnText) btnText.textContent = window.t ? window.t("auth.registerSubmit", {}, "S'inscrire") : "S'inscrire";
+            if (toggleText) toggleText.textContent = window.t ? window.t("auth.hasAccount", {}, "Déjà un compte ?") : "Déjà un compte ?";
+            if (toggleLink) toggleLink.textContent = window.t ? window.t("auth.loginLink", {}, "Se connecter") : "Se connecter";
             if (usernameInput) usernameInput.required = true;
             if (confirmPasswordInput) confirmPasswordInput.required = true;
         } else {
@@ -359,18 +402,18 @@ function toggleMode(keepMessages = false) {
             signupStep1.style.display = "none";
             signupStep2.style.display = "none";
             credentialsGroup.style.display = "block";
-            if (formTitle) formTitle.textContent = "Bienvenue sur XERA";
+            if (formTitle) formTitle.textContent = window.t ? window.t("auth.welcomeTitle", {}, "Bienvenue sur XERA1") : "Bienvenue sur XERA1";
             if (formSubtitle)
-                formSubtitle.textContent = "Connectez-vous pour continuer";
+                formSubtitle.textContent = window.t ? window.t("auth.welcomeSubtitle", {}, "Connectez-vous pour continuer") : "Connectez-vous pour continuer";
             if (usernameGroup) usernameGroup.style.display = "none";
             if (confirmPasswordGroup)
                 confirmPasswordGroup.style.display = "none";
             if (forgotPasswordLink) forgotPasswordLink.style.display = "block";
             if (rememberMeContainer)
                 rememberMeContainer.style.display = "block";
-            if (btnText) btnText.textContent = "Se connecter";
-            if (toggleText) toggleText.textContent = "Pas encore de compte ?";
-            if (toggleLink) toggleLink.textContent = "Créer un compte";
+            if (btnText) btnText.textContent = window.t ? window.t("auth.loginSubmit", {}, "Se connecter") : "Se connecter";
+            if (toggleText) toggleText.textContent = window.t ? window.t("auth.noAccount", {}, "Pas encore de compte ?") : "Pas encore de compte ?";
+            if (toggleLink) toggleLink.textContent = window.t ? window.t("auth.createAccountLink", {}, "Créer un compte") : "Créer un compte";
             if (usernameInput) usernameInput.required = false;
             if (confirmPasswordInput) confirmPasswordInput.required = false;
         }
@@ -590,9 +633,121 @@ function setSubmitLoading(isLoading) {
     btnLoader.style.display = isLoading ? "block" : "none";
 }
 
-// Gérer la soumission du formulaire
+function toggleConsentModal(show) {
+    if (!consentModal) return;
+    consentModal.style.display = show ? "flex" : "none";
+    if (show) {
+        if (pendingProvider !== "google") {
+            pendingTermsAcceptance = null;
+        }
+        consentPrivacy.checked = false;
+        consentCgu.checked = false;
+        if (consentSubmit) consentSubmit.disabled = true;
+        if (consentSubmit) consentSubmit.style.opacity = "0.45";
+    }
+}
+
+function acceptPendingTerms() {
+    pendingTermsAcceptance = {
+        accepted_terms: true,
+        accepted_terms_at: new Date().toISOString(),
+    };
+}
+
+function updateConsentSubmitState() {
+    if (!consentPrivacy || !consentCgu || !consentSubmit) return;
+    const canContinue = consentPrivacy.checked && consentCgu.checked;
+    consentSubmit.disabled = !canContinue;
+    consentSubmit.style.opacity = canContinue ? "1" : "0.45";
+}
+
+if (consentPrivacy) {
+    consentPrivacy.addEventListener("change", updateConsentSubmitState);
+}
+
+if (consentCgu) {
+    consentCgu.addEventListener("change", updateConsentSubmitState);
+}
+
+if (consentSubmit) {
+    consentSubmit.addEventListener("click", () => {
+        acceptPendingTerms();
+        const provider = pendingProvider;
+        pendingProvider = null;
+        toggleConsentModal(false);
+        if (provider === "google") {
+            handleGoogleSignIn(true);
+        } else if (isSignUpMode) {
+            handleSubmitAfterConsent(new Event("submit"));
+        }
+    });
+}
+
+if (consentCancel) {
+    consentCancel.addEventListener("click", () => {
+        pendingProvider = null;
+        pendingTermsAcceptance = null;
+        toggleConsentModal(false);
+        showError("Vous devez accepter les politiques pour créer un compte.");
+    });
+}
+
+if (consentClose) {
+    consentClose.addEventListener("click", () => {
+        pendingProvider = null;
+        pendingTermsAcceptance = null;
+        toggleConsentModal(false);
+        showError("Vous devez accepter les politiques pour créer un compte.");
+    });
+}
+
 async function handleSubmit(e) {
+    return handleSubmitAfterConsent(e);
+}
+
+async function handleSubmitAfterConsent(e) {
+    if (e && typeof e.preventDefault === "function") {
+        e.preventDefault();
+    }
+
+    if (!isSignUpMode) {
+        return handleSubmitInternal(e || new Event("submit"));
+    }
+
+    if (!consentPrivacy || !consentCgu) {
+        return handleSubmitInternal(e || new Event("submit"));
+    }
+
+    if (!consentPrivacy.checked || !consentCgu.checked) {
+        toggleConsentModal(true);
+        showError(
+            "Vous devez accepter la Politique de confidentialité et les CGU pour créer un compte.",
+        );
+        return;
+    }
+
+    return handleSubmitInternal(e || new Event("submit"));
+}
+
+async function handleSubmitInternal(e) {
     e.preventDefault();
+
+    if (isSignUpMode) {
+        const hasConsent = !!(
+            consentPrivacy &&
+            consentCgu &&
+            consentPrivacy.checked &&
+            consentCgu.checked
+        );
+
+        if (!hasConsent) {
+            toggleConsentModal(true);
+            showError(
+                "Vous devez accepter la Politique de confidentialité et les CGU avant de créer votre compte.",
+            );
+            return;
+        }
+    }
 
     // Récupération des valeurs
     const email = emailInput.value.trim().toLowerCase();
@@ -645,6 +800,7 @@ async function handleSubmit(e) {
                         : signupState.structure || signupState.mainType,
                 onboarding_completed: signupState.mainType !== "pro",
                 display_name: username,
+                ...pendingTermsAcceptance,
             };
 
             // Ajout des infos spécifiques selon le type
@@ -711,6 +867,7 @@ async function handleSubmit(e) {
                                 user?.user_metadata?.avatar_url ||
                                 user?.user_metadata?.picture ||
                                 null,
+                            ...pendingTermsAcceptance,
                         });
                     } catch (e) {
                         console.warn(
@@ -724,6 +881,7 @@ async function handleSubmit(e) {
                     "Compte créé ! Un email de confirmation a été envoyé à " +
                         email,
                 );
+                pendingTermsAcceptance = null;
                 setTimeout(() => {
                     toggleMode(true);
                     emailInput.value = email;
@@ -869,56 +1027,154 @@ async function handleSubmit(e) {
 }
 
 // Fonctions pour toggle password visibility
+function buildPasswordEyeIcon(isVisible) {
+    if (isVisible) {
+        return `
+            <svg class="eye-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M2 2l20 20"/>
+                <path d="M10.58 10.58A2 2 0 0 0 13.42 13.42"/>
+                <path d="M9.88 5.08A10.94 10.94 0 0 1 12 5c6.5 0 10 7 10 7a17.32 17.32 0 0 1-4.96 6.06"/>
+                <path d="M6.61 6.61A17.47 17.47 0 0 0 2 12s3.5 7 10 7a11.34 11.34 0 0 0 5.39-1.64"/>
+            </svg>
+        `;
+    }
+
+    return `
+        <svg class="eye-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/>
+            <circle cx="12" cy="12" r="3"/>
+        </svg>
+    `;
+}
+
 function togglePasswordVisibility(inputId, toggleBtnId) {
     const input = document.getElementById(inputId);
     const toggleBtn = document.getElementById(toggleBtnId);
 
-    if (input.type === "password") {
-        input.type = "text";
-        toggleBtn.setAttribute("data-visible", "true");
-    } else {
-        input.type = "password";
-        toggleBtn.setAttribute("data-visible", "false");
-    }
+    if (!input || !toggleBtn) return;
+
+    const isHidden = input.type === "password";
+    const nextVisible = isHidden;
+
+    input.type = nextVisible ? "text" : "password";
+
+    toggleBtn.setAttribute("data-visible", String(nextVisible));
+    toggleBtn.setAttribute(
+        "aria-label",
+        nextVisible ? "Masquer le mot de passe" : "Afficher le mot de passe",
+    );
+    toggleBtn.title = nextVisible
+        ? "Masquer le mot de passe"
+        : "Afficher le mot de passe";
+    toggleBtn.innerHTML = buildPasswordEyeIcon(nextVisible);
 }
 
 function resetPasswordVisibility() {
-    passwordInput.type = "password";
-    confirmPasswordInput.type = "password";
-    passwordToggle.setAttribute("data-visible", "false");
-    confirmPasswordToggle.setAttribute("data-visible", "false");
+    if (passwordInput) passwordInput.type = "password";
+    if (confirmPasswordInput) confirmPasswordInput.type = "password";
+    if (passwordToggle) {
+        passwordToggle.setAttribute("data-visible", "false");
+        passwordToggle.setAttribute("aria-label", "Afficher le mot de passe");
+        passwordToggle.title = "Afficher le mot de passe";
+        passwordToggle.innerHTML = buildPasswordEyeIcon(false);
+    }
+    if (confirmPasswordToggle) {
+        confirmPasswordToggle.setAttribute("data-visible", "false");
+        confirmPasswordToggle.setAttribute(
+            "aria-label",
+            "Afficher le mot de passe",
+        );
+        confirmPasswordToggle.title = "Afficher le mot de passe";
+        confirmPasswordToggle.innerHTML = buildPasswordEyeIcon(false);
+    }
+}
+
+function setPasswordResetLoading(isLoading) {
+    if (
+        !passwordResetSubmit ||
+        !passwordResetSubmitText ||
+        !passwordResetLoader
+    ) {
+        return;
+    }
+
+    passwordResetSubmit.disabled = isLoading;
+    passwordResetSubmitText.textContent = isLoading
+        ? "Envoi en cours..."
+        : "Envoyer le lien";
+    passwordResetLoader.style.display = isLoading ? "inline-block" : "none";
+}
+
+function setPasswordResetStatus(message = "", type = "") {
+    if (!passwordResetStatus) return;
+    passwordResetStatus.textContent = message;
+    passwordResetStatus.dataset.state = type;
+}
+
+function resetPasswordModalState() {
+    if (passwordResetForm) passwordResetForm.reset();
+    setPasswordResetLoading(false);
+    setPasswordResetStatus();
+    if (passwordResetSubmit) passwordResetSubmit.style.display = "inline-flex";
+    if (passwordResetCancel) passwordResetCancel.textContent = "Annuler";
+}
+
+function togglePasswordResetModal(show) {
+    if (!passwordResetModal) return;
+    passwordResetModal.style.display = show ? "flex" : "none";
+    if (show) {
+        resetPasswordModalState();
+        window.setTimeout(() => passwordResetEmail?.focus(), 0);
+    } else {
+        resetPasswordModalState();
+    }
 }
 
 // Gérer le reset de mot de passe
-async function handleForgotPassword() {
-    const email = emailInput.value.trim().toLowerCase();
+async function handleForgotPassword(event) {
+    event?.preventDefault();
+    const email = passwordResetEmail?.value.trim().toLowerCase();
 
     if (!email) {
-        showError("Veuillez entrer votre adresse email.");
+        setPasswordResetStatus("Veuillez entrer votre adresse email.", "error");
+        passwordResetEmail?.focus();
         return;
     }
 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        showError("Adresse email invalide.");
+        setPasswordResetStatus("Adresse email invalide.", "error");
+        passwordResetEmail?.focus();
         return;
     }
+
+    setPasswordResetLoading(true);
+    setPasswordResetStatus();
 
     try {
         const result = await resetPassword(email);
 
         if (result.success) {
-            showSuccess(
-                "Un email de réinitialisation a été envoyé à votre adresse email.",
+            setPasswordResetStatus(
+                "Un lien de réinitialisation a été envoyé à votre adresse si un compte y est associé.",
+                "success",
             );
+            if (passwordResetSubmit) passwordResetSubmit.style.display = "none";
+            if (passwordResetCancel) passwordResetCancel.textContent = "Fermer";
         } else {
-            showError(
+            setPasswordResetStatus(
                 result.error ||
-                    "Erreur lors de l'envoi de l'email de réinitialisation.",
+                    "Impossible d'envoyer le lien. Veuillez réessayer.",
+                "error",
             );
         }
     } catch (error) {
         console.error("Erreur reset password:", error);
-        showError("Une erreur est survenue. Veuillez réessayer.");
+        setPasswordResetStatus(
+            "Un problème réseau est survenu. Veuillez réessayer.",
+            "error",
+        );
+    } finally {
+        setPasswordResetLoading(false);
     }
 }
 
@@ -926,10 +1182,10 @@ async function handleForgotPassword() {
 async function signInWithGoogle() {
     try {
         const { error } = await supabase.auth.signInWithOAuth({
-            provider: 'google',
+            provider: "google",
             options: {
-                redirectTo: `${window.location.origin}/index.html`
-            }
+                redirectTo: `${window.location.origin}/index.html`,
+            },
         });
         if (error) throw error;
         return { success: true };
@@ -939,8 +1195,19 @@ async function signInWithGoogle() {
 }
 
 // Gérer la connexion avec Google
-async function handleGoogleSignIn() {
+async function handleGoogleSignIn(isConsentValidated = false) {
     try {
+        if (!isConsentValidated) {
+            pendingProvider = "google";
+            toggleConsentModal(true);
+            return;
+        }
+
+        acceptPendingTerms();
+        sessionStorage.setItem(
+            "xera-google-terms-consent",
+            JSON.stringify(pendingTermsAcceptance),
+        );
         googleSigninBtn.disabled = true;
         googleSigninBtn.innerHTML =
             '<svg class="btn-loader" style="animation: spin 1s linear infinite;" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle></svg><span>Signing in...</span>';
@@ -974,7 +1241,7 @@ if (toggleLink) {
     });
 }
 
-if (authForm) {
+if (authForm && typeof handleSubmit === "function") {
     authForm.addEventListener("submit", handleSubmit);
 }
 
@@ -995,17 +1262,40 @@ if (confirmPasswordToggle) {
 if (forgotPassword) {
     forgotPassword.addEventListener("click", (e) => {
         e.preventDefault();
-        handleForgotPassword();
+        togglePasswordResetModal(true);
+        if (passwordResetEmail && emailInput?.value) {
+            passwordResetEmail.value = emailInput.value.trim();
+        }
+    });
+}
+
+if (passwordResetForm) {
+    passwordResetForm.addEventListener("submit", handleForgotPassword);
+}
+
+if (passwordResetClose) {
+    passwordResetClose.addEventListener("click", () => {
+        togglePasswordResetModal(false);
+    });
+}
+
+if (passwordResetCancel) {
+    passwordResetCancel.addEventListener("click", () => {
+        togglePasswordResetModal(false);
     });
 }
 
 // Google signin listener
 if (googleSigninBtn) {
-    googleSigninBtn.addEventListener("click", handleGoogleSignIn);
+    googleSigninBtn.addEventListener("click", () => handleGoogleSignIn());
 }
 
 // Initialisation de la page
 document.addEventListener("DOMContentLoaded", () => {
+    if (authForm && typeof handleSubmit === "function") {
+        authForm.addEventListener("submit", handleSubmit);
+    }
+
     // Initialiser les clics sur les options de type de compte pour le wizard
     document.querySelectorAll(".account-option").forEach((opt) => {
         opt.onclick = () => handleAccountTypeSelection(opt.dataset.type);

@@ -16,7 +16,7 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
     auth: { persistSession: false },
-    global: { headers: { "X-Client-Info": "xera-dedupe-bots" } },
+    global: { headers: { "X-Client-Info": "xera1-dedupe-bots" } },
 });
 
 function normalizeName(raw) {

@@ -1,4 +1,4 @@
-# 🎯 XERA Recommendation Algorithm - Proof of Building
+# 🎯 XERA1 Recommendation Algorithm - Proof of Building
 
 ## Vue d'ensemble
 
@@ -98,7 +98,7 @@ Cet algorithme de recommandation est conçu pour **retenir les utilisateurs** en
 
 ```bash
 # Exécute le schéma SQL
-psql -U postgres -d xera -f sql/engagement-tracking-schema.sql
+psql -U postgres -d xera1 -f sql/engagement-tracking-schema.sql
 ```
 
 Cela crée:
@@ -177,7 +177,7 @@ fetch("/api/app/discover/users")
     .then((r) => r.json())
     .then((data) => {
         // data.data = utilisateurs ranking par algo
-        // data.algorithm = "xera-v2-composite" (nouveau)
+        // data.algorithm = "xera1-v2-composite" (nouveau)
         displayFeed(data.data);
     });
 ```
@@ -460,7 +460,7 @@ curl http://localhost:5050/api/app/discover/users
     { "id": "...", "name": "Creator 1", "followers_count": 1000, ... },
     { "id": "...", "name": "Creator 2", "followers_count": 500, ... }
   ],
-  "algorithm": "xera-v2-composite",
+  "algorithm": "xera1-v2-composite",
   "cached": false
 }
 ```

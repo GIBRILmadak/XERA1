@@ -1,5 +1,5 @@
 /**
- * XERA RECOMMENDATION ENGINE - Proof of Building
+ * XERA1 RECOMMENDATION ENGINE - Proof of Building
  *
  * Algorithme de recommandation sophistiqué (niveau TikTok/YouTube/Instagram)
  * Objectif: Retenir les utilisateurs avec le meilleur contenu
@@ -274,6 +274,7 @@ function calculateCompositeScore(user, userStats = {}, options = {}) {
         enterpriseNeeds = [],
         enterpriseIndustry = "",
         enterpriseBio = "",
+        fataMultipliers = {}, // user_id -> multiplier
     } = options;
 
     let score = 0;
@@ -306,6 +307,12 @@ function calculateCompositeScore(user, userStats = {}, options = {}) {
     // Gravité sociale (+10 points max)
     const socialGravityScore = calculateSocialGravityScore(userStats);
     score += socialGravityScore * 0.1;
+
+    // Fata Visibility Boost (Reward 2)
+    if (fataMultipliers && fataMultipliers[user.id]) {
+        const multiplier = Math.min(5.0, Number(fataMultipliers[user.id]) || 1.0);
+        score *= multiplier;
+    }
 
     // Pénalité diversité
     const diversityPenalty = calculateDiversityPenalty(
@@ -345,6 +352,7 @@ function rankUsersIntelligently(users, userStatsMap = {}, options = {}) {
             boostPriority: options.boostPriority !== false,
             boostMonetized: options.boostMonetized !== false,
             personalizationFactors: options.personalizationFactors || {},
+            fataMultipliers: options.fataMultipliers || {},
         });
 
         return {
@@ -427,8 +435,9 @@ async function fetchUserEngagementStats(supabase, userIds = []) {
         const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
         const { data: recentPosts, error: postsError } = await supabase
             .from("content")
-            .select("user_id")
-            .in("user_id", userIds)
+            .select("author_id")
+            .eq("author_type", "USER")
+            .in("author_id", userIds)
             .gte("created_at", sevenDaysAgo);
 
         if (postsError) {
@@ -496,7 +505,8 @@ async function fetchUserEngagementStats(supabase, userIds = []) {
             const userSocialEvents = socialEvents.filter(
                 (event) => event.target_user_id === userId,
             );
-            const userRecentPosts = recentPosts?.filter(p => p.user_id === userId) || [];
+            const userRecentPosts =
+                recentPosts?.filter((post) => post.author_id === userId) || [];
 
             const countEvent = (type) =>
                 userSocialEvents.filter((event) => event.event_type === type)

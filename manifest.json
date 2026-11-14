@@ -1,26 +1,31 @@
 {
-  "name": "XERA",
-  "short_name": "XERA",
-  "description": "Tracez votre progression sans dopamine sociale",
-  "start_url": "/",
-  "scope": "/",
-  "display": "standalone",
-  "background_color": "#050505",
-  "theme_color": "#050505",
-  "orientation": "portrait-primary",
-  "lang": "fr",
-  "icons": [
-    {
-      "src": "icons/logo-192x192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
+    "name": "XERA1",
+    "short_name": "XERA1",
+    "id": "/",
+    "description": "XERA1 - Tracez votre progression sans dopamine sociale",
+    "start_url": "/",
+    "scope": "/",
+    "capture_links": "existing-client-navigate",
+    "launch_handler": {
+        "client_mode": "navigate-existing"
     },
-    {
-      "src": "icons/logo-512x512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
-    }
-  ]
+    "display": "standalone",
+    "background_color": "#050505",
+    "theme_color": "#050505",
+    "orientation": "portrait-primary",
+    "lang": "fr",
+    "icons": [
+        {
+            "src": "icons/logo-192x192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any maskable"
+        },
+        {
+            "src": "icons/logo-512x512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any maskable"
+        }
+    ]
 }
