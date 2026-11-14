@@ -1,6 +1,10 @@
 {
     "$schema": "https://openapi.vercel.sh/vercel.json",
+    "outputDirectory": "client/dist",
     "functions": {
+        "api/*.js": {
+            "includeFiles": "client/dist/**"
+        },
         "api/router.js": {
             "maxDuration": 60
         }
@@ -34,7 +38,8 @@
         { "source": "/verification", "destination": "/verification.html" },
         { "source": "/cgu", "destination": "/cgu.html" },
         { "source": "/privacy", "destination": "/privacy.html" },
-        { "source": "/404", "destination": "/404.html" }
+        { "source": "/404", "destination": "/404.html" },
+        { "source": "/((?!api/|icons/|css/|js/|medias/|favicon.svg|manifest.json|robots.txt|sw.js).*)", "destination": "/index.html" }
     ],
     "crons": [
         {
