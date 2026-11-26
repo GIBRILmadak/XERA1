@@ -25,7 +25,11 @@ export function AuthProvider({ children }) {
     });
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY' && !window.location.search.includes('mode=nouveau')) {
+        window.location.replace('/connexion?mode=nouveau');
+        return;
+      }
       if (session?.user) loadFullUser(session.user);
       else setUser(null);
     });

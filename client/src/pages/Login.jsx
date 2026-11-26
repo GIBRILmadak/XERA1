@@ -5,7 +5,7 @@ import { Brand } from '../components/Shell';
 import { Button } from '../components/ui';
 import { useAuth } from '../contexts/AuthContext';
 import { useUi } from '../contexts/UiContext';
-import { signIn, signInWithGoogle, signUp, supabase } from '../services/supabase';
+import { AUTH_RETURN_BASE, signIn, signInWithGoogle, signUp, supabase } from '../services/supabase';
 
 function GoogleLogo() {
   return (
@@ -24,7 +24,7 @@ export default function Login() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const redirect = params.get('redirect')?.startsWith('/') ? params.get('redirect') : '/';
-  const [mode, setMode] = useState(params.get('mode') === 'inscription' ? 'signup' : 'login');
+  const [mode, setMode] = useState(params.get('mode') === 'inscription' ? 'signup' : params.get('mode') === 'nouveau' ? 'newpass' : 'login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
@@ -33,15 +33,23 @@ export default function Login() {
   const [error, setError] = useState('');
   const [sent, setSent] = useState(false);
 
-  if (user) return <Navigate to={redirect} replace />;
+  if (user && mode !== 'newpass') return <Navigate to={redirect} replace />;
 
   async function submit(e) {
     e.preventDefault();
     setError('');
     setBusy(true);
     try {
+      if (mode === 'newpass') {
+        if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/.test(password)) throw new Error('8 caractères minimum, avec une majuscule, une minuscule et un chiffre.');
+        const { error: err } = await supabase.auth.updateUser({ password });
+        if (err) throw err;
+        toast('success', 'Mot de passe modifié', 'Vous êtes connecté.');
+        navigate('/', { replace: true });
+        return;
+      }
       if (mode === 'reset') {
-        const { error: err } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: `${window.location.origin}/connexion` });
+        const { error: err } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: `${AUTH_RETURN_BASE}/connexion?mode=nouveau` });
         if (err) throw err;
         setSent(true);
         return;
@@ -86,13 +94,13 @@ export default function Login() {
         ) : (
           <>
             <div>
-              <h1>{mode === 'login' ? 'Bon retour' : mode === 'signup' ? 'Rejoignez XERA' : 'Mot de passe oublié'}</h1>
+              <h1>{mode === 'login' ? 'Bon retour' : mode === 'signup' ? 'Rejoignez XERA' : mode === 'newpass' ? 'Nouveau mot de passe' : 'Mot de passe oublié'}</h1>
               <p className="lead" style={{ marginTop: 6 }}>
-                {mode === 'reset' ? 'Recevez un lien pour le réinitialiser.' : 'Montrez ce que vous construisez, jour après jour.'}
+                {mode === 'reset' ? 'Recevez un lien pour le réinitialiser.' : mode === 'newpass' ? 'Choisissez votre nouveau mot de passe.' : 'Montrez ce que vous construisez, jour après jour.'}
               </p>
             </div>
 
-            {mode !== 'reset' && (
+            {(mode === 'login' || mode === 'signup') && (
               <div className="tabs" role="tablist">
                 <button type="button" role="tab" aria-selected={mode === 'login'} className={`tab${mode === 'login' ? ' is-active' : ''}`} onClick={() => setMode('login')}>
                   Connexion
@@ -103,7 +111,7 @@ export default function Login() {
               </div>
             )}
 
-            {mode !== 'reset' && (
+            {(mode === 'login' || mode === 'signup') && (
               <>
                 <Button className="google-btn" size="lg" block type="button" onClick={google}>
                   <GoogleLogo />
@@ -120,10 +128,12 @@ export default function Login() {
                   <input className="input" placeholder="Nom d’utilisateur" autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} required minLength={3} aria-label="Nom d’utilisateur" />
                 </div>
               )}
+              {mode !== 'newpass' && (
               <div className="input-wrap">
                 <Icon name="mail" />
                 <input className="input" type="email" placeholder="Adresse e-mail" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required aria-label="Adresse e-mail" />
               </div>
+              )}
               {mode !== 'reset' && (
                 <div className="input-wrap">
                   <Icon name="lock" />
@@ -145,7 +155,7 @@ export default function Login() {
                   </span>
                 </div>
               )}
-              {mode === 'signup' && <p className="muted" style={{ fontSize: 12.5 }}>8 caractères minimum, avec une majuscule, une minuscule et un chiffre.</p>}
+              {(mode === 'signup' || mode === 'newpass') && <p className="muted" style={{ fontSize: 12.5 }}>8 caractères minimum, avec une majuscule, une minuscule et un chiffre.</p>}
               {error && (
                 <div className="form-error">
                   <Icon name="error" />
@@ -153,7 +163,7 @@ export default function Login() {
                 </div>
               )}
               <Button variant="primary" size="lg" block loading={busy}>
-                {mode === 'login' ? 'Se connecter' : mode === 'signup' ? 'Créer mon compte' : 'Envoyer le lien'}
+                {mode === 'login' ? 'Se connecter' : mode === 'signup' ? 'Créer mon compte' : mode === 'newpass' ? 'Enregistrer' : 'Envoyer le lien'}
               </Button>
             </form>
             <div style={{ textAlign: 'center' }}>
@@ -161,7 +171,7 @@ export default function Login() {
                 <button type="button" className="muted" style={{ fontSize: 13.5, fontWeight: 600 }} onClick={() => setMode('reset')}>
                   Mot de passe oublié ?
                 </button>
-              ) : mode === 'reset' ? (
+              ) : mode === 'reset' || mode === 'newpass' ? (
                 <button type="button" className="muted" style={{ fontSize: 13.5, fontWeight: 600 }} onClick={() => setMode('login')}>
                   Retour à la connexion
                 </button>
