@@ -49,7 +49,7 @@ function ValidateSheet({ open, onClose, arc, proofs, isOwner, onDone }) {
   return (
     <Sheet open={open} onClose={onClose} title="Valider un jalon">
       {eligible.length === 0 ? (
-        <EmptyState
+        <EmptyState art="proof"
           icon="add_photo_alternate"
           title="Il faut d'abord une preuve"
           text="Un jalon se valide avec une preuve qui a un média et une description."
@@ -129,7 +129,7 @@ export default function ArcDetail() {
       <>
         <TopBar back title="Projet" />
         <main className="main">
-          <EmptyState icon="flag" title="Projet introuvable" text="Il a peut-être été supprimé ou rendu privé." />
+          <EmptyState art="launch" icon="flag" title="Projet introuvable" text="Il a peut-être été supprimé ou rendu privé." />
         </main>
       </>
     );
@@ -200,7 +200,7 @@ export default function ArcDetail() {
           <span className="muted" style={{ fontSize: 13 }}>{proofs.length} preuve{proofs.length > 1 ? 's' : ''}</span>
         </div>
         {proofs.length === 0 ? (
-          <EmptyState
+          <EmptyState art="proof"
             icon="photo_camera"
             title="Pas encore de preuve"
             text={isOwner ? 'Publiez votre première preuve pour lancer le parcours.' : 'Le parcours de ce projet commence bientôt.'}

@@ -105,7 +105,7 @@ function Feed() {
             <CardSkeleton />
           </div>
         ) : items.length === 0 ? (
-          <EmptyState
+          <EmptyState art="empty"
             icon={filter === 'following' ? 'group_add' : 'auto_awesome'}
             title={filter === 'following' ? 'Rien de neuf chez vos abonnements' : 'Aucune preuve pour le moment'}
             text={

@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import Icon from '../components/Icon';
 import { Brand } from '../components/Shell';
 import { Button } from '../components/ui';
+import Art from '../components/Illustrations';
 import { useAuth } from '../contexts/AuthContext';
 import { useUi } from '../contexts/UiContext';
 import { AUTH_RETURN_BASE, signIn, signInWithGoogle, signUp, supabase } from '../services/supabase';
@@ -15,6 +16,44 @@ function GoogleLogo() {
       <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z" />
       <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z" />
     </svg>
+  );
+}
+
+const SLIDES = [
+  { art: 'launch', title: 'Lancez vos projets', text: 'Un ARC, des jalons, et une preuve à chaque avancée.' },
+  { art: 'proof', title: 'Montrez des preuves', text: 'Photos, vidéos, résultats : votre travail parle pour vous.' },
+  { art: 'community', title: 'Attirez les bonnes personnes', text: 'Collaborateurs, investisseurs et soutien de la communauté.' },
+];
+
+/** Panneau illustré et animé de la page de connexion / inscription. */
+function AuthShowcase({ signup }) {
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setI((n) => (n + 1) % SLIDES.length), 4200);
+    return () => clearInterval(t);
+  }, []);
+  const slide = SLIDES[i];
+  return (
+    <aside className="auth-aside" aria-hidden="true">
+      <div className="auth-aside-art" key={slide.art}>
+        <Art name={slide.art} size={260} />
+      </div>
+      <div className="auth-aside-copy" key={`t-${i}`}>
+        <span className="eyebrow">{signup ? 'Gratuit, en moins de 2 minutes' : 'Proof of Building'}</span>
+        <h2>{slide.title}</h2>
+        <p>{slide.text}</p>
+      </div>
+      <div className="auth-dots">
+        {SLIDES.map((sl, n) => (
+          <span key={sl.art} className={n === i ? 'is-on' : ''} />
+        ))}
+      </div>
+      <ul className="auth-perks">
+        <li><span className="perk-dot" style={{ background: '#10B981' }} />Badges vérifiés et paliers de contributeur</li>
+        <li><span className="perk-dot" style={{ background: '#8B5CF6' }} />Messagerie privée et sécurisée</li>
+        <li><span className="perk-dot" style={{ background: '#F5C451' }} />Soutien de la communauté par Mobile Money</li>
+      </ul>
+    </aside>
   );
 }
 
@@ -76,6 +115,8 @@ export default function Login() {
 
   return (
     <div className="auth">
+      <div className="auth-shell">
+      <AuthShowcase signup={mode === 'signup'} />
       <div className="auth-card">
         <Brand />
         {sent ? (
@@ -183,6 +224,7 @@ export default function Login() {
             </div>
           </>
         )}
+      </div>
       </div>
     </div>
   );

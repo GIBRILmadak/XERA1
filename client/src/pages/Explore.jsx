@@ -61,7 +61,7 @@ export default function Explore() {
 
         {results ? (
           results.users.length + results.arcs.length === 0 ? (
-            <EmptyState icon="search_off" title="Aucun résultat" text={`Rien ne correspond à « ${term} ».`} />
+            <EmptyState art="empty" icon="search_off" title="Aucun résultat" text={`Rien ne correspond à « ${term} ».`} />
           ) : (
             <>
               {results.users.length > 0 && (
@@ -125,7 +125,7 @@ export default function Explore() {
                 ))}
               </div>
             ) : arcs.length === 0 ? (
-              <EmptyState icon="flag" title="Aucun projet public" />
+              <EmptyState art="launch" icon="flag" title="Aucun projet public" />
             ) : (
               <div className="arc-grid">
                 {arcs.map((a) => (

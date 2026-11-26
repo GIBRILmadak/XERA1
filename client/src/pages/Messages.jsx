@@ -94,7 +94,7 @@ export function Inbox() {
             ))}
           </div>
         ) : list.length === 0 ? (
-          <EmptyState icon="forum" title="Aucune conversation" text="Écrivez à un bâtisseur depuis son profil pour démarrer." />
+          <EmptyState art="chat" icon="forum" title="Aucune conversation" text="Écrivez à un bâtisseur depuis son profil pour démarrer." />
         ) : (
           <div className="list">
             {list.map((c) => (
@@ -422,7 +422,7 @@ export function Conversation() {
           {messages === null ? (
             <Skeleton height={40} width="60%" radius={14} />
           ) : messages.length === 0 ? (
-            <EmptyState icon="waving_hand" title="Dites bonjour" text="Présentez-vous et parlez de vos projets." />
+            <EmptyState art="chat" icon="waving_hand" title="Dites bonjour" text="Présentez-vous et parlez de vos projets." />
           ) : (
             messages.map((m) => {
               const day = dayLabel(m.created_at);

@@ -205,7 +205,7 @@ export default function Profile() {
       <>
         <TopBar back title="Profil" />
         <main className="main">
-          <EmptyState icon="person_off" title="Profil introuvable" />
+          <EmptyState art="empty" icon="person_off" title="Profil introuvable" />
         </main>
       </>
     );
@@ -296,7 +296,7 @@ export default function Profile() {
             content === null ? (
               <CardSkeleton />
             ) : content.length === 0 ? (
-              <EmptyState
+              <EmptyState art="proof"
                 icon="photo_camera"
                 title={isMe ? 'Publiez votre première preuve' : 'Aucune preuve publiée'}
                 action={isMe && <Link to="/creer/preuve" className="btn btn--primary"><Icon name="add" /> Publier</Link>}
@@ -305,7 +305,7 @@ export default function Profile() {
               content.map((c, i) => <ContentCard key={c.id} content={c} index={i} />)
             )
           ) : arcs.length === 0 ? (
-            <EmptyState
+            <EmptyState art="launch"
               icon="flag"
               title={isMe ? 'Lancez votre premier projet' : 'Aucun projet'}
               action={isMe && <Link to="/creer/arc" className="btn btn--primary"><Icon name="add" /> Nouvel ARC</Link>}
