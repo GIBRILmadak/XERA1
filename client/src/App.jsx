@@ -3,7 +3,8 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate, usePa
 import { Capacitor } from '@capacitor/core';
 import { App as CapApp } from '@capacitor/app';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { UiProvider } from './contexts/UiContext';
+import { UiProvider, useUi } from './contexts/UiContext';
+import { handleNativeAuthCallback } from './services/supabase';
 import Shell, { TopBar } from './components/Shell';
 import { EmptyState } from './components/ui';
 import Home from './pages/Home';
@@ -56,6 +57,28 @@ function NotFound() {
   );
 }
 
+/** Retour de la connexion Google dans l'APK (com.xera.app://auth-callback). */
+function NativeAuthReturn() {
+  const navigate = useNavigate();
+  const { toast } = useUi();
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return undefined;
+    const handle = CapApp.addListener('appUrlOpen', async ({ url }) => {
+      const res = await handleNativeAuthCallback(url);
+      if (!res.handled) return;
+      if (res.error) toast('error', 'Connexion Google impossible', res.error);
+      else {
+        toast('success', 'Bienvenue sur XERA');
+        navigate('/', { replace: true });
+      }
+    });
+    return () => {
+      handle.then((h) => h.remove());
+    };
+  }, [navigate, toast]);
+  return null;
+}
+
 /** Bouton retour Android dans l'APK. */
 function NativeBackButton() {
   const navigate = useNavigate();
@@ -79,6 +102,7 @@ export default function App() {
       <AuthProvider>
         <BrowserRouter>
           <NativeBackButton />
+          <NativeAuthReturn />
           <Routes>
             <Route path="/connexion" element={<Login />} />
             <Route path="/login" element={<Navigate to="/connexion" replace />} />
