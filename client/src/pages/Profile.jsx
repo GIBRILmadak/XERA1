@@ -4,12 +4,15 @@ import { TopBar } from '../components/Shell';
 import Icon from '../components/Icon';
 import ContentCard from '../components/ContentCard';
 import ArcCard from '../components/ArcCard';
-import { Avatar, Badge, Button, CardSkeleton, EmptyState, IconLink, Sheet } from '../components/ui';
+import { Avatar, Button, CardSkeleton, EmptyState, IconLink, Sheet } from '../components/ui';
 import { useAuth } from '../contexts/AuthContext';
 import { useUi } from '../contexts/UiContext';
-import { compact, displayName, isVerified } from '../lib/format';
+import { compact, displayName } from '../lib/format';
+import { NameBadges, ProfileBadges } from '../components/Badges';
+import { canReceiveSupport } from '../services/badges';
+import { openSupport } from '../services/support';
 import {
-  fetchBadges,
+  countUserContent,
   fetchFollowCounts,
   fetchUser,
   fetchUserArcs,
@@ -103,7 +106,7 @@ export default function Profile() {
   const [content, setContent] = useState(null);
   const [arcs, setArcs] = useState([]);
   const [counts, setCounts] = useState({ followers: 0, following: 0 });
-  const [badges, setBadges] = useState([]);
+  const [contentCount, setContentCount] = useState(0);
   const [following, setFollowing] = useState(false);
   const [tab, setTab] = useState('proofs');
   const [editing, setEditing] = useState(false);
@@ -124,14 +127,14 @@ export default function Profile() {
           fetchUserContent(id),
           fetchUserArcs(id),
           fetchFollowCounts(id),
-          fetchBadges(id),
+          countUserContent(id),
           user && user.id !== id ? isFollowing(user.id, id) : false,
         ]);
         if (!alive) return;
         setContent(c);
         setArcs(a);
         setCounts(n);
-        setBadges(b);
+        setContentCount(b);
         setFollowing(f);
       } catch {
         if (alive) setProfile(null);
@@ -163,6 +166,15 @@ export default function Profile() {
       navigate(`/messages/${conversationId}`);
     } catch (error) {
       toast('error', 'Conversation impossible', error.message);
+    }
+  }
+
+  async function support() {
+    if (!user) return navigate(`/connexion?redirect=${encodeURIComponent(`/u/${id}`)}`);
+    try {
+      await openSupport({ creatorId: id, creatorName: displayName(profile), onSuccess: () => toast('success', 'Soutien envoyé', 'Merci pour ce créateur !') });
+    } catch (error) {
+      toast('error', 'Soutien indisponible', error.message);
     }
   }
 
@@ -198,7 +210,6 @@ export default function Profile() {
       </>
     );
 
-  const hasFata = badges.some((b) => String(b.type).toLowerCase() === 'fata');
   const wins = (content || []).filter((c) => c.state === 'success').length;
 
   return (
@@ -219,45 +230,38 @@ export default function Profile() {
         <div className="profile-cover">{profile.banner && <img src={profile.banner} alt="" />}</div>
         <div className="profile-id">
           <Avatar user={profile} size={92} />
-          <div className="profile-actions">
-            {isMe ? (
+          {isMe && (
+            <div className="profile-actions">
               <Button icon="edit" onClick={() => setEditing(true)}>
                 Modifier
               </Button>
-            ) : (
-              <>
-                <Button icon="mail" onClick={message} aria-label="Envoyer un message">
-                  <span className="desktop-only">Message</span>
-                </Button>
-                <Button variant={following ? undefined : 'primary'} icon={following ? 'check' : 'person_add'} onClick={toggleFollow}>
-                  {following ? 'Suivi' : 'Suivre'}
-                </Button>
-              </>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
         <div className="profile-name">
           <h1>
             {displayName(profile)}
-            {isVerified(profile) && <Icon name="verified" filled className="verified" label="Compte vérifié" />}
+            <NameBadges user={profile} size={20} />
           </h1>
           {profile.title && <span className="headline">{profile.title}</span>}
         </div>
-        {(hasFata || profile.plan === 'pro' || profile.plan === 'elite') && (
-          <div className="profile-badges">
-            {hasFata && (
-              <Badge tone="gold" icon="emoji_events">
-                Badge Fata
-              </Badge>
-            )}
-            {(profile.plan === 'pro' || profile.plan === 'elite') && (
-              <Badge tone="violet" icon="workspace_premium">
-                {profile.plan === 'elite' ? 'Elite' : 'Pro'}
-              </Badge>
+        {!isMe && (
+          <div className="profile-cta">
+            <Button variant={following ? undefined : 'primary'} icon={following ? 'check' : 'person_add'} onClick={toggleFollow}>
+              {following ? 'Suivi' : 'Suivre'}
+            </Button>
+            <Button icon="mail" onClick={message}>
+              Message
+            </Button>
+            {canReceiveSupport(profile) && (
+              <Button icon="favorite" onClick={support} className="support-btn">
+                Soutenir
+              </Button>
             )}
           </div>
         )}
+        <ProfileBadges user={profile} contentCount={contentCount} followers={counts.followers} />
         {profile.bio && <p className="profile-bio">{profile.bio}</p>}
         <div className="profile-counts">
           <span><strong>{compact(counts.followers)}</strong>abonnés</span>
