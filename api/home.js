@@ -17,7 +17,7 @@ module.exports = async (req, res) => {
 
     try {
         const distPath = path.join(process.cwd(), "client", "dist", "index.html");
-        const rootPath = path.join(process.cwd(), "index.html");
+        const rootPath = path.join(process.cwd(), "app-legacy.html");
         const filePath = fs.existsSync(distPath) ? distPath : rootPath;
         let html = fs.readFileSync(filePath, "utf8");
 
@@ -72,7 +72,7 @@ module.exports = async (req, res) => {
         return res.status(200).send(html);
     } catch (error) {
         const distPath = path.join(process.cwd(), "client", "dist", "index.html");
-        const rootPath = path.join(process.cwd(), "index.html");
+        const rootPath = path.join(process.cwd(), "app-legacy.html");
         const fallbackPath = fs.existsSync(distPath) ? distPath : rootPath;
         return res.status(200).send(fs.readFileSync(fallbackPath, "utf8"));
     }

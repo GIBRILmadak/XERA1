@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Capacitor } from '@capacitor/core';
 import { App as CapApp } from '@capacitor/app';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -34,8 +34,13 @@ function RequireAuth({ children }) {
 function ProfileEntry() {
   const { user, loading } = useAuth();
   const { search } = useLocation();
+  const { id } = useParams();
   const params = new URLSearchParams(search);
   if (params.get('fata') || params.get('challengeId')) return <Navigate to={`/fata${search}`} replace />;
+  // Anciens liens partagés : /profile?user=…&arc=…
+  if (params.get('arc')) return <Navigate to={`/arc/${encodeURIComponent(params.get('arc'))}`} replace />;
+  const target = id || params.get('user') || params.get('id');
+  if (target) return <Navigate to={`/u/${encodeURIComponent(target)}`} replace />;
   if (loading) return null;
   return <Navigate to={user ? `/u/${user.id}` : '/connexion?redirect=/profile'} replace />;
 }
@@ -83,6 +88,7 @@ export default function App() {
               <Route path="arc/:id" element={<ArcDetail />} />
               <Route path="u/:id" element={<Profile />} />
               <Route path="profile" element={<ProfileEntry />} />
+              <Route path="profile/:id" element={<ProfileEntry />} />
               <Route path="fata" element={<Fata />} />
               <Route path="creer/arc" element={<RequireAuth><CreateArc /></RequireAuth>} />
               <Route path="creer/preuve" element={<RequireAuth><CreateProof /></RequireAuth>} />
