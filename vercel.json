@@ -3,38 +3,151 @@
     "functions": {
         "api/router.js": {
             "maxDuration": 60
+        },
+        "api/home.js": {
+            "includeFiles": "client/dist/index.html"
+        },
+        "api/profile.js": {
+            "includeFiles": "client/dist/index.html"
         }
     },
     "rewrites": [
-        { "source": "/sitemap.xml", "destination": "/api/sitemap" },
-        { "source": "/api/:path*", "destination": "/api/router?path=:path*" },
-        { "source": "/", "destination": "/api/home" },
-        { "source": "/share/:path*", "destination": "/index.html" },
-        { "source": "/login", "destination": "/login.html" },
-        { "source": "/messages", "destination": "/messages.html" },
-        { "source": "/profile", "destination": "/api/profile" },
-        { "source": "/profile/:path*", "destination": "/api/profile" },
-        { "source": "/pagepro", "destination": "/api/profile" },
-        { "source": "/pagepro/:path*", "destination": "/api/profile" },
-        { "source": "/analytics", "destination": "/analytics.html" },
-        { "source": "/commissions", "destination": "/commissions.html" },
-        { "source": "/admin", "destination": "/admin.html" },
-        { "source": "/badges-admin", "destination": "/badges-admin.html" },
-        { "source": "/create-stream", "destination": "/create-stream.html" },
+        {
+            "source": "/sitemap.xml",
+            "destination": "/api/sitemap"
+        },
+        {
+            "source": "/api/:path*",
+            "destination": "/api/router?path=:path*"
+        },
+        {
+            "source": "/assets/:path*",
+            "destination": "/client/dist/assets/:path*"
+        },
+        {
+            "source": "/index.html",
+            "destination": "/app-legacy.html"
+        },
+        {
+            "source": "/",
+            "destination": "/api/home"
+        },
+        {
+            "source": "/share/:path*",
+            "destination": "/app-legacy.html"
+        },
+        {
+            "source": "/login",
+            "destination": "/login.html"
+        },
+        {
+            "source": "/explorer",
+            "destination": "/client/dist/index.html"
+        },
+        {
+            "source": "/arc/:id",
+            "destination": "/client/dist/index.html"
+        },
+        {
+            "source": "/u/:id",
+            "destination": "/client/dist/index.html"
+        },
+        {
+            "source": "/fata",
+            "destination": "/client/dist/index.html"
+        },
+        {
+            "source": "/creer/:type",
+            "destination": "/client/dist/index.html"
+        },
+        {
+            "source": "/messages",
+            "destination": "/client/dist/index.html"
+        },
+        {
+            "source": "/messages/:id",
+            "destination": "/client/dist/index.html"
+        },
+        {
+            "source": "/notifications",
+            "destination": "/client/dist/index.html"
+        },
+        {
+            "source": "/reglages",
+            "destination": "/client/dist/index.html"
+        },
+        {
+            "source": "/connexion",
+            "destination": "/client/dist/index.html"
+        },
+        {
+            "source": "/profile",
+            "destination": "/api/profile"
+        },
+        {
+            "source": "/profile/:path*",
+            "destination": "/api/profile"
+        },
+        {
+            "source": "/analytics",
+            "destination": "/analytics.html"
+        },
+        {
+            "source": "/commissions",
+            "destination": "/commissions.html"
+        },
+        {
+            "source": "/admin",
+            "destination": "/admin.html"
+        },
+        {
+            "source": "/badges-admin",
+            "destination": "/badges-admin.html"
+        },
+        {
+            "source": "/create-stream",
+            "destination": "/create-stream.html"
+        },
         {
             "source": "/creator-dashboard",
             "destination": "/creator-dashboard.html"
         },
-        { "source": "/credits", "destination": "/credits.html" },
-        { "source": "/stream", "destination": "/stream.html" },
+        {
+            "source": "/credits",
+            "destination": "/credits.html"
+        },
+        {
+            "source": "/stream",
+            "destination": "/stream.html"
+        },
         {
             "source": "/subscription-plans",
             "destination": "/subscription-plans.html"
         },
-        { "source": "/verification", "destination": "/verification.html" },
-        { "source": "/cgu", "destination": "/cgu.html" },
-        { "source": "/privacy", "destination": "/privacy.html" },
-        { "source": "/404", "destination": "/404.html" }
+        {
+            "source": "/verification",
+            "destination": "/verification.html"
+        },
+        {
+            "source": "/cgu",
+            "destination": "/cgu.html"
+        },
+        {
+            "source": "/privacy",
+            "destination": "/privacy.html"
+        },
+        {
+            "source": "/404",
+            "destination": "/404.html"
+        },
+        {
+            "source": "/pagepro",
+            "destination": "/profile.html"
+        },
+        {
+            "source": "/pagepro/:path*",
+            "destination": "/profile.html"
+        }
     ],
     "crons": [
         {
@@ -45,5 +158,6 @@
             "path": "/api/cron/fata-worker",
             "schedule": "0 11 * * *"
         }
-    ]
+    ],
+    "buildCommand": "npm --prefix client ci --no-audit --no-fund && npm --prefix client run build"
 }

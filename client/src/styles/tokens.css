@@ -1,0 +1,98 @@
+/*
+ * XERA1 — jetons de design.
+ * Palette d'origine conservée : noir profond, surfaces graphite, accent blanc,
+ * halo violet du feed, vert/rouge/indigo pour les états de progression.
+ */
+:root {
+  color-scheme: dark;
+
+  /* Surfaces (valeurs d'origine de style.css) */
+  --bg: #050505;
+  --surface: #121212;
+  --surface-2: #1a1a1a;
+  --surface-3: #232323;
+  --border: #222222;
+  --border-strong: #2e2e2e;
+
+  /* Texte */
+  --text: #f5f5f5;
+  --text-2: #a3a3a3;
+  --text-3: #888888;
+
+  /* Accent principal : blanc sur noir (identité XERA) */
+  --accent: #ffffff;
+  --on-accent: #050505;
+
+  /* Violet du feed, utilisé avec parcimonie */
+  --violet: #8b5cf6;
+  --violet-soft: rgba(139, 92, 246, 0.16);
+  --violet-glow: rgba(139, 92, 246, 0.18);
+  --violet-glow-2: rgba(167, 139, 250, 0.12);
+
+  /* États de progression (d'origine) */
+  --success: #10b981;
+  --success-soft: rgba(16, 185, 129, 0.14);
+  --failure: #ef4444;
+  --failure-soft: rgba(239, 68, 68, 0.14);
+  --pause: #6366f1;
+  --pause-soft: rgba(99, 102, 241, 0.16);
+  --gold: #f5c451;
+  --gold-soft: rgba(245, 196, 81, 0.14);
+
+  --overlay: rgba(0, 0, 0, 0.7);
+  --card-bg: #0d0d0d;
+  --glass: rgba(5, 5, 5, 0.92);
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-2: 0 12px 32px rgba(0, 0, 0, 0.36);
+  --shadow-3: 0 24px 70px rgba(0, 0, 0, 0.45);
+
+  /* Typographie (Outfit pour les titres, Inter pour le texte, comme avant) */
+  --font-heading: "Outfit", system-ui, sans-serif;
+  --font-body: "Inter Variable", "Inter", system-ui, sans-serif;
+
+  /* Rythme */
+  --r-xs: 6px;
+  --r-sm: 8px;
+  --r-md: 10px;
+  --r-lg: 12px;
+  --r-pill: 999px;
+  --gutter: 16px;
+  --topbar-h: 60px;
+  --bottombar-h: 64px;
+  --sidebar-w: 248px;
+  --content-w: 640px;
+
+  /* Mouvement (courbe d'origine) */
+  --ease: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-1: 140ms;
+  --dur-2: 240ms;
+  --dur-3: 420ms;
+
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #ffffff;
+  --surface: #f5f5f5;
+  --surface-2: #efefef;
+  --surface-3: #e6e6e6;
+  --border: #e3e3e3;
+  --border-strong: #d4d4d4;
+  --text: #1a1a1a;
+  --text-2: #4d4d4d;
+  --text-3: #666666;
+  --accent: #000000;
+  --on-accent: #ffffff;
+  --violet-soft: rgba(139, 92, 246, 0.12);
+  --violet-glow: rgba(139, 92, 246, 0.14);
+  --violet-glow-2: rgba(167, 139, 250, 0.16);
+  --overlay: rgba(0, 0, 0, 0.5);
+  --card-bg: #ffffff;
+  --glass: rgba(255, 255, 255, 0.94);
+  --shadow-1: 0 1px 2px rgba(15, 23, 42, 0.08);
+  --shadow-2: 0 12px 32px rgba(15, 23, 42, 0.1);
+  --shadow-3: 0 24px 70px rgba(15, 23, 42, 0.12);
+}

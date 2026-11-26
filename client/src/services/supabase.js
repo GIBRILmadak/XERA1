@@ -1,4 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
+import { Capacitor } from '@capacitor/core';
+
+// Les liens envoyés par e-mail et le retour de Google doivent viser le site
+// public : dans l'APK, window.location.origin vaut https://localhost.
+export const AUTH_RETURN_BASE = Capacitor.isNativePlatform() ? 'https://xera1.xyz' : window.location.origin;
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://ssbuagqwjptyhavinkxg.supabase.co";
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "sb_publishable_o7_j9WXXd96YKXa-fmfs1Q_OEwNTh1M";
@@ -89,7 +94,7 @@ export async function signUp(email, password, username, metadata = {}) {
     const { data, error } = await supabase.auth.signUp({
       email: safeEmail,
       password,
-      options: { data: { username: safeUsername, ...metadata }, emailRedirectTo: `${window.location.origin}/login` },
+      options: { data: { username: safeUsername, ...metadata }, emailRedirectTo: `${AUTH_RETURN_BASE}/connexion` },
     });
     if (error) return { success: false, error: "Impossible de créer le compte.", code: error.code };
     return { success: true, data: data.user, session: data.session };
@@ -106,7 +111,7 @@ export async function signOut() {
 export async function signInWithGoogle() {
   return supabase.auth.signInWithOAuth({
     provider: "google",
-    options: { redirectTo: `${window.location.origin}/` },
+    options: { redirectTo: `${AUTH_RETURN_BASE}/` },
   });
 }
 

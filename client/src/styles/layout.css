@@ -1,0 +1,266 @@
+/* ---------- Coque de l'application ---------- */
+.app {
+  min-height: 100dvh;
+  background: var(--bg);
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  height: calc(var(--topbar-h) + var(--safe-top));
+  padding: var(--safe-top) var(--gutter) 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--glass);
+  backdrop-filter: saturate(160%) blur(18px);
+  -webkit-backdrop-filter: saturate(160%) blur(18px);
+  border-bottom: 1px solid var(--border);
+}
+.topbar.is-scrolled {
+  border-bottom-color: var(--border);
+}
+.topbar .page-title {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 17px;
+  font-weight: 650;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 20px;
+  letter-spacing: 0.02em;
+}
+.brand img {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+}
+.brand small {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-3);
+  letter-spacing: 0.12em;
+}
+
+/* Barre de navigation mobile (bas) */
+.bottombar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 50;
+  height: calc(var(--bottombar-h) + var(--safe-bottom));
+  padding-bottom: var(--safe-bottom);
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  background: var(--glass);
+  backdrop-filter: saturate(160%) blur(18px);
+  -webkit-backdrop-filter: saturate(160%) blur(18px);
+  border-top: 1px solid var(--border);
+}
+.bottombar a,
+.bottombar button {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-3);
+  position: relative;
+  transition: color var(--dur-2) var(--ease);
+}
+.bottombar .pill {
+  width: 48px;
+  height: 28px;
+  border-radius: var(--r-sm);
+  display: grid;
+  place-items: center;
+  transition: background var(--dur-2) var(--ease);
+}
+.bottombar .is-active {
+  color: var(--text);
+}
+.bottombar .is-active .pill {
+  background: transparent;
+}
+.bottombar .create .pill {
+  width: 44px;
+  height: 36px;
+  border-radius: var(--r-md);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.bottombar .create .pill .icon {
+  font-size: 24px;
+}
+.bottombar .nav-dot {
+  position: absolute;
+  top: 8px;
+  left: calc(50% + 8px);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--failure);
+  border: 2px solid var(--bg);
+}
+
+/* Barre latérale (bureau) */
+.sidebar {
+  display: none;
+}
+
+.main {
+  width: 100%;
+  max-width: var(--content-w);
+  margin: 0 auto;
+  padding: 8px var(--gutter) calc(var(--bottombar-h) + 32px + var(--safe-bottom));
+  animation: fade-up var(--dur-3) var(--ease-out);
+}
+.main--wide {
+  max-width: 980px;
+}
+.main--flush {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+@media (min-width: 1024px) {
+  .shell {
+    display: grid;
+    grid-template-columns: var(--sidebar-w) 1fr;
+  }
+  .bottombar {
+    display: none;
+  }
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    position: sticky;
+    top: 0;
+    height: 100dvh;
+    padding: 22px 14px;
+    border-right: 1px solid var(--border);
+  }
+  .sidebar .brand {
+    padding: 4px 12px 22px;
+  }
+  .sidebar nav {
+    display: grid;
+    gap: 2px;
+  }
+  .side-link {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    height: 42px;
+    padding: 0 12px;
+    border-radius: var(--r-sm);
+    font-weight: 600;
+    color: var(--text-2);
+    transition: all var(--dur-2) var(--ease);
+    position: relative;
+  }
+  .side-link:hover {
+    background: var(--surface);
+    color: var(--text);
+  }
+  .side-link.is-active {
+    background: var(--surface-2);
+    color: var(--text);
+  }
+  .side-link .count {
+    margin-left: auto;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 6px;
+    border-radius: var(--r-pill);
+    background: var(--failure);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    display: grid;
+    place-items: center;
+  }
+  .sidebar .create-btn {
+    margin: 18px 4px 0;
+  }
+  .sidebar .me {
+    margin-top: auto;
+  }
+  .topbar .mobile-only {
+    display: none;
+  }
+  .main {
+    padding-bottom: 48px;
+  }
+}
+
+@media (max-width: 1023px) {
+  .desktop-only {
+    display: none !important;
+  }
+}
+
+/* Bandeau de page (titre + sous-titre) */
+.page-head {
+  margin: 10px 0 18px;
+}
+.page-head h1 {
+  font-size: 24px;
+}
+.page-head p {
+  color: var(--text-3);
+  margin-top: 6px;
+}
+
+.mobile-only-inline {
+  display: inline;
+}
+@media (min-width: 1024px) {
+  .mobile-only-inline {
+    display: none;
+  }
+}
+.is-spinning .icon {
+  animation: spin 0.9s linear infinite;
+}
+.person-chip {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: 6px;
+  width: 150px;
+  flex-shrink: 0;
+  padding: 16px 12px;
+  font-weight: 600;
+  font-size: 14px;
+  transition: transform var(--dur-2) var(--ease);
+}
+.person-chip:hover {
+  transform: translateY(-2px);
+}
+.person-chip .muted {
+  font-size: 12px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+.is-chat .bottombar {
+  display: none;
+}

@@ -1,0 +1,85 @@
+name: APK Android (Capacitor)
+
+on:
+  push:
+    branches: [main, refonte-react]
+    paths:
+      - 'client/**'
+      - '.github/workflows/android-apk.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - name: Dépendances
+        run: npm ci --no-audit --no-fund
+
+      - name: Build React
+        run: npm run build
+
+      - name: Synchronisation Capacitor
+        run: npx cap sync android
+
+      - name: Version
+        run: echo "APP_VERSION=1.0.${{ github.run_number }}" >> "$GITHUB_ENV"
+
+      # APK de test, non signé pour le Play Store (installable directement).
+      - name: APK debug
+        working-directory: client/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon -PversionName="$APP_VERSION" -PversionCode="${{ github.run_number }}"
+          cp app/build/outputs/apk/debug/app-debug.apk "$GITHUB_WORKSPACE/XERA1-$APP_VERSION-debug.apk"
+
+      # APK signé : seulement quand les secrets de signature sont ajoutés au dépôt
+      # (ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD).
+      - name: APK signé (release)
+        if: ${{ env.KEYSTORE != '' }}
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        working-directory: client/android
+        run: |
+          echo "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/xera.keystore"
+          ./gradlew assembleRelease --no-daemon -PversionName="$APP_VERSION" -PversionCode="${{ github.run_number }}" \
+            -Pandroid.injected.signing.store.file="$RUNNER_TEMP/xera.keystore" \
+            -Pandroid.injected.signing.store.password="$ANDROID_KEYSTORE_PASSWORD" \
+            -Pandroid.injected.signing.key.alias="$ANDROID_KEY_ALIAS" \
+            -Pandroid.injected.signing.key.password="$ANDROID_KEY_PASSWORD"
+          cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/XERA1-$APP_VERSION.apk"
+          rm -f "$RUNNER_TEMP/xera.keystore"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: XERA1-${{ env.APP_VERSION }}
+          path: XERA1-*.apk
+          retention-days: 7
+          if-no-files-found: error

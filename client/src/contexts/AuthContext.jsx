@@ -1,58 +1,67 @@
-import { createContext, useContext, useEffect, useState } from 'react';
-import { supabase, isProUser } from '../services/supabase';
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { supabase, isProUser, signOut as supabaseSignOut } from '../services/supabase';
+import { DEMO, demoMe } from '../services/demo';
 
-export const AuthContext = createContext(null);
+const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(undefined); // undefined = loading, null = not logged in
-  const [loading, setLoading] = useState(true);
+  // undefined = chargement, null = déconnecté
+  const [user, setUser] = useState(DEMO ? (new URLSearchParams(window.location.search).has('invite') ? null : demoMe) : undefined);
+
+  const loadFullUser = useCallback(async (authUser) => {
+    try {
+      const { data: profile } = await supabase.from('users').select('*').eq('id', authUser.id).maybeSingle();
+      setUser(profile ? { ...authUser, ...profile, id: authUser.id } : authUser);
+    } catch {
+      setUser(authUser);
+    }
+  }, []);
 
   useEffect(() => {
+    if (DEMO) return undefined;
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) loadFullUser(session.user);
+      else setUser(null);
+    });
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY' && !window.location.search.includes('mode=nouveau')) {
+        window.location.replace('/connexion?mode=nouveau');
+        return;
+      }
+      if (session?.user) loadFullUser(session.user);
+      else setUser(null);
+    });
+    return () => subscription.unsubscribe();
+  }, [loadFullUser]);
+
+  useEffect(() => {
+    // Compatibilité avec les pages historiques encore ouvertes dans l'appli.
     window.currentUser = user || null;
     window.currentUserId = user?.id || null;
   }, [user]);
 
-  useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session?.user) {
-        await loadFullUser(session.user);
-      } else {
-        setUser(null);
-      }
-      setLoading(false);
-    });
+  const refresh = useCallback(async () => {
+    if (DEMO) return;
+    const { data } = await supabase.auth.getUser();
+    if (data?.user) await loadFullUser(data.user);
+  }, [loadFullUser]);
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session?.user) {
-        await loadFullUser(session.user);
-      } else {
-        setUser(null);
-      }
-    });
-
-    return () => subscription.unsubscribe();
+  const signOut = useCallback(async () => {
+    if (!DEMO) await supabaseSignOut();
+    setUser(null);
   }, []);
 
-  async function loadFullUser(authUser) {
-    try {
-      const { data: profile } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', authUser.id)
-        .single();
-      setUser(profile ? { ...authUser, ...profile } : authUser);
-    } catch (_) {
-      setUser(authUser);
-    }
-  }
-
-  const isPro = () => isProUser(user);
-
   return (
-    <AuthContext.Provider value={{ user, loading, isPro }}>
+    <AuthContext.Provider
+      value={{ user, loading: user === undefined, isPro: isProUser(user), refresh, signOut, setUser }}
+    >
       {children}
     </AuthContext.Provider>
   );
+}
+
+export function useAuth() {
+  return useContext(AuthContext);
 }
