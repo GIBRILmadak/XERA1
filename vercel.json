@@ -159,5 +159,6 @@
             "schedule": "0 11 * * *"
         }
     ],
-    "buildCommand": "npm --prefix client ci --no-audit --no-fund && npm --prefix client run build"
+    "buildCommand": "npm --prefix client ci --no-audit --no-fund && npm --prefix client run build",
+    "outputDirectory": "."
 }
