@@ -68,9 +68,7 @@ export default function Home() {
         <div className="feed-head">
           {!user && (
             <section className="card card--glow hero-card">
-              <span className="badge badge--violet" style={{ justifySelf: 'start' }}>
-                <Icon name="bolt" filled /> Proof of Building
-              </span>
+              <span className="eyebrow">Proof of Building</span>
               <h1>Montrez votre progression, jour après jour.</h1>
               <p>
                 Sur XERA, chaque projet devient un ARC : des jalons, des preuves, des réussites et des obstacles.

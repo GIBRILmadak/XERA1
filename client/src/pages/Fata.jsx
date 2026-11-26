@@ -194,6 +194,7 @@ export default function Fata() {
             <img src="/icons/logo.png" alt="XERA1" />
           </div>
           <div className="stack" style={{ gap: 6 }}>
+            <span className="eyebrow">Partenariat</span>
             <h1>Challenge Fata × XERA1</h1>
             <p>Construisez un vrai projet sur XERA : trois actions, confirmées automatiquement auprès de Fata.</p>
           </div>
@@ -201,7 +202,7 @@ export default function Fata() {
             <div className="row" style={{ flexWrap: 'wrap', gap: 6 }}>
               <Badge icon="sell">{challengeId}</Badge>
               {user && status?.connected && (
-                <Badge tone={doneCount === 3 ? 'success' : 'violet'} icon="checklist">
+                <Badge tone={doneCount === 3 ? 'success' : undefined} icon="checklist">
                   {doneCount}/3 étapes
                 </Badge>
               )}

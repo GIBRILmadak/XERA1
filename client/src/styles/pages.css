@@ -23,15 +23,16 @@
   color: var(--text-3);
 }
 .post-arc {
-  margin: 12px 16px 0;
+  margin: 10px 16px 0;
   display: inline-flex;
   align-items: center;
   gap: 6px;
   max-width: calc(100% - 32px);
-  height: 30px;
-  padding: 0 10px 0 10px;
-  border-radius: var(--r-pill);
-  background: var(--surface-2);
+  height: 26px;
+  padding: 0 8px;
+  border-radius: var(--r-xs);
+  border: 1px solid var(--border);
+  background: transparent;
   color: var(--text-2);
   font-size: 12.5px;
   font-weight: 600;
@@ -52,7 +53,8 @@
   gap: 6px;
 }
 .post-body h3 {
-  font-size: 17px;
+  font-size: 16px;
+  font-weight: 650;
 }
 .post-body p {
   color: var(--text-2);
@@ -108,10 +110,10 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 40px;
-  padding: 0 12px;
-  border-radius: var(--r-pill);
-  font-size: 13.5px;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: var(--r-sm);
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-2);
   transition: all var(--dur-2) var(--ease);
@@ -150,8 +152,8 @@
   position: relative;
 }
 .hero-card h1 {
-  font-size: 26px;
-  line-height: 1.1;
+  font-size: 22px;
+  line-height: 1.2;
 }
 .hero-card p {
   color: var(--text-2);
@@ -163,35 +165,25 @@
   flex-wrap: wrap;
   margin-top: 4px;
 }
-.hero-card::after {
-  content: "";
-  position: absolute;
-  right: -60px;
-  top: -60px;
-  width: 200px;
-  height: 200px;
-  border-radius: 50%;
-  background: radial-gradient(circle, var(--violet-glow), transparent 70%);
-  pointer-events: none;
-}
+
 
 .fata-strip {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 12px 14px;
-  border-radius: var(--r-md);
-  border: 1px solid rgba(245, 196, 81, 0.3);
-  background: linear-gradient(100deg, var(--gold-soft), transparent 70%), var(--surface);
-  transition: transform var(--dur-2) var(--ease);
+  border-radius: var(--r-lg);
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  transition: border-color var(--dur-2) var(--ease);
 }
 .fata-strip:hover {
-  transform: translateY(-1px);
+  border-color: var(--border-strong);
 }
 .fata-strip img {
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--r-sm);
   object-fit: cover;
 }
 .fata-strip strong {
@@ -212,7 +204,6 @@
     border-color var(--dur-2) var(--ease);
 }
 .arc-card:hover {
-  transform: translateY(-2px);
   border-color: var(--border-strong);
 }
 .arc-cover {
@@ -229,17 +220,14 @@
   position: absolute;
   top: 10px;
   left: 10px;
-  backdrop-filter: blur(8px);
-  background: rgba(5, 5, 5, 0.6);
+  background: rgba(5, 5, 5, 0.85);
 }
 .arc-cover-fallback {
   height: 100%;
   display: grid;
   place-items: center;
   color: var(--text-3);
-  background:
-    radial-gradient(80% 80% at 20% 0%, var(--violet-glow), transparent 60%),
-    var(--surface-2);
+  background: var(--surface-2);
 }
 .arc-info {
   padding: 14px 16px 16px;
@@ -320,7 +308,7 @@
   gap: 10px;
 }
 .arc-title-block h1 {
-  font-size: 28px;
+  font-size: 24px;
 }
 .arc-title-block .goal {
   color: var(--text-2);
@@ -355,7 +343,8 @@
 .stat strong {
   display: block;
   font-family: var(--font-heading);
-  font-size: 22px;
+  font-size: 20px;
+  font-weight: 650;
 }
 .stat span {
   font-size: 12.5px;
@@ -422,9 +411,7 @@
 .profile-cover {
   height: 150px;
   margin: 0 calc(var(--gutter) * -1);
-  background:
-    radial-gradient(80% 120% at 10% 0%, var(--violet-glow), transparent 60%),
-    linear-gradient(135deg, var(--surface-2), var(--surface));
+  background: var(--surface-2);
   overflow: hidden;
 }
 .profile-cover img {
@@ -457,7 +444,7 @@
   gap: 4px;
 }
 .profile-name h1 {
-  font-size: 24px;
+  font-size: 22px;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -496,14 +483,9 @@
 
 /* ================= Fata ================= */
 .fata-hero {
-  padding: 22px;
+  padding: 20px;
   display: grid;
   gap: 14px;
-  border-color: rgba(245, 196, 81, 0.28);
-  background:
-    radial-gradient(90% 90% at 100% 0%, var(--gold-soft), transparent 60%),
-    radial-gradient(90% 90% at 0% 100%, var(--violet-glow), transparent 60%),
-    var(--card-bg);
 }
 .fata-logos {
   display: flex;
@@ -511,9 +493,9 @@
   gap: 10px;
 }
 .fata-logos img {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r-sm);
   object-fit: cover;
   border: 1px solid var(--border);
   background: var(--surface-2);
@@ -523,7 +505,8 @@
   font-weight: 700;
 }
 .fata-hero h1 {
-  font-size: 24px;
+  font-size: 20px;
+  font-weight: 650;
 }
 .fata-hero p {
   color: var(--text-2);
@@ -536,9 +519,9 @@
   padding: 16px;
 }
 .link-card .state-icon {
-  width: 46px;
-  height: 46px;
-  border-radius: 14px;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-sm);
   display: grid;
   place-items: center;
   background: var(--surface-2);
@@ -567,19 +550,19 @@
 }
 .step {
   display: grid;
-  grid-template-columns: 44px 1fr auto;
+  grid-template-columns: 36px 1fr auto;
   align-items: center;
   gap: 12px;
-  padding: 14px;
-  border-radius: var(--r-md);
+  padding: 12px 14px;
+  border-radius: var(--r-lg);
   background: var(--surface);
   border: 1px solid var(--border);
   transition: border-color var(--dur-2) var(--ease);
 }
 .step .num {
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r-sm);
   display: grid;
   place-items: center;
   background: var(--surface-2);
@@ -619,15 +602,15 @@
 }
 .reward {
   padding: 14px;
-  border-radius: var(--r-md);
+  border-radius: var(--r-lg);
   background: var(--surface);
   border: 1px solid var(--border);
   display: grid;
   gap: 6px;
 }
 .reward .icon {
-  color: var(--gold);
-  font-size: 26px;
+  color: var(--text-2);
+  font-size: 22px;
 }
 .reward strong {
   font-size: 14px;
@@ -645,9 +628,9 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 14px;
-  border-radius: var(--r-md);
-  border: 1.5px solid var(--border);
+  padding: 12px 14px;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--border);
   background: var(--surface);
   text-align: left;
   width: 100%;
@@ -657,8 +640,8 @@
   border-color: var(--border-strong);
 }
 .arc-option.is-selected {
-  border-color: var(--violet);
-  background: var(--violet-soft);
+  border-color: var(--text-2);
+  background: var(--surface-2);
 }
 .arc-option:disabled {
   opacity: 0.55;
@@ -674,14 +657,14 @@
   flex-shrink: 0;
 }
 .arc-option.is-selected .radio {
-  border-color: var(--violet);
+  border-color: var(--text);
 }
 .arc-option.is-selected .radio::after {
   content: "";
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: var(--violet);
+  background: var(--text);
 }
 
 /* Célébration */
@@ -734,11 +717,11 @@
   align-items: center;
 }
 .inbox-item .unread {
-  min-width: 22px;
-  height: 22px;
+  min-width: 20px;
+  height: 20px;
   border-radius: var(--r-pill);
-  background: var(--violet);
-  color: #fff;
+  background: var(--text);
+  color: var(--on-accent);
   font-size: 11.5px;
   font-weight: 700;
   display: grid;
@@ -766,8 +749,8 @@
 }
 .bubble {
   max-width: 78%;
-  padding: 10px 14px;
-  border-radius: 20px;
+  padding: 9px 13px;
+  border-radius: 14px;
   background: var(--surface-2);
   font-size: 14.5px;
   white-space: pre-wrap;
@@ -830,9 +813,7 @@
   display: grid;
   place-items: center;
   padding: calc(24px + var(--safe-top)) var(--gutter) 32px;
-  background:
-    radial-gradient(700px 420px at 50% -10%, var(--violet-glow), transparent 65%),
-    var(--bg);
+  background: var(--bg);
 }
 .auth-card {
   width: 100%;
@@ -852,7 +833,8 @@
 }
 .auth-card h1 {
   text-align: center;
-  font-size: 26px;
+  font-size: 22px;
+  font-weight: 650;
 }
 .auth-card .lead {
   text-align: center;
@@ -884,7 +866,7 @@
 
 /* ================= Création ================= */
 .dropzone {
-  border: 1.5px dashed var(--border-strong);
+  border: 1px dashed var(--border-strong);
   border-radius: var(--r-lg);
   padding: 26px;
   display: grid;
@@ -898,8 +880,8 @@
 }
 .dropzone:hover,
 .dropzone.is-over {
-  border-color: var(--violet);
-  background: var(--violet-soft);
+  border-color: var(--text-3);
+  background: var(--surface-2);
 }
 .dropzone .icon {
   font-size: 36px;
@@ -936,9 +918,9 @@
   display: grid;
   justify-items: center;
   gap: 4px;
-  padding: 12px 6px;
-  border-radius: var(--r-md);
-  border: 1.5px solid var(--border);
+  padding: 10px 6px;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--border);
   background: var(--surface);
   font-size: 13px;
   font-weight: 600;
@@ -1013,6 +995,6 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--violet);
+  background: var(--text);
   flex-shrink: 0;
 }

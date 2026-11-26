@@ -1,11 +1,7 @@
 /* ---------- Coque de l'application ---------- */
 .app {
   min-height: 100dvh;
-  background:
-    radial-gradient(900px 500px at 15% -10%, var(--violet-glow), transparent 60%),
-    radial-gradient(700px 420px at 100% 0%, var(--violet-glow-2), transparent 60%),
-    var(--bg);
-  background-attachment: fixed;
+  background: var(--bg);
 }
 
 .topbar {
@@ -20,8 +16,7 @@
   background: var(--glass);
   backdrop-filter: saturate(160%) blur(18px);
   -webkit-backdrop-filter: saturate(160%) blur(18px);
-  border-bottom: 1px solid transparent;
-  transition: border-color var(--dur-2) var(--ease);
+  border-bottom: 1px solid var(--border);
 }
 .topbar.is-scrolled {
   border-bottom-color: var(--border);
@@ -29,7 +24,8 @@
 .topbar .page-title {
   font-family: var(--font-heading);
   font-weight: 700;
-  font-size: 19px;
+  font-size: 17px;
+  font-weight: 650;
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -42,14 +38,14 @@
   align-items: center;
   gap: 10px;
   font-family: var(--font-heading);
-  font-weight: 800;
-  font-size: 22px;
-  letter-spacing: 0.04em;
+  font-weight: 700;
+  font-size: 20px;
+  letter-spacing: 0.02em;
 }
 .brand img {
-  width: 30px;
-  height: 30px;
-  border-radius: 9px;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
 }
 .brand small {
   font-size: 10px;
@@ -87,9 +83,9 @@
   transition: color var(--dur-2) var(--ease);
 }
 .bottombar .pill {
-  width: 56px;
-  height: 30px;
-  border-radius: var(--r-pill);
+  width: 48px;
+  height: 28px;
+  border-radius: var(--r-sm);
   display: grid;
   place-items: center;
   transition: background var(--dur-2) var(--ease);
@@ -98,18 +94,17 @@
   color: var(--text);
 }
 .bottombar .is-active .pill {
-  background: var(--surface-3);
+  background: transparent;
 }
 .bottombar .create .pill {
-  width: 46px;
-  height: 46px;
-  border-radius: 16px;
+  width: 44px;
+  height: 36px;
+  border-radius: var(--r-md);
   background: var(--accent);
   color: var(--on-accent);
-  box-shadow: 0 8px 24px var(--violet-glow);
 }
 .bottombar .create .pill .icon {
-  font-size: 28px;
+  font-size: 24px;
 }
 .bottombar .nav-dot {
   position: absolute;
@@ -171,9 +166,9 @@
     display: flex;
     align-items: center;
     gap: 14px;
-    height: 48px;
-    padding: 0 14px;
-    border-radius: var(--r-pill);
+    height: 42px;
+    padding: 0 12px;
+    border-radius: var(--r-sm);
     font-weight: 600;
     color: var(--text-2);
     transition: all var(--dur-2) var(--ease);
@@ -225,7 +220,7 @@
   margin: 10px 0 18px;
 }
 .page-head h1 {
-  font-size: 28px;
+  font-size: 24px;
 }
 .page-head p {
   color: var(--text-3);

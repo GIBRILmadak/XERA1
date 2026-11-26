@@ -7,9 +7,9 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-height: 42px;
-  padding: 0 18px;
-  border-radius: var(--r-pill);
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: var(--r-sm);
   border: 1px solid var(--btn-border);
   background: var(--btn-bg);
   color: var(--btn-fg);
@@ -60,12 +60,12 @@
   --btn-border: transparent;
 }
 .btn--sm {
-  min-height: 34px;
+  min-height: 32px;
   padding: 0 14px;
   font-size: 13px;
 }
 .btn--lg {
-  min-height: 50px;
+  min-height: 46px;
   padding: 0 24px;
   font-size: 15px;
 }
@@ -122,15 +122,12 @@
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
-  box-shadow: var(--shadow-1);
 }
 .card--pad {
   padding: 18px;
 }
 .card--glow {
-  background:
-    radial-gradient(120% 80% at 0% 0%, var(--violet-glow), transparent 60%),
-    var(--card-bg);
+  background: var(--card-bg);
 }
 
 .section-title {
@@ -141,7 +138,8 @@
   margin: 26px 0 12px;
 }
 .section-title h2 {
-  font-size: 18px;
+  font-size: 15px;
+  font-weight: 650;
 }
 .section-title .link {
   color: var(--text-3);
@@ -154,11 +152,11 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 34px;
-  padding: 0 14px;
-  border-radius: var(--r-pill);
+  height: 32px;
+  padding: 0 12px;
+  border-radius: var(--r-sm);
   border: 1px solid var(--border);
-  background: var(--surface);
+  background: transparent;
   color: var(--text-2);
   font-size: 13px;
   font-weight: 600;
@@ -193,10 +191,10 @@
   align-items: center;
   gap: 4px;
   height: 22px;
-  padding: 0 9px;
-  border-radius: var(--r-pill);
+  padding: 0 7px;
+  border-radius: var(--r-xs);
   font-size: 11.5px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.01em;
   background: var(--surface-2);
   color: var(--text-2);
@@ -260,7 +258,7 @@
 .avatar--ring {
   box-shadow:
     0 0 0 2px var(--bg),
-    0 0 0 4px var(--violet);
+    0 0 0 3px var(--text);
 }
 
 /* ---------- Champs ---------- */
@@ -305,8 +303,8 @@
 .input:focus,
 .textarea:focus,
 .select:focus {
-  border-color: var(--violet);
-  box-shadow: 0 0 0 4px var(--violet-soft);
+  border-color: var(--text-2);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.06);
 }
 .input-wrap {
   position: relative;
@@ -359,15 +357,15 @@
 .tabs {
   display: flex;
   gap: 4px;
-  padding: 4px;
-  border-radius: var(--r-pill);
+  padding: 3px;
+  border-radius: var(--r-md);
   background: var(--surface);
   border: 1px solid var(--border);
 }
 .tab {
   flex: 1;
-  height: 38px;
-  border-radius: var(--r-pill);
+  height: 36px;
+  border-radius: var(--r-sm);
   font-size: 13.5px;
   font-weight: 600;
   color: var(--text-3);
@@ -424,8 +422,8 @@
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 14px 16px;
-  border-radius: var(--r-md);
+  padding: 12px 14px;
+  border-radius: var(--r-sm);
   transition: background var(--dur-2) var(--ease);
   text-align: left;
   width: 100%;
@@ -454,9 +452,9 @@
   color: var(--text-2);
 }
 .list-item .lead-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r-sm);
   display: grid;
   place-items: center;
   background: var(--surface-2);
@@ -473,9 +471,9 @@
   color: var(--text-3);
 }
 .empty .empty-icon {
-  width: 64px;
-  height: 64px;
-  border-radius: 20px;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--r-md);
   display: grid;
   place-items: center;
   background: var(--surface);
@@ -526,7 +524,7 @@
   background: var(--surface);
   border: 1px solid var(--border);
   border-bottom: 0;
-  border-radius: 26px 26px 0 0;
+  border-radius: 14px 14px 0 0;
   padding: 10px 18px calc(22px + var(--safe-bottom));
   animation: sheet-up var(--dur-3) var(--ease-out);
 }
@@ -552,7 +550,7 @@
     align-items: center;
   }
   .sheet {
-    border-radius: 26px;
+    border-radius: 14px;
     border-bottom: 1px solid var(--border);
     animation: pop var(--dur-3) var(--ease-out);
     padding-bottom: 22px;
@@ -635,8 +633,8 @@
   min-width: 0;
 }
 .progress {
-  height: 6px;
-  border-radius: 6px;
+  height: 4px;
+  border-radius: 4px;
   background: var(--surface-3);
   overflow: hidden;
 }
@@ -644,7 +642,7 @@
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, var(--violet), #c4b5fd);
+  background: var(--text);
   transition: width var(--dur-3) var(--ease);
 }
 .switch {
@@ -673,4 +671,12 @@
 }
 .switch.is-on::after {
   transform: translateX(18px);
+}
+
+.eyebrow {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
 }
