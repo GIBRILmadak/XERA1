@@ -91,7 +91,7 @@ export function Conversation() {
     fetchMessages(id)
       .then((m) => alive && setMessages(m))
       .catch(() => alive && setMessages([]));
-    markConversationRead(id, user.id);
+    markConversationRead(id);
     const unsub = subscribeToConversation(id, (row) =>
       setMessages((list) => (list && !list.some((m) => m.id === row.id) ? [...list, row] : list)),
     );

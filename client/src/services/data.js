@@ -16,7 +16,7 @@ import {
 } from './demo';
 
 const CONTENT_COLUMNS =
-  'id, user_id, author_id, author_type, page_id, arc_id, day_number, type, state, title, description, media_url, media_urls, thumbnail_url, views, encouragements_count, tags, created_at, users(id, name, avatar, account_type, account_subtype, badge), arcs(id, title, status, user_id)';
+  'id, user_id, author_id, author_type, page_id, arc_id, day_number, type, state, title, description, media_url, media_urls, views, encouragements_count, tags, metadata, created_at, users(id, name, avatar, account_type, account_subtype, badge, is_verified), arcs(id, title, status, user_id)';
 
 const wait = (ms = 250) => new Promise((r) => setTimeout(r, ms));
 
@@ -80,7 +80,7 @@ export function milestoneList(arc) {
 export async function fetchArc(id) {
   if (DEMO) return demoArcs.find((a) => a.id === id) || null;
   return unwrap(
-    await supabase.from('arcs').select('*, users(id, name, avatar, account_type, badge)').eq('id', id).maybeSingle(),
+    await supabase.from('arcs').select('*, users(id, name, avatar, account_type, badge, is_verified)').eq('id', id).maybeSingle(),
   );
 }
 
@@ -109,29 +109,42 @@ export async function fetchArcValidations(arcId) {
 
 export async function fetchRecentArcs(limit = 12) {
   if (DEMO) return demoArcs;
-  return (
+  const arcs =
     unwrap(
       await supabase
         .from('arcs')
-        .select('id, title, goal, status, milestones, media_url, user_id, created_at, users(id, name, avatar, badge)')
+        .select('id, title, goal, status, milestones, media_url, user_id, created_at, users(id, name, avatar, badge, is_verified)')
         .is('page_id', null)
         .order('created_at', { ascending: false })
         .limit(limit),
-    ) || []
-  );
+    ) || [];
+  return attachValidated(arcs);
+}
+
+/** Nombre de jalons validés par leur auteur, pour la barre de progression des cartes ARC. */
+async function attachValidated(arcs) {
+  if (!arcs.length) return arcs;
+  const { data } = await supabase
+    .from('arc_milestone_validations')
+    .select('arc_id, content_id')
+    .eq('validation_type', 'self_reported')
+    .in('arc_id', arcs.map((a) => a.id));
+  const byArc = {};
+  for (const row of data || []) (byArc[row.arc_id] ||= new Set()).add(row.content_id);
+  return arcs.map((a) => ({ ...a, validated: byArc[a.id]?.size || 0 }));
 }
 
 export async function fetchUserArcs(userId) {
   if (DEMO) return demoArcs.filter((a) => a.user_id === userId);
-  return (
+  const arcs =
     unwrap(
       await supabase
         .from('arcs')
         .select('id, title, goal, description, status, milestones, media_url, stage_level, start_date, duration_days, user_id, page_id, created_at')
         .eq('user_id', userId)
         .order('created_at', { ascending: false }),
-    ) || []
-  );
+    ) || [];
+  return attachValidated(arcs);
 }
 
 export async function createArc(userId, arc) {
@@ -323,18 +336,19 @@ export async function search(term) {
   }
   const like = `%${q.replace(/[%_]/g, '')}%`;
   const [users, arcs] = await Promise.all([
-    supabase.from('users').select('id, name, avatar, title, badge, account_type').ilike('name', like).limit(12),
-    supabase.from('arcs').select('id, title, goal, status, user_id, users(id, name, avatar)').ilike('title', like).limit(12),
+    supabase.from('users').select('id, name, avatar, title, badge, is_verified, account_type').ilike('name', like).limit(12),
+    supabase.from('arcs').select('id, title, goal, status, milestones, media_url, user_id, users(id, name, avatar, badge, is_verified)').ilike('title', like).limit(12),
   ]);
   return { users: users.data || [], arcs: arcs.data || [] };
 }
 
 export async function fetchSuggestedUsers(excludeId) {
   if (DEMO) return demoUsers.filter((u) => u.id !== 'u1').slice(0, 4);
-  let query = supabase.from('users').select('id, name, avatar, title, badge').order('created_at', { ascending: false }).limit(8);
+  let query = supabase.from('users').select('id, name, avatar, title, badge, is_verified').not('is_bot', 'is', true).order('created_at', { ascending: false }).limit(8);
   if (excludeId) query = query.neq('id', excludeId);
   const { data } = await query;
-  return data || [];
+  // Écarte les comptes sans vrai nom (anciens profils « undefined undefined »).
+  return (data || []).filter((u) => String(u.name || '').replace(/\b(undefined|null)\b/gi, '').trim());
 }
 
 // ---------------------------------------------------------------- Notifications
@@ -372,7 +386,7 @@ export async function fetchInbox(userId) {
   const rows = unwrap(await supabase.rpc('get_dm_inbox')) || [];
   const otherIds = [...new Set(rows.map((r) => r.other_user_id).filter(Boolean))];
   const { data: users } = otherIds.length
-    ? await supabase.from('users').select('id, name, avatar, badge').in('id', otherIds)
+    ? await supabase.from('users').select('id, name, avatar, badge, is_verified').in('id', otherIds)
     : { data: [] };
   const map = Object.fromEntries((users || []).map((u) => [u.id, u]));
   return rows
@@ -418,13 +432,10 @@ export async function openConversation(otherUserId) {
   return unwrap(await supabase.rpc('get_or_create_dm_conversation', { p_other_user_id: otherUserId }));
 }
 
-export async function markConversationRead(conversationId, userId) {
+export async function markConversationRead(conversationId) {
   if (DEMO) return;
-  await supabase
-    .from('dm_participants')
-    .update({ last_read_at: new Date().toISOString() })
-    .eq('conversation_id', conversationId)
-    .eq('user_id', userId);
+  // Fonction serveur dédiée : la table dm_participants n'est pas modifiable directement.
+  await supabase.rpc('mark_dm_conversation_read', { p_conversation_id: conversationId });
 }
 
 export function subscribeToConversation(conversationId, onInsert) {

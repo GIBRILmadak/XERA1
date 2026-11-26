@@ -108,7 +108,7 @@ export default function ContentCard({ content, encouraged = false, milestone, in
       {media && (
         <div className="post-media">
           {isVideo ? (
-            <video src={media} poster={content.thumbnail_url || undefined} controls playsInline preload="metadata" />
+            <video src={media} poster={content.metadata?.poster_url || undefined} controls playsInline preload="metadata" />
           ) : (
             <img src={media} alt={content.title || 'Preuve'} loading="lazy" />
           )}

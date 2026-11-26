@@ -7,7 +7,7 @@ import ArcCard from '../components/ArcCard';
 import { Avatar, Badge, Button, CardSkeleton, EmptyState, IconLink, Sheet } from '../components/ui';
 import { useAuth } from '../contexts/AuthContext';
 import { useUi } from '../contexts/UiContext';
-import { compact, isVerified } from '../lib/format';
+import { compact, displayName, isVerified } from '../lib/format';
 import {
   fetchBadges,
   fetchFollowCounts,
@@ -205,7 +205,7 @@ export default function Profile() {
     <>
       <TopBar
         back={!isMe}
-        title={profile.name}
+        title={displayName(profile)}
         actions={
           <>
             <button className="icon-btn" onClick={share} aria-label="Partager le profil">
@@ -239,7 +239,7 @@ export default function Profile() {
 
         <div className="profile-name">
           <h1>
-            {profile.name}
+            {displayName(profile)}
             {isVerified(profile) && <Icon name="verified" filled className="verified" label="Compte vérifié" />}
           </h1>
           {profile.title && <span className="headline">{profile.title}</span>}

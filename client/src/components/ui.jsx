@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Icon from './Icon';
-import { initials, isVerified } from '../lib/format';
+import { displayName, initials, isVerified } from '../lib/format';
 
 export function Avatar({ user, size = 40, ring = false }) {
   const [broken, setBroken] = useState(false);
@@ -30,7 +30,7 @@ export function UserName({ user, className = '' }) {
   return (
     <span className={`row ${className}`} style={{ gap: 4, display: 'inline-flex', minWidth: 0 }}>
       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {user?.name || 'Membre XERA'}
+        {displayName(user)}
       </span>
       {isVerified(user) && <Icon name="verified" filled className="verified" label="Compte vérifié" />}
     </span>

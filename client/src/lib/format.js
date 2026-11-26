@@ -20,6 +20,7 @@ export function compact(n) {
 export function initials(name = '') {
   return (
     String(name)
+      .replace(/\b(undefined|null)\b/gi, '')
       .trim()
       .split(/\s+/)
       .slice(0, 2)
@@ -43,6 +44,7 @@ export const ARC_STATUS = {
 };
 
 export function isVerified(user) {
+  if (Number(user?.is_verified) > 0) return true;
   const b = String(user?.badge || '').toLowerCase();
   return ['verified', 'staff', 'team', 'official', 'pro'].includes(b);
 }
@@ -57,4 +59,10 @@ export const ARC_STAGES = [
 
 export function stageLabel(value) {
   return ARC_STAGES.find((s) => s.value === String(value || '').toLowerCase())?.label || null;
+}
+
+/** Nom affichable : certains anciens comptes ont un nom vide ou « undefined undefined ». */
+export function displayName(user) {
+  const name = String(user?.name || '').replace(/\b(undefined|null)\b/gi, '').trim();
+  return name || 'Membre XERA';
 }
