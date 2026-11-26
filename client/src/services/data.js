@@ -315,6 +315,19 @@ export async function updateProfile(userId, fields) {
   );
 }
 
+/** Chiffres publics de la plateforme pour la page d'accueil. */
+export async function fetchPlatformStats() {
+  if (DEMO) return { builders: 1840, projects: 612, proofs: 9430 };
+  const head = (table, apply = (q) => q) =>
+    apply(supabase.from(table).select('id', { count: 'exact', head: true })).then((r) => r.count || 0);
+  const [builders, projects, proofs] = await Promise.all([
+    head('users', (q) => q.not('is_bot', 'is', true)),
+    head('arcs'),
+    head('content', (q) => q.eq('is_deleted', false)),
+  ]);
+  return { builders, projects, proofs };
+}
+
 /** Nombre exact de contenus publiés (paliers contributeur). */
 export async function countUserContent(userId) {
   if (DEMO) return 24;

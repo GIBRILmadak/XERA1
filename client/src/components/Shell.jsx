@@ -111,6 +111,9 @@ export default function Shell() {
 
   const requireAuth = (fn) => () => (user ? fn() : null);
 
+  // Visiteur sur l'accueil : page de présentation plein écran, sans la navigation de l'appli.
+  if (user === null && location.pathname === '/') return <Outlet />;
+
   return (
     <div className={`app shell${/^\/messages\/.+/.test(location.pathname) ? ' is-chat' : ''}`}>
       <aside className="sidebar">
