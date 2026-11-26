@@ -1,145 +1,100 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import { AuthProvider } from './contexts/AuthContext';
-import ProtectedRoute from './components/ProtectedRoute';
-
-// Pages
+import { useEffect } from 'react';
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { Capacitor } from '@capacitor/core';
+import { App as CapApp } from '@capacitor/app';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { UiProvider } from './contexts/UiContext';
+import Shell, { TopBar } from './components/Shell';
+import { EmptyState } from './components/ui';
 import Home from './pages/Home';
-import Login from './pages/Login';
+import Explore from './pages/Explore';
+import ArcDetail from './pages/ArcDetail';
 import Profile from './pages/Profile';
-import CreatorDashboard from './pages/CreatorDashboard';
-import NotFound from './pages/NotFound';
+import Fata from './pages/Fata';
+import CreateArc from './pages/CreateArc';
+import CreateProof from './pages/CreateProof';
+import { Conversation, Inbox } from './pages/Messages';
+import Notifications from './pages/Notifications';
+import Settings from './pages/Settings';
+import Login from './pages/Login';
 
-// Global CSS
-import '../public/css/style.css';
-import '../public/css/search-notification.css';
-import '../public/css/login.css';
-import '../public/css/arcs.css';
-import '../public/css/monetization.css';
-import '../public/css/streaming-analytics.css';
-
-export default function App() {
-  return (
-    <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          {/* Public routes */}
-          <Route path="/" element={<Home />} />
-          <Route path="/index.html" element={<Home />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/login.html" element={<Login />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/profile.html" element={<Profile />} />
-          <Route path="/pagepro" element={<Profile />} />
-          <Route path="/pagepro.html" element={<Profile />} />
-          <Route path="/stream" element={<LegacyPage src="/stream.html" />} />
-          <Route path="/stream.html" element={<LegacyPage src="/stream.html" />} />
-          <Route path="/subscription-plans" element={<LegacyPage src="/subscription-plans.html" />} />
-          <Route path="/subscription-plans.html" element={<LegacyPage src="/subscription-plans.html" />} />
-          <Route path="/verification" element={<LegacyPage src="/verification.html" />} />
-          <Route path="/verification.html" element={<LegacyPage src="/verification.html" />} />
-          <Route path="/credits" element={<LegacyPage src="/credits.html" />} />
-          <Route path="/credits.html" element={<LegacyPage src="/credits.html" />} />
-
-          {/* Protected routes */}
-          <Route
-            path="/creator-dashboard"
-            element={
-              <ProtectedRoute>
-                <CreatorDashboard />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/creator-dashboard.html"
-            element={
-              <ProtectedRoute>
-                <CreatorDashboard />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/admin"
-            element={
-              <ProtectedRoute>
-                <LegacyPage src="/admin.html" />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/admin.html"
-            element={
-              <ProtectedRoute>
-                <LegacyPage src="/admin.html" />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/analytics"
-            element={
-              <ProtectedRoute>
-                <LegacyPage src="/analytics.html" />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/analytics.html"
-            element={
-              <ProtectedRoute>
-                <LegacyPage src="/analytics.html" />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/create-stream"
-            element={
-              <ProtectedRoute>
-                <LegacyPage src="/create-stream.html" />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/create-stream.html"
-            element={
-              <ProtectedRoute>
-                <LegacyPage src="/create-stream.html" />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/badges-admin"
-            element={
-              <ProtectedRoute>
-                <LegacyPage src="/badges-admin.html" />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/badges-admin.html"
-            element={
-              <ProtectedRoute>
-                <LegacyPage src="/badges-admin.html" />
-              </ProtectedRoute>
-            }
-          />
-
-          {/* 404 */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
-    </AuthProvider>
-  );
+function RequireAuth({ children }) {
+  const { user, loading } = useAuth();
+  const location = useLocation();
+  if (loading) return <div className="main" aria-busy="true" />;
+  if (!user) return <Navigate to={`/connexion?redirect=${encodeURIComponent(location.pathname + location.search)}`} replace />;
+  return children;
 }
 
 /**
- * Temporary wrapper for pages not yet migrated to React.
- * Uses an iframe to load the legacy HTML page.
+ * /profile est l'adresse d'entrée convenue avec Fata
+ * (https://xera1.xyz/profile?fata=success&challengeId=…, contrat §3) :
+ * avec un contexte Fata on ouvre le challenge, sinon le profil de l'utilisateur.
  */
-function LegacyPage({ src }) {
+function ProfileEntry() {
+  const { user, loading } = useAuth();
+  const { search } = useLocation();
+  const params = new URLSearchParams(search);
+  if (params.get('fata') || params.get('challengeId')) return <Navigate to={`/fata${search}`} replace />;
+  if (loading) return null;
+  return <Navigate to={user ? `/u/${user.id}` : '/connexion?redirect=/profile'} replace />;
+}
+
+function NotFound() {
   return (
-    <iframe
-      src={src}
-      style={{ width: '100%', height: '100vh', border: 'none', display: 'block' }}
-      title="XERA page"
-    />
+    <>
+      <TopBar back title="Page introuvable" />
+      <main className="main">
+        <EmptyState icon="explore_off" title="Cette page n’existe pas" text="Le lien est peut-être ancien ou mal copié." action={<a className="btn btn--primary" href="/">Retour à l’accueil</a>} />
+      </main>
+    </>
+  );
+}
+
+/** Bouton retour Android dans l'APK. */
+function NativeBackButton() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return undefined;
+    const handle = CapApp.addListener('backButton', () => {
+      if (location.pathname === '/') CapApp.exitApp();
+      else navigate(-1);
+    });
+    return () => {
+      handle.then((h) => h.remove());
+    };
+  }, [navigate, location.pathname]);
+  return null;
+}
+
+export default function App() {
+  return (
+    <UiProvider>
+      <AuthProvider>
+        <BrowserRouter>
+          <NativeBackButton />
+          <Routes>
+            <Route path="/connexion" element={<Login />} />
+            <Route path="/login" element={<Navigate to="/connexion" replace />} />
+            <Route element={<Shell />}>
+              <Route index element={<Home />} />
+              <Route path="explorer" element={<Explore />} />
+              <Route path="arc/:id" element={<ArcDetail />} />
+              <Route path="u/:id" element={<Profile />} />
+              <Route path="profile" element={<ProfileEntry />} />
+              <Route path="fata" element={<Fata />} />
+              <Route path="creer/arc" element={<RequireAuth><CreateArc /></RequireAuth>} />
+              <Route path="creer/preuve" element={<RequireAuth><CreateProof /></RequireAuth>} />
+              <Route path="messages" element={<RequireAuth><Inbox /></RequireAuth>} />
+              <Route path="messages/:id" element={<RequireAuth><Conversation /></RequireAuth>} />
+              <Route path="notifications" element={<RequireAuth><Notifications /></RequireAuth>} />
+              <Route path="reglages" element={<Settings />} />
+              <Route path="*" element={<NotFound />} />
+            </Route>
+          </Routes>
+        </BrowserRouter>
+      </AuthProvider>
+    </UiProvider>
   );
 }

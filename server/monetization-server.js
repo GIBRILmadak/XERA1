@@ -245,6 +245,13 @@ allowedOrigins.forEach((raw) => {
     corsAllowedOrigins.add(variant.origin);
 });
 
+// L'appli Android (Capacitor) sert ses pages depuis https://localhost
+// (capacitor://localhost sur iOS). Ces origines ne sont joignables que depuis
+// l'appli installée ; l'API reste protégée par le jeton Supabase de l'utilisateur.
+function isCapacitorAppOrigin(origin) {
+    const value = String(origin || "").trim().toLowerCase();
+    return value === "https://localhost" || value === "capacitor://localhost";
+}
 function isLoopbackOrigin(origin) {
     try {
         const url = new URL(String(origin || "").trim());
@@ -261,7 +268,11 @@ function isOriginAllowed(req) {
     const origin = req.headers.origin;
     if (!origin) return true; // webhooks, curl, appels serveur a serveur
     const normalized = normalizeOrigin(origin);
-    if (corsAllowedOrigins.has(normalized) || isLoopbackOrigin(origin)) {
+    if (
+        corsAllowedOrigins.has(normalized) ||
+        isLoopbackOrigin(origin) ||
+        isCapacitorAppOrigin(origin)
+    ) {
         return true;
     }
     // Ton propre site qui appelle son propre serveur est toujours accepte

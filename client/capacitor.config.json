@@ -1,0 +1,15 @@
+{
+  "appId": "com.xera.app",
+  "appName": "XERA1",
+  "webDir": "dist",
+  "android": {
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "StatusBar": {
+      "overlaysWebView": false,
+      "style": "DARK",
+      "backgroundColor": "#050505"
+    }
+  }
+}

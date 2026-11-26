@@ -1,0 +1,109 @@
+import { Link, useNavigate } from 'react-router-dom';
+import { TopBar } from '../components/Shell';
+import Icon from '../components/Icon';
+import { Avatar } from '../components/ui';
+import { useAuth } from '../contexts/AuthContext';
+import { useUi } from '../contexts/UiContext';
+
+/** Pages encore servies par l'ancienne interface (migration progressive). */
+const LEGACY = [
+  { href: '/creator-dashboard', icon: 'monitoring', title: 'Tableau de bord créateur', sub: 'Revenus, audience, retraits' },
+  { href: '/subscription-plans', icon: 'workspace_premium', title: 'Abonnement XERA Pro', sub: 'Plans et paiement Mobile Money' },
+  { href: '/credits', icon: 'toll', title: 'Crédits', sub: 'Solde et achats' },
+  { href: '/verification', icon: 'verified', title: 'Vérification du compte', sub: 'Obtenir le badge vérifié' },
+  { href: '/analytics', icon: 'insights', title: 'Statistiques', sub: 'Vues et engagement' },
+  { href: '/create-stream', icon: 'sensors', title: 'Lancer un live', sub: 'Diffuser votre travail en direct' },
+];
+
+function Row({ to, href, icon, title, sub, onClick, trailing, danger }) {
+  const content = (
+    <>
+      <span className="lead-icon" style={danger ? { color: 'var(--failure)' } : undefined}>
+        <Icon name={icon} />
+      </span>
+      <span className="grow">
+        <span className="title" style={{ display: 'block', color: danger ? 'var(--failure)' : undefined }}>{title}</span>
+        {sub && <span className="sub">{sub}</span>}
+      </span>
+      {trailing ?? <Icon name={href ? 'open_in_new' : 'chevron_right'} />}
+    </>
+  );
+  if (to) return <Link to={to} className="list-item">{content}</Link>;
+  if (href) return <a href={href} className="list-item">{content}</a>;
+  return (
+    <button type="button" className="list-item" onClick={onClick}>
+      {content}
+    </button>
+  );
+}
+
+export default function Settings() {
+  const { user, signOut } = useAuth();
+  const { theme, setTheme } = useUi();
+  const navigate = useNavigate();
+
+  return (
+    <>
+      <TopBar back title="Réglages" />
+      <main className="main">
+        {user && (
+          <Link to={`/u/${user.id}`} className="card list-item" style={{ padding: 16, marginBottom: 14 }}>
+            <Avatar user={user} size={54} />
+            <span className="grow">
+              <span className="title" style={{ display: 'block', fontSize: 16 }}>{user.name || 'Mon profil'}</span>
+              <span className="sub">{user.email}</span>
+            </span>
+            <Icon name="chevron_right" />
+          </Link>
+        )}
+
+        <section className="card settings-group">
+          <h2>Apparence</h2>
+          <Row
+            icon={theme === 'light' ? 'light_mode' : 'dark_mode'}
+            title="Thème sombre"
+            sub="Le noir profond d’origine de XERA"
+            onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+            trailing={<span className={`switch${theme !== 'light' ? ' is-on' : ''}`} role="switch" aria-checked={theme !== 'light'} />}
+          />
+        </section>
+
+        <section className="card settings-group">
+          <h2>Challenge & partenaires</h2>
+          <Row to="/fata" icon="emoji_events" title="Challenge Fata" sub="Compte relié, ARC et étapes" />
+        </section>
+
+        {user && (
+          <section className="card settings-group">
+            <h2>Créateur & compte</h2>
+            {LEGACY.map((item) => (
+              <Row key={item.href} {...item} />
+            ))}
+          </section>
+        )}
+
+        <section className="card settings-group">
+          <h2>Informations</h2>
+          <Row href="/cgu" icon="gavel" title="Conditions d’utilisation" />
+          <Row href="/privacy" icon="shield_person" title="Confidentialité" />
+        </section>
+
+        {user && (
+          <section className="card settings-group">
+            <Row
+              icon="logout"
+              title="Se déconnecter"
+              danger
+              trailing={false}
+              onClick={async () => {
+                await signOut();
+                navigate('/');
+              }}
+            />
+          </section>
+        )}
+        <p className="muted" style={{ textAlign: 'center', fontSize: 12, marginTop: 20 }}>XERA1 · Proof of Building</p>
+      </main>
+    </>
+  );
+}

@@ -1,293 +1,178 @@
-import { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import Navbar from '../components/Navbar';
-import { useAuth } from '../contexts/useAuth';
-import { signIn, signUp, signInWithGoogle, supabase } from '../services/supabase';
+import { useState } from 'react';
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
+import Icon from '../components/Icon';
+import { Brand } from '../components/Shell';
+import { Button } from '../components/ui';
+import { useAuth } from '../contexts/AuthContext';
+import { useUi } from '../contexts/UiContext';
+import { signIn, signInWithGoogle, signUp, supabase } from '../services/supabase';
 
-const ACCOUNT_TYPES = ['Personnel', 'Communauté', 'Entreprise'];
-const SUBTYPES = {
-  Personnel: ['Freelance', 'Étudiant', 'Salarié', 'Entrepreneur'],
-  Communauté: ['Association', 'Collectif', 'ONG', 'Club'],
-  Entreprise: ['Startup', 'PME', 'Grande entreprise', 'Institution'],
-};
-
-export default function Login() {
-  const { user } = useAuth();
-  const navigate = useNavigate();
-
-  const [isSignup, setIsSignup] = useState(false);
-  const [step, setStep] = useState(0);
-  const [accountType, setAccountType] = useState('');
-  const [accountSubtype, setAccountSubtype] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [username, setUsername] = useState('');
-  const [showPw, setShowPw] = useState(false);
-  const [showConfirmPw, setShowConfirmPw] = useState(false);
-  const [rememberMe, setRememberMe] = useState(true);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  // Redirect if already logged in
-  useEffect(() => {
-    if (user) navigate('/', { replace: true });
-  }, [user, navigate]);
-
-  // Handle OAuth callback
-  useEffect(() => {
-    supabase.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_IN') navigate('/', { replace: true });
-    });
-  }, [navigate]);
-
-  async function handleSubmit(e) {
-    e.preventDefault();
-    setError('');
-    setSuccess('');
-    setLoading(true);
-
-    if (isSignup) {
-      if (password !== confirmPassword) {
-        setError('Les mots de passe ne correspondent pas.');
-        setLoading(false);
-        return;
-      }
-      const result = await signUp(email, password, username, { account_type: accountType, account_subtype: accountSubtype });
-      if (result.success) {
-        setSuccess('Compte créé ! Vérifiez votre email pour confirmer votre inscription.');
-      } else {
-        setError(result.error);
-      }
-    } else {
-      const result = await signIn(email, password);
-      if (result.success) {
-        localStorage.setItem('rize-remember-me', rememberMe ? 'true' : 'false');
-        navigate('/', { replace: true });
-      } else {
-        setError(result.error);
-      }
-    }
-    setLoading(false);
-  }
-
-  async function handleGoogle() {
-    setError('');
-    await signInWithGoogle();
-  }
-
-  function toggleMode() {
-    setIsSignup((v) => !v);
-    setStep(0);
-    setError('');
-    setSuccess('');
-  }
-
-  // Signup wizard step 1: choose account type
-  if (isSignup && step === 0) {
-    return (
-      <>
-        <Navbar />
-        <div className="login-container">
-          <div className="login-left"><LoginHero /></div>
-          <div className="login-right">
-            <div className="login-form-container">
-              <div className="login-form-header">
-                <h2 id="form-title">Créer un compte</h2>
-                <p id="form-subtitle">Choisissez votre profil</p>
-              </div>
-              <div className="account-type-options">
-                {ACCOUNT_TYPES.map((type) => (
-                  <div key={type} className="account-option" onClick={() => { setAccountType(type); setStep(1); }}>
-                    <img src={`/icons/${type === 'Personnel' ? 'impact' : type === 'Communauté' ? 'team' : 'enterprise'}.svg`} alt={type} />
-                    <span>{type}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="login-toggle">
-                <p id="toggle-text">Déjà un compte ?</p>
-                <a href="#" id="toggle-link" onClick={(e) => { e.preventDefault(); toggleMode(); }}>Se connecter</a>
-              </div>
-            </div>
-          </div>
-        </div>
-      </>
-    );
-  }
-
-  // Signup wizard step 2: choose subtype
-  if (isSignup && step === 1) {
-    return (
-      <>
-        <Navbar />
-        <div className="login-container">
-          <div className="login-left"><LoginHero /></div>
-          <div className="login-right">
-            <div className="login-form-container">
-              <div className="login-form-header">
-                <h2 id="form-title">Précisez votre statut</h2>
-              </div>
-              <div className="subtype-options" id="subtype-options-container">
-                {(SUBTYPES[accountType] || []).map((sub) => (
-                  <div key={sub} className="account-option" onClick={() => { setAccountSubtype(sub); setStep(2); }}>
-                    <span>{sub}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="wizard-nav">
-                <button type="button" className="btn-secondary" onClick={() => setStep(0)}>Retour</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </>
-    );
-  }
-
-  // Login or signup credentials form
+function GoogleLogo() {
   return (
-    <>
-      <Navbar />
-      <div className="login-container">
-        <div className="login-left"><LoginHero /></div>
-        <div className="login-right">
-          <div className="login-form-container">
-            <div className="login-form-header">
-              <h2 id="form-title">{isSignup ? 'Finalisez votre compte' : 'Welcome to XERA'}</h2>
-              <p id="form-subtitle">{isSignup ? `${accountType} • ${accountSubtype}` : 'Log in to continue'}</p>
-            </div>
-
-            {error && <div id="error-message" className="error-message">{error}</div>}
-            {success && <div id="success-message" className="success-message">{success}</div>}
-
-            <form id="auth-form" className="login-form" onSubmit={handleSubmit}>
-              {isSignup && (
-                <div className="form-group" id="username-group">
-                  <label htmlFor="username">Nom d'utilisateur</label>
-                  <input type="text" id="username" className="form-input" placeholder="Votre nom d'utilisateur" value={username} onChange={(e) => setUsername(e.target.value)} required />
-                </div>
-              )}
-
-              <div className="form-group">
-                <label htmlFor="email">Email</label>
-                <input type="email" id="email" className="form-input" placeholder="votre@email.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="password">Mot de passe</label>
-                <div className="password-input-container">
-                  <input type={showPw ? 'text' : 'password'} id="password" className="form-input" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required />
-                  <button type="button" className="password-toggle" id="password-toggle" onClick={() => setShowPw((v) => !v)}>
-                    <svg className="eye-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                      <circle cx="12" cy="12" r="3" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-
-              {isSignup && (
-                <div className="form-group" id="confirm-password-group">
-                  <label htmlFor="confirm-password">Confirmer le mot de passe</label>
-                  <div className="password-input-container">
-                    <input type={showConfirmPw ? 'text' : 'password'} id="confirm-password" className="form-input" placeholder="••••••••" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
-                    <button type="button" className="password-toggle" id="confirm-password-toggle" onClick={() => setShowConfirmPw((v) => !v)}>
-                      <svg className="eye-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                        <circle cx="12" cy="12" r="3" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {!isSignup && (
-                <div className="form-row">
-                  <div className="remember-me-container" id="remember-me-container">
-                    <label className="remember-checkbox">
-                      <input type="checkbox" id="remember-me" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} />
-                      <span className="checkmark"></span>
-                      Se souvenir de moi
-                    </label>
-                  </div>
-                  <div className="forgot-password-link" id="forgot-password-link">
-                    <a href="#" id="forgot-password">Mot de passe oublié ?</a>
-                  </div>
-                </div>
-              )}
-
-              <button type="submit" className="btn-submit" id="submit-btn" disabled={loading}>
-                <span id="btn-text">{loading ? 'Chargement...' : isSignup ? 'Créer mon compte' : 'Se connecter'}</span>
-              </button>
-            </form>
-
-            {isSignup && (
-              <div className="wizard-nav" style={{ marginTop: '0.5rem' }}>
-                <button type="button" className="btn-secondary" onClick={() => setStep(1)}>Retour</button>
-              </div>
-            )}
-
-            <div className="login-divider"><span>ou</span></div>
-
-            <button type="button" className="btn-google" id="google-signin-btn" onClick={handleGoogle}>
-              <svg width="20" height="20" viewBox="0 0 24 24">
-                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-              </svg>
-              <span>Continuer avec Google</span>
-            </button>
-
-            <div className="login-toggle">
-              <p id="toggle-text">{isSignup ? 'Déjà un compte ?' : 'Pas encore de compte ?'}</p>
-              <a href="#" id="toggle-link" onClick={(e) => { e.preventDefault(); toggleMode(); }}>
-                {isSignup ? 'Se connecter' : 'Créer un compte'}
-              </a>
-            </div>
-
-            <div className="login-footer">
-              <Link to="/">← Retour à l'accueil</Link>
-            </div>
-          </div>
-        </div>
-      </div>
-    </>
+    <svg viewBox="0 0 48 48" aria-hidden="true">
+      <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z" />
+      <path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z" />
+      <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z" />
+      <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z" />
+    </svg>
   );
 }
 
-function LoginHero() {
+export default function Login() {
+  const { user } = useAuth();
+  const { toast } = useUi();
+  const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const redirect = params.get('redirect')?.startsWith('/') ? params.get('redirect') : '/';
+  const [mode, setMode] = useState(params.get('mode') === 'inscription' ? 'signup' : 'login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [username, setUsername] = useState('');
+  const [show, setShow] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [sent, setSent] = useState(false);
+
+  if (user) return <Navigate to={redirect} replace />;
+
+  async function submit(e) {
+    e.preventDefault();
+    setError('');
+    setBusy(true);
+    try {
+      if (mode === 'reset') {
+        const { error: err } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: `${window.location.origin}/connexion` });
+        if (err) throw err;
+        setSent(true);
+        return;
+      }
+      const res = mode === 'login' ? await signIn(email, password) : await signUp(email, password, username);
+      if (!res.success) throw new Error(res.error);
+      if (mode === 'signup' && !res.session) {
+        setSent(true);
+        return;
+      }
+      toast('success', mode === 'login' ? 'Bon retour sur XERA' : 'Bienvenue sur XERA');
+      navigate(redirect, { replace: true });
+    } catch (err) {
+      setError(err.message || 'Une erreur est survenue.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function google() {
+    const { error: err } = await signInWithGoogle();
+    if (err) setError('Connexion Google indisponible.');
+  }
+
   return (
-    <div className="login-hero">
-      <div className="login-logo">
-        <img src="/icons/logo.png" alt="XERA Logo" />
-      </div>
-      <h1>Documentez l'effort.</h1>
-      <p>Rejoignez une communauté de builders qui partagent leur progression authentique, sans filtres.</p>
-      <div className="login-features">
-        <div className="feature-item">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-            <polyline points="22 4 12 14.01 9 11.01" />
-          </svg>
-          <span>Progression transparente</span>
-        </div>
-        <div className="feature-item">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-            <circle cx="9" cy="7" r="4" />
-            <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-          </svg>
-          <span>Communauté authentique</span>
-        </div>
-        <div className="feature-item">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-          </svg>
-          <span>Suivi jour par jour</span>
-        </div>
+    <div className="auth">
+      <div className="auth-card">
+        <Brand />
+        {sent ? (
+          <div className="card card--pad stack" style={{ textAlign: 'center', justifyItems: 'center' }}>
+            <span className="lead-icon" style={{ width: 60, height: 60, borderRadius: 18, display: 'grid', placeItems: 'center', background: 'var(--success-soft)', color: 'var(--success)' }}>
+              <Icon name="mark_email_read" size={30} />
+            </span>
+            <h1 style={{ fontSize: 22 }}>Vérifiez vos e-mails</h1>
+            <p className="muted">
+              {mode === 'reset' ? 'Un lien pour choisir un nouveau mot de passe' : 'Un lien de confirmation'} a été envoyé à <strong>{email}</strong>.
+            </p>
+            <Button variant="ghost" onClick={() => { setSent(false); setMode('login'); }}>
+              Retour à la connexion
+            </Button>
+          </div>
+        ) : (
+          <>
+            <div>
+              <h1>{mode === 'login' ? 'Bon retour' : mode === 'signup' ? 'Rejoignez XERA' : 'Mot de passe oublié'}</h1>
+              <p className="lead" style={{ marginTop: 6 }}>
+                {mode === 'reset' ? 'Recevez un lien pour le réinitialiser.' : 'Montrez ce que vous construisez, jour après jour.'}
+              </p>
+            </div>
+
+            {mode !== 'reset' && (
+              <div className="tabs" role="tablist">
+                <button type="button" role="tab" aria-selected={mode === 'login'} className={`tab${mode === 'login' ? ' is-active' : ''}`} onClick={() => setMode('login')}>
+                  Connexion
+                </button>
+                <button type="button" role="tab" aria-selected={mode === 'signup'} className={`tab${mode === 'signup' ? ' is-active' : ''}`} onClick={() => setMode('signup')}>
+                  Inscription
+                </button>
+              </div>
+            )}
+
+            {mode !== 'reset' && (
+              <>
+                <Button className="google-btn" size="lg" block type="button" onClick={google}>
+                  <GoogleLogo />
+                  Continuer avec Google
+                </Button>
+                <div className="or">ou avec un e-mail</div>
+              </>
+            )}
+
+            <form className="stack" onSubmit={submit}>
+              {mode === 'signup' && (
+                <div className="input-wrap">
+                  <Icon name="alternate_email" />
+                  <input className="input" placeholder="Nom d’utilisateur" autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} required minLength={3} aria-label="Nom d’utilisateur" />
+                </div>
+              )}
+              <div className="input-wrap">
+                <Icon name="mail" />
+                <input className="input" type="email" placeholder="Adresse e-mail" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required aria-label="Adresse e-mail" />
+              </div>
+              {mode !== 'reset' && (
+                <div className="input-wrap">
+                  <Icon name="lock" />
+                  <input
+                    className="input"
+                    type={show ? 'text' : 'password'}
+                    placeholder="Mot de passe"
+                    autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    minLength={8}
+                    aria-label="Mot de passe"
+                  />
+                  <span className="trailing">
+                    <button type="button" className="icon-btn" onClick={() => setShow((v) => !v)} aria-label={show ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}>
+                      <Icon name={show ? 'visibility_off' : 'visibility'} />
+                    </button>
+                  </span>
+                </div>
+              )}
+              {mode === 'signup' && <p className="muted" style={{ fontSize: 12.5 }}>8 caractères minimum, avec une majuscule, une minuscule et un chiffre.</p>}
+              {error && (
+                <div className="form-error">
+                  <Icon name="error" />
+                  <span>{error}</span>
+                </div>
+              )}
+              <Button variant="primary" size="lg" block loading={busy}>
+                {mode === 'login' ? 'Se connecter' : mode === 'signup' ? 'Créer mon compte' : 'Envoyer le lien'}
+              </Button>
+            </form>
+            <div style={{ textAlign: 'center' }}>
+              {mode === 'login' ? (
+                <button type="button" className="muted" style={{ fontSize: 13.5, fontWeight: 600 }} onClick={() => setMode('reset')}>
+                  Mot de passe oublié ?
+                </button>
+              ) : mode === 'reset' ? (
+                <button type="button" className="muted" style={{ fontSize: 13.5, fontWeight: 600 }} onClick={() => setMode('login')}>
+                  Retour à la connexion
+                </button>
+              ) : (
+                <p className="muted" style={{ fontSize: 12.5 }}>
+                  En continuant, vous acceptez les <a href="/cgu" style={{ textDecoration: 'underline' }}>conditions</a> et la <a href="/privacy" style={{ textDecoration: 'underline' }}>politique de confidentialité</a>.
+                </p>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
