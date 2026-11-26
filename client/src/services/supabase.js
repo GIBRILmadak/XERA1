@@ -108,11 +108,59 @@ export async function signOut() {
   localStorage.removeItem("rize-remember-me");
 }
 
+export const NATIVE_AUTH_CALLBACK = "com.xera.app://auth-callback";
+
+/**
+ * Connexion Google.
+ * - Web : redirection classique.
+ * - APK : Google refuse les connexions dans une vue intégrée ; on ouvre donc le
+ *   navigateur du téléphone, et Supabase renvoie vers com.xera.app://auth-callback,
+ *   que l'appli intercepte (voir handleNativeAuthCallback).
+ */
 export async function signInWithGoogle() {
-  return supabase.auth.signInWithOAuth({
+  if (!Capacitor.isNativePlatform()) {
+    return supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: `${AUTH_RETURN_BASE}/` },
+    });
+  }
+  const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
-    options: { redirectTo: `${AUTH_RETURN_BASE}/` },
+    options: { redirectTo: NATIVE_AUTH_CALLBACK, skipBrowserRedirect: true },
   });
+  if (error || !data?.url) return { data, error: error || new Error("Adresse Google invalide") };
+  const { Browser } = await import("@capacitor/browser");
+  await Browser.open({ url: data.url, presentationStyle: "popover" });
+  return { data, error: null };
+}
+
+/**
+ * Termine la connexion quand Android rouvre l'appli sur com.xera.app://auth-callback.
+ * Supabase renvoie les jetons dans le fragment (#access_token=…&refresh_token=…),
+ * ou un code (?code=…) si le flux PKCE est utilisé.
+ */
+export async function handleNativeAuthCallback(url) {
+  if (!String(url || "").startsWith(NATIVE_AUTH_CALLBACK)) return { handled: false };
+  const parsed = new URL(url.replace(NATIVE_AUTH_CALLBACK, "https://callback.local/"));
+  const params = new URLSearchParams(parsed.hash.replace(/^#/, ""));
+  parsed.searchParams.forEach((v, k) => params.set(k, v));
+  try {
+    const { Browser } = await import("@capacitor/browser");
+    await Browser.close();
+  } catch {
+    /* navigateur déjà fermé */
+  }
+  const errorText = params.get("error_description") || params.get("error");
+  if (errorText) return { handled: true, error: errorText.replace(/\+/g, " ") };
+  if (params.get("code")) {
+    const { error } = await supabase.auth.exchangeCodeForSession(params.get("code"));
+    return { handled: true, error: error?.message };
+  }
+  const access_token = params.get("access_token");
+  const refresh_token = params.get("refresh_token");
+  if (!access_token || !refresh_token) return { handled: true, error: "Réponse de connexion incomplète." };
+  const { error } = await supabase.auth.setSession({ access_token, refresh_token });
+  return { handled: true, error: error?.message };
 }
 
 // =========================================================
