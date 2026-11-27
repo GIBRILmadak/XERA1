@@ -29,7 +29,7 @@ const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 const passwordPolicyOk = (password) =>
   /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/.test(password);
 
-function buildAuthProfileData(user) {
+export function buildAuthProfileData(user) {
   if (!user) return {};
   const emailPrefix = String(user?.email || "").split("@")[0] || "Utilisateur";
   const name =

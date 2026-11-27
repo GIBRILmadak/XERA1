@@ -733,6 +733,21 @@ async function approvePaidVerificationRequest(userId) {
 }
 
 /**
+ * Colonnes de fonctionnalités réellement présentes dans la table users.
+ * Les autres avantages (HD, live privé, etc.) se déduisent du plan lui-même :
+ * les écrire faisait échouer toute la mise à jour (« Could not find the
+ * 'advanced_collab_tools' column of 'users' »).
+ */
+const USER_FEATURE_COLUMNS = new Set(["priority_recommendations"]);
+function onlyExistingFeatureColumns(features) {
+    return Object.fromEntries(
+        Object.entries(features || {}).filter(([key]) =>
+            USER_FEATURE_COLUMNS.has(key),
+        ),
+    );
+}
+
+/**
  * Calcule les fonctionnalités premium selon le plan
  * @param {string} plan - Le plan (standard, medium, pro)
  * @returns {object} Les fonctionnalités premium activées
@@ -771,7 +786,7 @@ function computePremiumFeatures(plan) {
         features.maximum_visibility = true;
     }
 
-    return features;
+    return onlyExistingFeatureColumns(features);
 }
 
 const SUBSCRIPTION_PLANS = {
@@ -2582,7 +2597,7 @@ async function sweepExpiredSubscriptions() {
                     plan_status: "inactive",
                     is_monetized: false,
                     updated_at: nowIso,
-                    ...expiredFeatures,
+                    ...onlyExistingFeatureColumns(expiredFeatures),
                 })
                 .in("id", userIds);
 

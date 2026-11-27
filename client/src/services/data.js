@@ -354,15 +354,17 @@ export async function updateProfile(userId, fields) {
 
 /** Chiffres publics de la plateforme pour la page d'accueil. */
 export async function fetchPlatformStats() {
-  if (DEMO) return { builders: 1840, projects: 612, proofs: 9430 };
+  if (DEMO) return { builders: 1840, projects: 612, proofs: 9430, milestones: 1270, verified: 86 };
   const head = (table, apply = (q) => q) =>
-    apply(supabase.from(table).select('id', { count: 'exact', head: true })).then((r) => r.count || 0);
-  const [builders, projects, proofs] = await Promise.all([
+    apply(supabase.from(table).select('*', { count: 'exact', head: true })).then((r) => r.count || 0);
+  const [builders, projects, proofs, milestones, verified] = await Promise.all([
     head('users', (q) => q.not('is_bot', 'is', true)),
     head('arcs'),
     head('content', (q) => q.eq('is_deleted', false)),
+    head('arc_milestone_validations'),
+    head('verified_badges', (q) => q.in('type', ['creator', 'staff'])),
   ]);
-  return { builders, projects, proofs };
+  return { builders, projects, proofs, milestones, verified };
 }
 
 /** Nombre exact de contenus publiés (paliers contributeur). */

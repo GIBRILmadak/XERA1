@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { supabase, isProUser, signOut as supabaseSignOut } from '../services/supabase';
+import { buildAuthProfileData, supabase, isProUser, signOut as supabaseSignOut } from '../services/supabase';
 import { DEMO, demoMe } from '../services/demo';
 
 const AuthContext = createContext(null);
@@ -10,7 +10,19 @@ export function AuthProvider({ children }) {
 
   const loadFullUser = useCallback(async (authUser) => {
     try {
-      const { data: profile } = await supabase.from('users').select('*').eq('id', authUser.id).maybeSingle();
+      let { data: profile } = await supabase.from('users').select('*').eq('id', authUser.id).maybeSingle();
+      if (!profile) {
+        // Premier passage (nouveau compte, Google…) : crée la fiche publique,
+        // sans quoi le profil est « introuvable » et rien ne peut être publié.
+        const base = buildAuthProfileData(authUser);
+        const name = String(base.name || '').replace(/\b(undefined|null)\b/gi, '').trim() || (authUser.email || '').split('@')[0] || 'Membre XERA';
+        const { data: created } = await supabase
+          .from('users')
+          .upsert({ id: authUser.id, name, avatar: base.avatar || null, account_type: 'personal', account_subtype: 'fan', updated_at: new Date().toISOString() }, { onConflict: 'id' })
+          .select('*')
+          .maybeSingle();
+        profile = created;
+      }
       setUser(profile ? { ...authUser, ...profile, id: authUser.id } : authUser);
     } catch {
       setUser(authUser);
