@@ -9,6 +9,8 @@ import { useUi } from '../contexts/UiContext';
 import { fetchEncouraged, fetchFeed, fetchFollowing } from '../services/data';
 import { useUnread } from '../hooks/useUnread';
 import Landing from './Landing';
+import LiveRail from '../components/LiveRail';
+import Announcements from '../components/Announcements';
 import { rankFeed } from '../services/feedAlgo';
 import { loadBadgeSets } from '../services/badges';
 
@@ -90,6 +92,9 @@ function Feed() {
             </div>
             <Icon name="chevron_right" />
           </Link>
+
+          <Announcements />
+          <LiveRail />
 
           <div className="chip-row" role="tablist" aria-label="Filtrer le fil">
             {FILTERS.filter((f) => f.key !== 'following' || user).map((f) => (

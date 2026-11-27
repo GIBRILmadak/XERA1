@@ -8,6 +8,10 @@ import { setEncouragement } from '../services/data';
 import { useAuth } from '../contexts/AuthContext';
 import { useUi } from '../contexts/UiContext';
 import { PUBLIC_SITE } from '../services/api';
+import { SUPER_ADMIN_ID } from '../services/badges';
+import { setTraceValidation } from '../services/pages';
+import { useMyPages } from '../hooks/useMyPages';
+import { supabase } from '../services/supabase';
 
 export function StateBadge({ state }) {
   const meta = STATE_META[state];
@@ -20,13 +24,43 @@ export function StateBadge({ state }) {
 }
 
 /** Carte d'une preuve (trace de progression) dans le fil. */
-export default function ContentCard({ content, encouraged = false, milestone, index = 0 }) {
+export default function ContentCard({ content, encouraged = false, milestone, index = 0, allowValidation = false }) {
   const { user } = useAuth();
   const { toast } = useUi();
   const [on, setOn] = useState(encouraged);
   const [count, setCount] = useState(Number(content.encouragements_count ?? content.encouragements ?? 0));
   const [expanded, setExpanded] = useState(false);
-  const author = content.users || {};
+  const [removed, setRemoved] = useState(false);
+  const [validation, setValidation] = useState({ valid: Boolean(content.is_validated_pro), pageId: content.validated_by_page_id || content.validator?.id || null, validator: content.validator || null });
+  // Sceau de validation : le propriétaire d'une page pro peut valider la preuve d'un autre membre.
+  const myPages = useMyPages(allowValidation && user && content.author_type !== 'PAGE_PRO' && user.id !== content.user_id ? user.id : null);
+
+  async function toggleSeal(page) {
+    const granting = !(validation.valid && validation.pageId === page.id);
+    try {
+      await setTraceValidation(content.id, page.id, granting);
+      setValidation(granting ? { valid: true, pageId: page.id, validator: { id: page.id, name: page.name, slug: page.slug } } : { valid: false, pageId: null, validator: null });
+      toast('success', granting ? 'Sceau accordé' : 'Validation révoquée', granting ? `Preuve validée par ${page.name}.` : undefined);
+    } catch (e) {
+      toast('error', 'Action impossible', e.message);
+    }
+  }
+  const isAdmin = user?.id === SUPER_ADMIN_ID;
+
+  async function adminHide() {
+    const reason = window.prompt('Motif du masquage (visible par l’équipe)');
+    if (reason === null) return;
+    const { error } = await supabase
+      .from('content')
+      .update({ is_deleted: true, deleted_at: new Date().toISOString(), deleted_reason: reason.trim() || null, deleted_by: user.id })
+      .eq('id', content.id);
+    if (error) return toast('error', 'Masquage impossible', error.message);
+    setRemoved(true);
+    toast('success', 'Contenu masqué', 'Il n’est plus visible publiquement.');
+  }
+  const isPagePost = content.author_type === 'PAGE_PRO' && content.page;
+  const author = isPagePost ? { id: content.page.id, name: content.page.name, avatar: content.page.avatar_url } : content.users || {};
+  const authorLink = isPagePost ? `/page/${content.page.slug || content.page.id}` : `/u/${content.user_id}`;
   const arc = content.arcs;
   const media = content.media_url || content.media_urls?.[0];
   const isVideo = content.type === 'video' || /\.(mp4|webm|mov)(\?|$)/i.test(media || '');
@@ -87,13 +121,22 @@ export default function ContentCard({ content, encouraged = false, milestone, in
     }
   }
 
+  if (removed) return null;
   return (
     <article ref={cardRef} className="post card" style={{ animationDelay: `${Math.min(index, 6) * 40}ms` }}>
       <header className="post-head">
-        <Link to={`/u/${content.user_id}`} className="row grow" style={{ minWidth: 0 }}>
+        <Link to={authorLink} className="row grow" style={{ minWidth: 0 }}>
           <Avatar user={author} size={42} />
           <div className="grow">
-            <UserName user={author} className="post-author" />
+            {isPagePost ? (
+              <span className="row post-author" style={{ gap: 6 }}>
+                {author.name}
+                {content.page.is_verified && <img src="/icons/verify_page.svg" alt="Page vérifiée" style={{ width: 16, height: 16 }} />}
+                <span className="pro-tag">PRO</span>
+              </span>
+            ) : (
+              <UserName user={author} className="post-author" />
+            )}
             <div className="post-meta">
               {content.day_number != null && <span>Jour {content.day_number}</span>}
               {content.day_number != null && <span aria-hidden="true">·</span>}
@@ -124,6 +167,11 @@ export default function ContentCard({ content, encouraged = false, milestone, in
             {expanded ? 'Voir moins' : 'Voir plus'}
           </button>
         )}
+        {validation.valid && validation.validator && (
+          <Link to={`/page/${validation.validator.slug || validation.validator.id}`} className="post-seal">
+            <Icon name="workspace_premium" filled size={18} /> Validé par {validation.validator.name}
+          </Link>
+        )}
         {milestone && (
           <div className="post-milestone">
             <Icon name="task_alt" filled size={18} /> Jalon validé
@@ -141,6 +189,19 @@ export default function ContentCard({ content, encouraged = false, milestone, in
         </div>
       )}
 
+      {myPages.length > 0 && (
+        <div className="seal-actions">
+          {myPages.map((page) => {
+            const mine = validation.valid && validation.pageId === page.id;
+            return (
+              <button key={page.id} className={`seal-btn${mine ? ' is-on' : ''}`} onClick={() => toggleSeal(page)}>
+                <Icon name={mine ? 'remove_done' : 'workspace_premium'} filled={!mine} size={18} />
+                {mine ? `Révoquer la validation (${page.name})` : `Accorder le sceau de ${page.name}`}
+              </button>
+            );
+          })}
+        </div>
+      )}
       <footer className="post-actions">
         <button className={`react${on ? ' is-on' : ''}`} onClick={toggle} aria-pressed={on}>
           <Icon name="local_fire_department" filled={on} />
@@ -156,6 +217,7 @@ export default function ContentCard({ content, encouraged = false, milestone, in
           <Icon name="visibility" size={18} />
           {compact(content.views || 0)}
         </span>
+        {isAdmin && <IconButton icon="shield_person" label="Admin : masquer ce contenu" onClick={adminHide} />}
         <IconButton icon="ios_share" label="Partager" onClick={share} />
       </footer>
     </article>

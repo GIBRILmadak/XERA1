@@ -83,7 +83,7 @@ function CreateSheet({ open, onClose }) {
           </span>
           <Icon name="chevron_right" />
         </button>
-        <a className="list-item" href="/create-stream">
+        <button className="list-item" onClick={() => go('/live/nouveau')}>
           <span className="lead-icon">
             <Icon name="sensors" />
           </span>
@@ -91,8 +91,8 @@ function CreateSheet({ open, onClose }) {
             <span className="title" style={{ display: 'block' }}>Lancer un live</span>
             <span className="sub">Construisez en direct avec votre communauté</span>
           </span>
-          <Icon name="open_in_new" />
-        </a>
+          <Icon name="chevron_right" />
+        </button>
       </div>
     </Sheet>
   );

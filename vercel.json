@@ -38,7 +38,7 @@
         },
         {
             "source": "/share/:path*",
-            "destination": "/app-legacy.html"
+            "destination": "/client/dist/index.html"
         },
         {
             "source": "/login",
@@ -93,6 +93,26 @@
             "destination": "/client/dist/index.html"
         },
         {
+            "source": "/live/:path*",
+            "destination": "/client/dist/index.html"
+        },
+        {
+            "source": "/talents",
+            "destination": "/client/dist/index.html"
+        },
+        {
+            "source": "/partenaires",
+            "destination": "/client/dist/index.html"
+        },
+        {
+            "source": "/pages/:path*",
+            "destination": "/client/dist/index.html"
+        },
+        {
+            "source": "/page/:path*",
+            "destination": "/client/dist/index.html"
+        },
+        {
             "source": "/abonnements",
             "destination": "/client/dist/index.html"
         },
@@ -118,19 +138,19 @@
         },
         {
             "source": "/commissions",
-            "destination": "/commissions.html"
+            "destination": "/client/dist/index.html"
         },
         {
             "source": "/admin",
-            "destination": "/admin.html"
+            "destination": "/client/dist/index.html"
         },
         {
             "source": "/badges-admin",
-            "destination": "/badges-admin.html"
+            "destination": "/client/dist/index.html"
         },
         {
             "source": "/create-stream",
-            "destination": "/create-stream.html"
+            "destination": "/client/dist/index.html"
         },
         {
             "source": "/creator-dashboard",
@@ -142,7 +162,7 @@
         },
         {
             "source": "/stream",
-            "destination": "/stream.html"
+            "destination": "/client/dist/index.html"
         },
         {
             "source": "/verification",
@@ -162,11 +182,11 @@
         },
         {
             "source": "/pagepro",
-            "destination": "/profile.html"
+            "destination": "/client/dist/index.html"
         },
         {
             "source": "/pagepro/:path*",
-            "destination": "/profile.html"
+            "destination": "/client/dist/index.html"
         }
     ],
     "crons": [

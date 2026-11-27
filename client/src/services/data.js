@@ -15,7 +15,7 @@ import {
 } from './demo';
 
 const CONTENT_COLUMNS =
-  `id, user_id, author_id, author_type, page_id, arc_id, day_number, type, state, title, description, media_url, media_urls, views, encouragements_count, tags, metadata, is_validated_pro, created_at, users(${USER_BADGE_COLUMNS}), arcs(id, title, status, user_id, stage_level, opportunity_intents)`;
+  `id, user_id, author_id, author_type, page_id, arc_id, day_number, type, state, title, description, media_url, media_urls, views, encouragements_count, tags, metadata, is_validated_pro, created_at, page:professional_pages!content_page_id_fkey(id, name, slug, avatar_url, is_verified), validator:professional_pages!content_validated_by_page_id_fkey(id, name, slug), users(${USER_BADGE_COLUMNS}), arcs(id, title, status, user_id, stage_level, opportunity_intents)`;
 
 const wait = (ms = 250) => new Promise((r) => setTimeout(r, ms));
 
@@ -164,6 +164,7 @@ export async function createArc(userId, arc) {
     start_date: arc.start_date || new Date().toISOString(),
     media_url: arc.media_url || null,
     media_type: arc.media_type || null,
+    page_id: arc.page_id || null,
   };
   return unwrap(await supabase.from('arcs').insert([payload]).select('id').single());
 }

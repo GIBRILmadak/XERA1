@@ -11,6 +11,7 @@ import { compact, displayName } from '../lib/format';
 import { NameBadges, ProfileBadges } from '../components/Badges';
 import { canReceiveSupport } from '../services/badges';
 import { openSupport } from '../services/payments';
+import { userCertifications } from '../services/pages';
 import {
   countUserContent,
   fetchFollowCounts,
@@ -107,6 +108,7 @@ export default function Profile() {
   const [arcs, setArcs] = useState([]);
   const [counts, setCounts] = useState({ followers: 0, following: 0 });
   const [contentCount, setContentCount] = useState(0);
+  const [certs, setCerts] = useState([]);
   const [following, setFollowing] = useState(false);
   const [tab, setTab] = useState('proofs');
   const [editing, setEditing] = useState(false);
@@ -135,6 +137,7 @@ export default function Profile() {
         setArcs(a);
         setCounts(n);
         setContentCount(b);
+        userCertifications(id).then((c) => alive && setCerts(c)).catch(() => {});
         setFollowing(f);
       } catch {
         if (alive) setProfile(null);
@@ -262,6 +265,16 @@ export default function Profile() {
           </div>
         )}
         <ProfileBadges user={profile} contentCount={contentCount} followers={counts.followers} />
+        {certs.length > 0 && (
+          <div className="profile-badges">
+            {certs.map((c) => (
+              <Link key={c.id} to={`/page/${c.professional_pages?.slug || c.page_id}`} className="profile-chip cert-chip">
+                <Icon name="verified_user" size={15} />
+                {c.title} · {c.professional_pages?.name || 'Page pro'}
+              </Link>
+            ))}
+          </div>
+        )}
         {profile.bio && <p className="profile-bio">{profile.bio}</p>}
         <div className="profile-counts">
           <span><strong>{compact(counts.followers)}</strong>abonnés</span>
@@ -302,7 +315,7 @@ export default function Profile() {
                 action={isMe && <Link to="/creer/preuve" className="btn btn--primary"><Icon name="add" /> Publier</Link>}
               />
             ) : (
-              content.map((c, i) => <ContentCard key={c.id} content={c} index={i} />)
+              content.map((c, i) => <ContentCard key={c.id} content={c} index={i} allowValidation />)
             )
           ) : arcs.length === 0 ? (
             <EmptyState art="launch"
