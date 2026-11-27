@@ -22,6 +22,8 @@ import Plans from './pages/Plans';
 import Credits from './pages/Credits';
 import CreatorSpace from './pages/CreatorSpace';
 import Analytics from './pages/Analytics';
+import Live from './pages/Live';
+import LiveCreate from './pages/LiveCreate';
 
 function RequireAuth({ children }) {
   const { user, loading } = useAuth();
@@ -48,6 +50,13 @@ function ProfileEntry() {
   if (target) return <Navigate to={`/u/${encodeURIComponent(target)}`} replace />;
   if (loading) return null;
   return <Navigate to={user ? `/u/${user.id}` : '/connexion?redirect=/profile'} replace />;
+}
+
+/** Anciens liens de live : /stream?id=… */
+function LegacyStream() {
+  const { search } = useLocation();
+  const id = new URLSearchParams(search).get('id');
+  return <Navigate to={id ? `/live/${encodeURIComponent(id)}` : '/explorer'} replace />;
 }
 
 function NotFound() {
@@ -128,6 +137,10 @@ export default function App() {
               <Route path="credits" element={<Credits />} />
               <Route path="espace-createur" element={<RequireAuth><CreatorSpace /></RequireAuth>} />
               <Route path="creator-dashboard" element={<Navigate to="/espace-createur" replace />} />
+              <Route path="live/nouveau" element={<RequireAuth><LiveCreate /></RequireAuth>} />
+              <Route path="live/:id" element={<Live />} />
+              <Route path="stream" element={<LegacyStream />} />
+              <Route path="create-stream" element={<Navigate to="/live/nouveau" replace />} />
               <Route path="statistiques" element={<RequireAuth><Analytics /></RequireAuth>} />
               <Route path="analytics" element={<Navigate to="/statistiques" replace />} />
               <Route path="verification" element={<Navigate to="/abonnements" replace />} />

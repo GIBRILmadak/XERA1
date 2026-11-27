@@ -6,9 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useUi } from '../contexts/UiContext';
 
 /** Pages encore servies par l'ancienne interface (migration progressive). */
-const LEGACY = [
-  { href: '/create-stream', icon: 'sensors', title: 'Lancer un live', sub: 'Diffuser votre travail en direct' },
-];
+const LEGACY = [{ to: '/live/nouveau', icon: 'sensors', title: 'Lancer un live', sub: 'Diffuser votre travail en direct' }];
 
 function Row({ to, href, icon, title, sub, onClick, trailing, danger }) {
   const content = (
@@ -76,7 +74,7 @@ export default function Settings() {
           <section className="card settings-group">
             <h2>Créateur & compte</h2>
             {LEGACY.map((item) => (
-              <Row key={item.href} {...item} />
+              <Row key={item.to || item.href} {...item} />
             ))}
           </section>
         )}

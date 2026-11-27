@@ -15,6 +15,7 @@ const TYPE_ICON = {
   milestone: 'task_alt',
   fata: 'emoji_events',
   live: 'sensors',
+  live_start: 'sensors',
   collaboration: 'handshake',
   badge: 'verified',
   payment: 'payments',
@@ -22,6 +23,8 @@ const TYPE_ICON = {
 
 function target(n) {
   if (n.link && n.link.startsWith('/')) return n.link;
+  const legacyLive = String(n.link || '').match(/stream\.html\?id=([^&]+)/);
+  if (legacyLive) return `/live/${legacyLive[1]}`;
   if (n.type === 'fata') return '/fata';
   if (n.actor?.id) return `/u/${n.actor.id}`;
   return null;

@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { TopBar } from '../components/Shell';
 import Icon from '../components/Icon';
 import ArcCard from '../components/ArcCard';
+import LiveRail from '../components/LiveRail';
 import { Avatar, EmptyState, IconButton, Skeleton, UserName } from '../components/ui';
 import { useAuth } from '../contexts/AuthContext';
 import { recordSearch } from '../services/feedAlgo';
@@ -101,6 +102,7 @@ export default function Explore() {
           )
         ) : (
           <>
+            <LiveRail />
             {people.length > 0 && (
               <>
                 <div className="section-title">
@@ -139,11 +141,11 @@ export default function Explore() {
               <h2>Aussi sur XERA</h2>
             </div>
             <div className="card list" style={{ padding: 6 }}>
-              <a className="list-item" href="/stream">
+              <Link className="list-item" to="/live/nouveau">
                 <span className="lead-icon"><Icon name="live_tv" /></span>
-                <span className="grow"><span className="title" style={{ display: 'block' }}>Lives</span><span className="sub">Projets construits en direct</span></span>
-                <Icon name="open_in_new" />
-              </a>
+                <span className="grow"><span className="title" style={{ display: 'block' }}>Lancer un live</span><span className="sub">Construisez en direct avec votre communauté</span></span>
+                <Icon name="chevron_right" />
+              </Link>
               <Link className="list-item" to="/abonnements">
                 <span className="lead-icon"><Icon name="workspace_premium" /></span>
                 <span className="grow"><span className="title" style={{ display: 'block' }}>XERA Pro</span><span className="sub">Abonnements et avantages</span></span>
