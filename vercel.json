@@ -85,6 +85,14 @@
             "destination": "/client/dist/index.html"
         },
         {
+            "source": "/espace-createur",
+            "destination": "/client/dist/index.html"
+        },
+        {
+            "source": "/statistiques",
+            "destination": "/client/dist/index.html"
+        },
+        {
             "source": "/abonnements",
             "destination": "/client/dist/index.html"
         },
@@ -106,7 +114,7 @@
         },
         {
             "source": "/analytics",
-            "destination": "/analytics.html"
+            "destination": "/client/dist/index.html"
         },
         {
             "source": "/commissions",
@@ -126,7 +134,7 @@
         },
         {
             "source": "/creator-dashboard",
-            "destination": "/creator-dashboard.html"
+            "destination": "/client/dist/index.html"
         },
         {
             "source": "/credits",
@@ -138,7 +146,7 @@
         },
         {
             "source": "/verification",
-            "destination": "/verification.html"
+            "destination": "/client/dist/index.html"
         },
         {
             "source": "/cgu",

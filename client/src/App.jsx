@@ -20,6 +20,8 @@ import Settings from './pages/Settings';
 import Login from './pages/Login';
 import Plans from './pages/Plans';
 import Credits from './pages/Credits';
+import CreatorSpace from './pages/CreatorSpace';
+import Analytics from './pages/Analytics';
 
 function RequireAuth({ children }) {
   const { user, loading } = useAuth();
@@ -124,6 +126,11 @@ export default function App() {
               <Route path="reglages" element={<Settings />} />
               <Route path="abonnements" element={<Plans />} />
               <Route path="credits" element={<Credits />} />
+              <Route path="espace-createur" element={<RequireAuth><CreatorSpace /></RequireAuth>} />
+              <Route path="creator-dashboard" element={<Navigate to="/espace-createur" replace />} />
+              <Route path="statistiques" element={<RequireAuth><Analytics /></RequireAuth>} />
+              <Route path="analytics" element={<Navigate to="/statistiques" replace />} />
+              <Route path="verification" element={<Navigate to="/abonnements" replace />} />
               <Route path="subscription-plans" element={<Navigate to="/abonnements" replace />} />
               <Route path="premium-plans" element={<Navigate to="/abonnements" replace />} />
               <Route path="*" element={<NotFound />} />

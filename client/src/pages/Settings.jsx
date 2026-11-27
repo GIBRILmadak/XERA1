@@ -7,9 +7,6 @@ import { useUi } from '../contexts/UiContext';
 
 /** Pages encore servies par l'ancienne interface (migration progressive). */
 const LEGACY = [
-  { href: '/creator-dashboard', icon: 'monitoring', title: 'Tableau de bord créateur', sub: 'Revenus, audience, retraits' },
-  { href: '/verification', icon: 'verified', title: 'Vérification du compte', sub: 'Obtenir le badge vérifié' },
-  { href: '/analytics', icon: 'insights', title: 'Statistiques', sub: 'Vues et engagement' },
   { href: '/create-stream', icon: 'sensors', title: 'Lancer un live', sub: 'Diffuser votre travail en direct' },
 ];
 
@@ -70,6 +67,9 @@ export default function Settings() {
           <h2>Challenge & partenaires</h2>
           <Row to="/fata" icon="emoji_events" title="Challenge Fata" sub="Compte relié, ARC et étapes" />
           <Row to="/abonnements" icon="workspace_premium" title="Abonnements XERA" sub="Standard, Medium, Pro, Elite" />
+          <Row to="/espace-createur" icon="account_balance_wallet" title="Espace créateur" sub="Soutiens, portefeuille et retraits" />
+          <Row to="/statistiques" icon="insights" title="Statistiques" sub="Score d’élan, activité, analyse du compte" />
+          <Row to="/abonnements" icon="verified" title="Vérification du compte" sub="Badge vérifié bleu ou Gold" />
         </section>
 
         {user && (
