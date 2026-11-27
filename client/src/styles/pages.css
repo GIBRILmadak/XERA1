@@ -2336,3 +2336,11 @@ video.dm-media {
   font-size: 14px;
   white-space: pre-line;
 }
+.elite-wall {
+  text-align: center;
+  justify-items: center;
+  padding: 32px 20px;
+}
+.elite-wall > .icon {
+  color: var(--success);
+}

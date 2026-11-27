@@ -7,6 +7,7 @@ import { Avatar, EmptyState, Skeleton, UserName } from '../components/ui';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../services/supabase';
 import { DEMO, demoUsers } from '../services/demo';
+import { SUPER_ADMIN_ID, isPlanActive } from '../services/badges';
 
 const ROLE_FILTERS = [
   ['', 'Tous'],
@@ -23,8 +24,11 @@ export default function Talents() {
   const [role, setRole] = useState('');
   const [list, setList] = useState(null);
   const timer = useRef();
+  // Réservé aux abonnés Elite actifs (et à l'équipe XERA).
+  const hasElite = DEMO || (user && (user.id === SUPER_ADMIN_ID || (String(user.plan || '').toLowerCase() === 'elite' && isPlanActive(user))));
 
   useEffect(() => {
+    if (!hasElite) return undefined;
     clearTimeout(timer.current);
     timer.current = setTimeout(async () => {
       setList(null);
@@ -36,7 +40,7 @@ export default function Talents() {
       setList(data || []);
     }, 300);
     return () => clearTimeout(timer.current);
-  }, [q, role]);
+  }, [q, role, hasElite]);
 
   return (
     <>
@@ -55,6 +59,15 @@ export default function Talents() {
             <Icon name="lock" size={32} />
             <p>Connectez-vous pour explorer les talents.</p>
             <Link className="btn btn--primary" to="/connexion?redirect=/talents">Se connecter</Link>
+          </div>
+        ) : !hasElite ? (
+          <div className="card card--pad stack elite-wall">
+            <Icon name="workspace_premium" size={36} />
+            <h2 style={{ fontSize: 20 }}>Réservé aux abonnés Elite</h2>
+            <p className="muted">Recherche illimitée par domaine, profils certifiés, contact direct et filtres avancés du Momentum Engine.</p>
+            <Link className="btn btn--primary btn--lg" to="/abonnements">
+              Passer à Elite · 40 $ / mois
+            </Link>
           </div>
         ) : (
           <>
