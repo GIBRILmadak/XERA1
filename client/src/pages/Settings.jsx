@@ -56,7 +56,7 @@ export default function Settings() {
       <TopBar back title="Réglages" />
       <main className="main">
         {user && (
-          <Link to={`/u/${user.id}`} className="card list-item" style={{ padding: 16, marginBottom: 14 }}>
+          <Link to="/reglages/profil" className="card list-item" style={{ padding: 16, marginBottom: 14 }}>
             <Avatar user={user} size={54} />
             <span className="grow">
               <span className="title" style={{ display: 'block', fontSize: 16 }}>{user.name || 'Mon profil'}</span>
@@ -108,8 +108,8 @@ export default function Settings() {
         <section className="card settings-group">
           <h2>Informations</h2>
           <Row to="/credits" icon="favorite" title="Remerciements" sub="Ceux grâce à qui XERA1 existe" />
-          <Row href="/cgu" icon="gavel" title="Conditions d’utilisation" />
-          <Row href="/privacy" icon="shield_person" title="Confidentialité" />
+          <Row to="/cgu" icon="gavel" title="Conditions d’utilisation" />
+          <Row to="/privacy" icon="shield_person" title="Confidentialité" />
         </section>
 
         {user && (

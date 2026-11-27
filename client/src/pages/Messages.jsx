@@ -103,9 +103,12 @@ export function Inbox() {
                 <span className="grow" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 2 }}>
                   <span className="row" style={{ justifyContent: 'space-between', minWidth: 0 }}>
                     <UserName user={c.other} className="title grow" />
-                    <span className="time" style={{ flexShrink: 0 }}>{timeAgo(c.lastAt)}</span>
+                    <span className={`time${c.unreadCount ? ' is-unread' : ''}`} style={{ flexShrink: 0 }}>{timeAgo(c.lastAt)}</span>
                   </span>
                   <span className="preview">
+                    {c.lastMessage?.sender_id === user.id && !c.lastMessage?.deleted_at && (
+                      <Icon name="done_all" size={16} className={`ticks${c.otherLastReadAt && Date.parse(c.otherLastReadAt) >= Date.parse(c.lastMessage.created_at) ? ' is-read' : ''}`} />
+                    )}
                     <span className="sub grow" style={{ color: c.unreadCount ? 'var(--text)' : undefined, fontWeight: c.unreadCount ? 600 : 400 }}>
                       {previewText(c, user.id)}
                     </span>
@@ -388,8 +391,6 @@ export function Conversation() {
   }
 
   const canEdit = (m) => m.sender_id === user.id && !m.deleted_at && m.body && Date.now() - Date.parse(m.created_at) < DM_EDIT_WINDOW_MS;
-  const lastMine = [...(messages || [])].reverse().find((m) => m.sender_id === user.id && !m.deleted_at);
-  const seen = lastMine && meta.otherLastReadAt && Date.parse(meta.otherLastReadAt) >= Date.parse(lastMine.created_at);
   const isTyping = typingUntil > Date.now();
 
   let lastDay = '';
@@ -403,7 +404,7 @@ export function Conversation() {
               <Avatar user={other} size={34} />
               <span style={{ display: 'grid', minWidth: 0 }}>
                 <UserName user={other} />
-                <span className={`chat-sub${isTyping ? ' is-typing' : ''}`}>{isTyping ? 'écrit…' : meta.muted ? 'Notifications coupées' : 'Message privé'}</span>
+                <span className={`chat-sub${isTyping ? ' is-typing' : ''}`}>{isTyping ? 'écrit…' : meta.muted ? 'Notifications coupées' : 'Conversation privée'}</span>
               </span>
             </Link>
           ) : (
@@ -424,17 +425,21 @@ export function Conversation() {
           ) : messages.length === 0 ? (
             <EmptyState art="chat" icon="waving_hand" title="Dites bonjour" text="Présentez-vous et parlez de vos projets." />
           ) : (
-            messages.map((m) => {
+            messages.map((m, idx) => {
               const day = dayLabel(m.created_at);
               const showDay = day !== lastDay;
               lastDay = day;
               const mine = m.sender_id === user.id;
+              const prev = messages[idx - 1];
+              // Bulles consécutives du même auteur (moins de 5 min) : regroupées, sans pointe.
+              const cont = !showDay && prev && prev.sender_id === m.sender_id && Date.parse(m.created_at) - Date.parse(prev.created_at) < 5 * 60000;
+              const read = mine && meta.otherLastReadAt && Date.parse(meta.otherLastReadAt) >= Date.parse(m.created_at);
               const quoted = m.reply_to_id ? byId[m.reply_to_id] : null;
               return (
                 <div key={m.id} style={{ display: 'contents' }}>
                   {showDay && <span className="chat-day">{day}</span>}
                   <div
-                    className={`bubble${mine ? ' is-me' : ''}${m.deleted_at ? ' is-deleted' : ''}`}
+                    className={`bubble${mine ? ' is-me' : ''}${cont ? ' is-cont' : ''}${m.deleted_at ? ' is-deleted' : ''}`}
                     onClick={() => !m.deleted_at && setActionsFor(m)}
                     onContextMenu={(e) => {
                       e.preventDefault();
@@ -457,11 +462,13 @@ export function Conversation() {
                         {m.body}
                       </>
                     )}
-                    <time>
+                    <span className="bubble-meta">
+                      {m.edited_at && !m.deleted_at && <em>modifié</em>}
                       {hhmm(m.created_at)}
-                      {m.edited_at && !m.deleted_at ? ' · modifié' : ''}
-                      {mine && lastMine?.id === m.id ? (seen ? ' · Vu' : ' · Envoyé') : ''}
-                    </time>
+                      {mine && !m.deleted_at && (
+                        <Icon name="done_all" size={16} className={`ticks${read ? ' is-read' : ''}`} label={read ? 'Lu' : 'Envoyé'} />
+                      )}
+                    </span>
                   </div>
                 </div>
               );

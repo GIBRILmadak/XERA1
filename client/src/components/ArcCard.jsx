@@ -33,6 +33,13 @@ export default function ArcCard({ arc, showAuthor = true, compact = false }) {
         <h3>{arc.title}</h3>
         {arc.goal && !compact && <p className="muted clamp-2">{arc.goal}</p>}
         {milestones.length > 0 && (
+          <div className="arc-path" aria-hidden="true">
+            {milestones.slice(0, 8).map((m, i) => (
+              <span key={i} className={i < done ? 'is-done' : i === done ? 'is-next' : ''} title={m.title} />
+            ))}
+          </div>
+        )}
+        {milestones.length > 0 && (
         <div className="arc-progress">
           <div className="progress">
             <span style={{ width: `${pct}%` }} />

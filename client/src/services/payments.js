@@ -12,15 +12,10 @@ function loadModule() {
   if (loading) return loading;
   // Le module appelle l'API en relatif : dans l'APK, on lui donne l'adresse du serveur.
   window.XERA_API_BASE = API_BASE;
-  loading = new Promise((resolve, reject) => {
-    const s = document.createElement('script');
-    s.src = '/js/mobile-money-modal.js';
-    s.onload = () => resolve();
-    s.onerror = () => {
-      loading = null;
-      reject(new Error('Module de paiement indisponible. Vérifiez votre connexion.'));
-    };
-    document.head.appendChild(s);
+  // Module de paiement intégré au bundle de l'appli (plus de fichier de l'ancien site).
+  loading = import('../vendor/mobile-money-modal.js').catch(() => {
+    loading = null;
+    throw new Error('Module de paiement indisponible. Vérifiez votre connexion.');
   });
   return loading;
 }

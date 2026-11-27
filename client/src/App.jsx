@@ -30,6 +30,8 @@ import Partners from './pages/Partners';
 import Talents from './pages/Talents';
 import Admin from './pages/Admin';
 import PostView from './pages/PostView';
+import Legal from './pages/Legal';
+import ProfileSettings from './pages/ProfileSettings';
 
 function RequireAuth({ children }) {
   const { user, loading } = useAuth();
@@ -149,6 +151,7 @@ export default function App() {
               <Route path="messages/:id" element={<RequireAuth><Conversation /></RequireAuth>} />
               <Route path="notifications" element={<RequireAuth><Notifications /></RequireAuth>} />
               <Route path="reglages" element={<Settings />} />
+              <Route path="reglages/profil" element={<RequireAuth><ProfileSettings /></RequireAuth>} />
               <Route path="abonnements" element={<Plans />} />
               <Route path="credits" element={<Credits />} />
               <Route path="espace-createur" element={<RequireAuth><CreatorSpace /></RequireAuth>} />
@@ -165,6 +168,8 @@ export default function App() {
               <Route path="commissions" element={<Navigate to="/partenaires" replace />} />
               <Route path="talents" element={<Talents />} />
               <Route path="share/:id" element={<PostView />} />
+              <Route path="cgu" element={<Legal doc="cgu" />} />
+              <Route path="privacy" element={<Legal doc="privacy" />} />
               <Route path="admin" element={<RequireAuth><Admin /></RequireAuth>} />
               <Route path="badges-admin" element={<RequireAuth><Admin initialTab="badges" /></RequireAuth>} />
               <Route path="statistiques" element={<RequireAuth><Analytics /></RequireAuth>} />

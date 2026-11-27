@@ -1,14 +1,81 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { TopBar } from '../components/Shell';
 import Icon from '../components/Icon';
 import ContentCard from '../components/ContentCard';
+import MediaViewer from '../components/MediaViewer';
 import { Avatar, Badge, Button, CardSkeleton, EmptyState, IconLink, Sheet, UserName } from '../components/ui';
 import { useAuth } from '../contexts/AuthContext';
 import { useUi } from '../contexts/UiContext';
-import { ARC_STATUS, stageLabel } from '../lib/format';
-import { fetchArc, fetchArcContent, fetchArcValidations, milestoneList, validateMilestone } from '../services/data';
+import { ARC_STAGES, ARC_STATUS, stageLabel } from '../lib/format';
+import { deleteArc, fetchArc, fetchArcContent, fetchArcValidations, milestoneList, updateArc, validateMilestone } from '../services/data';
 import { syncQueue } from '../services/fata';
+
+/** Modifier un ARC (mêmes champs que l'ancienne interface) ou le supprimer. */
+function ArcEditSheet({ open, onClose, arc, onSaved }) {
+  const { toast } = useUi();
+  const navigate = useNavigate();
+  const [f, setF] = useState(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (open) setF({ title: arc.title || '', goal: arc.goal || '', description: arc.description || '', milestones: milestoneList(arc).map((m) => m.title).join('\n'), status: arc.status || 'in_progress', stage_level: arc.stage_level || 'idee' });
+  }, [open, arc]);
+  if (!f) return null;
+  async function save(e) {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      const saved = await updateArc(arc.id, {
+        title: f.title.trim(),
+        goal: f.goal.trim() || null,
+        description: f.description.trim() || null,
+        milestones: f.milestones.split(/\r?\n/).map((t) => t.trim()).filter(Boolean).map((title) => ({ title })),
+        status: f.status,
+        stage_level: f.stage_level,
+      });
+      onSaved(saved);
+      toast('success', 'Projet mis à jour');
+      onClose();
+    } catch (err) {
+      toast('error', 'Modification impossible', err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function remove() {
+    if (!window.confirm('Supprimer ce projet ? Ses preuves resteront sur votre profil.')) return;
+    try {
+      await deleteArc(arc.id);
+      toast('success', 'Projet supprimé');
+      navigate(`/u/${arc.user_id}`, { replace: true });
+    } catch (err) {
+      toast('error', 'Suppression impossible', err.message);
+    }
+  }
+  return (
+    <Sheet open={open} onClose={onClose} title="Modifier le projet">
+      <form className="stack" onSubmit={save}>
+        <input className="input" value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} required maxLength={90} aria-label="Titre" />
+        <input className="input" value={f.goal} onChange={(e) => setF({ ...f, goal: e.target.value })} placeholder="Objectif" maxLength={160} aria-label="Objectif" />
+        <textarea className="textarea" value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} placeholder="Description" aria-label="Description" />
+        <div className="field">
+          <label htmlFor="ae-ms">Jalons (un par ligne)</label>
+          <textarea id="ae-ms" className="textarea" value={f.milestones} onChange={(e) => setF({ ...f, milestones: e.target.value })} />
+        </div>
+        <div className="row" style={{ flexWrap: 'wrap' }}>
+          <select className="select grow" value={f.status} onChange={(e) => setF({ ...f, status: e.target.value })} aria-label="Statut">
+            {Object.entries(ARC_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+          </select>
+          <select className="select grow" value={f.stage_level} onChange={(e) => setF({ ...f, stage_level: e.target.value })} aria-label="Étape">
+            {ARC_STAGES.map((st) => <option key={st.value} value={st.value}>{st.label}</option>)}
+          </select>
+        </div>
+        <Button variant="primary" block loading={busy} icon="save">Enregistrer</Button>
+        <Button type="button" variant="ghost" block className="btn--danger" icon="delete" onClick={remove}>Supprimer le projet</Button>
+      </form>
+    </Sheet>
+  );
+}
 
 function ValidateSheet({ open, onClose, arc, proofs, isOwner, onDone }) {
   const { user } = useAuth();
@@ -99,6 +166,8 @@ export default function ArcDetail() {
   const [proofs, setProofs] = useState([]);
   const [validations, setValidations] = useState([]);
   const [sheet, setSheet] = useState(false);
+  const [viewer, setViewer] = useState(null);
+  const [editArc, setEditArc] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -143,10 +212,25 @@ export default function ArcDetail() {
 
   return (
     <>
-      <TopBar back title={arc.title} actions={isOwner && <IconLink to={`/creer/preuve?arc=${arc.id}`} icon="add_photo_alternate" label="Ajouter une preuve" />} />
+      <TopBar
+        back
+        title={arc.title}
+        actions={
+          isOwner && (
+            <>
+              <IconLink to={`/creer/preuve?arc=${arc.id}`} icon="add_photo_alternate" label="Ajouter une preuve" />
+              <button className="icon-btn" onClick={() => setEditArc(true)} aria-label="Modifier le projet"><Icon name="edit" /></button>
+            </>
+          )
+        }
+      />
+      {isOwner && <ArcEditSheet open={editArc} onClose={() => setEditArc(false)} arc={arc} onSaved={(saved) => setArc((a) => ({ ...a, ...saved }))} />}
       <main className="main">
         <section className="arc-hero">
-          <div className="cover">{arc.media_url ? <img src={arc.media_url} alt="" /> : <div className="arc-cover-fallback" style={{ height: '100%' }}><Icon name="flag" size={48} /></div>}</div>
+          <div className="cover" onClick={() => arc.media_url && setViewer(arc.media_url)} role={arc.media_url ? 'button' : undefined} aria-label={arc.media_url ? 'Voir la couverture en grand' : undefined}>
+            {arc.media_url ? <img src={arc.media_url} alt="" /> : <div className="arc-cover-fallback" style={{ height: '100%' }}><Icon name="flag" size={48} /></div>}
+          </div>
+          <MediaViewer src={viewer} alt={arc.title} onClose={() => setViewer(null)} />
         </section>
         <div className="arc-title-block">
           <div className="row" style={{ flexWrap: 'wrap', gap: 6 }}>
