@@ -315,7 +315,7 @@ export default function Profile() {
                 action={isMe && <Link to="/creer/preuve" className="btn btn--primary"><Icon name="add" /> Publier</Link>}
               />
             ) : (
-              content.map((c, i) => <ContentCard key={c.id} content={c} index={i} />)
+              content.map((c, i) => <ContentCard key={c.id} content={c} index={i} allowValidation />)
             )
           ) : arcs.length === 0 ? (
             <EmptyState art="launch"

@@ -2344,3 +2344,29 @@ video.dm-media {
 .elite-wall > .icon {
   color: var(--success);
 }
+.seal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 16px 0;
+}
+.seal-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: var(--r-sm);
+  border: 1px solid rgba(245, 196, 81, 0.4);
+  color: var(--gold);
+  font-size: 12.5px;
+  font-weight: 600;
+  transition: all var(--dur-2) var(--ease);
+}
+.seal-btn:hover {
+  background: var(--gold-soft);
+}
+.seal-btn.is-on {
+  border-color: var(--border-strong);
+  color: var(--text-2);
+}

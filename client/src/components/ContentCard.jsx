@@ -9,6 +9,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { useUi } from '../contexts/UiContext';
 import { PUBLIC_SITE } from '../services/api';
 import { SUPER_ADMIN_ID } from '../services/badges';
+import { setTraceValidation } from '../services/pages';
+import { useMyPages } from '../hooks/useMyPages';
 import { supabase } from '../services/supabase';
 
 export function StateBadge({ state }) {
@@ -22,13 +24,27 @@ export function StateBadge({ state }) {
 }
 
 /** Carte d'une preuve (trace de progression) dans le fil. */
-export default function ContentCard({ content, encouraged = false, milestone, index = 0 }) {
+export default function ContentCard({ content, encouraged = false, milestone, index = 0, allowValidation = false }) {
   const { user } = useAuth();
   const { toast } = useUi();
   const [on, setOn] = useState(encouraged);
   const [count, setCount] = useState(Number(content.encouragements_count ?? content.encouragements ?? 0));
   const [expanded, setExpanded] = useState(false);
   const [removed, setRemoved] = useState(false);
+  const [validation, setValidation] = useState({ valid: Boolean(content.is_validated_pro), pageId: content.validated_by_page_id || content.validator?.id || null, validator: content.validator || null });
+  // Sceau de validation : le propriétaire d'une page pro peut valider la preuve d'un autre membre.
+  const myPages = useMyPages(allowValidation && user && content.author_type !== 'PAGE_PRO' && user.id !== content.user_id ? user.id : null);
+
+  async function toggleSeal(page) {
+    const granting = !(validation.valid && validation.pageId === page.id);
+    try {
+      await setTraceValidation(content.id, page.id, granting);
+      setValidation(granting ? { valid: true, pageId: page.id, validator: { id: page.id, name: page.name, slug: page.slug } } : { valid: false, pageId: null, validator: null });
+      toast('success', granting ? 'Sceau accordé' : 'Validation révoquée', granting ? `Preuve validée par ${page.name}.` : undefined);
+    } catch (e) {
+      toast('error', 'Action impossible', e.message);
+    }
+  }
   const isAdmin = user?.id === SUPER_ADMIN_ID;
 
   async function adminHide() {
@@ -151,9 +167,9 @@ export default function ContentCard({ content, encouraged = false, milestone, in
             {expanded ? 'Voir moins' : 'Voir plus'}
           </button>
         )}
-        {content.is_validated_pro && content.validator && (
-          <Link to={`/page/${content.validator.slug || content.validator.id}`} className="post-seal">
-            <Icon name="workspace_premium" filled size={18} /> Validé par {content.validator.name}
+        {validation.valid && validation.validator && (
+          <Link to={`/page/${validation.validator.slug || validation.validator.id}`} className="post-seal">
+            <Icon name="workspace_premium" filled size={18} /> Validé par {validation.validator.name}
           </Link>
         )}
         {milestone && (
@@ -173,6 +189,19 @@ export default function ContentCard({ content, encouraged = false, milestone, in
         </div>
       )}
 
+      {myPages.length > 0 && (
+        <div className="seal-actions">
+          {myPages.map((page) => {
+            const mine = validation.valid && validation.pageId === page.id;
+            return (
+              <button key={page.id} className={`seal-btn${mine ? ' is-on' : ''}`} onClick={() => toggleSeal(page)}>
+                <Icon name={mine ? 'remove_done' : 'workspace_premium'} filled={!mine} size={18} />
+                {mine ? `Révoquer la validation (${page.name})` : `Accorder le sceau de ${page.name}`}
+              </button>
+            );
+          })}
+        </div>
+      )}
       <footer className="post-actions">
         <button className={`react${on ? ' is-on' : ''}`} onClick={toggle} aria-pressed={on}>
           <Icon name="local_fire_department" filled={on} />

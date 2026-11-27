@@ -207,7 +207,7 @@ export default function ArcDetail() {
             action={isOwner && <Link to={`/creer/preuve?arc=${arc.id}`} className="btn btn--primary"><Icon name="add" /> Publier une preuve</Link>}
           />
         ) : (
-          proofs.map((p, i) => <ContentCard key={p.id} content={{ ...p, arcs: null }} index={i} milestone={validatedIds.has(p.id)} />)
+          proofs.map((p, i) => <ContentCard key={p.id} content={{ ...p, arcs: null }} index={i} milestone={validatedIds.has(p.id)} allowValidation />)
         )}
       </main>
       {user && <ValidateSheet open={sheet} onClose={() => setSheet(false)} arc={arc} proofs={proofs} isOwner={isOwner} onDone={load} />}
