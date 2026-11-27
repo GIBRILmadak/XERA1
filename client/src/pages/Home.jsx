@@ -9,6 +9,8 @@ import { useUi } from '../contexts/UiContext';
 import { fetchEncouraged, fetchFeed, fetchFollowing } from '../services/data';
 import { useUnread } from '../hooks/useUnread';
 import Landing from './Landing';
+import { rankFeed } from '../services/feedAlgo';
+import { loadBadgeSets } from '../services/badges';
 
 const FILTERS = [
   { key: 'all', label: 'Tout', icon: 'apps' },
@@ -43,7 +45,13 @@ function Feed() {
           const ids = user ? await fetchFollowing(user.id) : [];
           list = ids.length ? await fetchFeed({ userIds: ids }) : [];
         } else {
-          list = await fetchFeed({ filter });
+          // Fil « Tout » : on récupère plus de candidats puis l'algorithme les classe.
+          const [candidates, followed, badgeSets] = await Promise.all([
+            fetchFeed({ filter, limit: filter === 'all' ? 60 : 24 }),
+            user ? fetchFollowing(user.id) : [],
+            loadBadgeSets(),
+          ]);
+          list = filter === 'all' ? rankFeed(candidates, { user, followedIds: new Set(followed), badgeSets }) : candidates;
         }
         if (!alive) return;
         setItems(list);

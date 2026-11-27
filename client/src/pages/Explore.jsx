@@ -5,6 +5,7 @@ import Icon from '../components/Icon';
 import ArcCard from '../components/ArcCard';
 import { Avatar, EmptyState, IconButton, Skeleton, UserName } from '../components/ui';
 import { useAuth } from '../contexts/AuthContext';
+import { recordSearch } from '../services/feedAlgo';
 import { fetchRecentArcs, fetchSuggestedUsers, search } from '../services/data';
 
 export default function Explore() {
@@ -30,12 +31,13 @@ export default function Explore() {
       return undefined;
     }
     timer.current = setTimeout(() => {
+      if (user) recordSearch(user.id, q);
       search(q)
         .then(setResults)
         .catch(() => setResults({ users: [], arcs: [] }));
     }, 280);
     return () => clearTimeout(timer.current);
-  }, [term, setParams]);
+  }, [term, setParams, user]);
 
   return (
     <>
