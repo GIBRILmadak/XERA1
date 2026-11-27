@@ -25,6 +25,10 @@
             "destination": "/client/dist/assets/:path*"
         },
         {
+            "source": "/medias/:path*",
+            "destination": "/client/dist/medias/:path*"
+        },
+        {
             "source": "/index.html",
             "destination": "/app-legacy.html"
         },

@@ -4,19 +4,18 @@
  * (arcs, content, arc_milestone_validations) restent la source de vérité.
  */
 import { supabase } from './supabase';
+import { USER_BADGE_COLUMNS } from './badges';
 import {
   DEMO,
   demoArcs,
   demoContent,
-  demoInbox,
   demoMe,
-  demoMessages,
   demoNotifications,
   demoUsers,
 } from './demo';
 
 const CONTENT_COLUMNS =
-  'id, user_id, author_id, author_type, page_id, arc_id, day_number, type, state, title, description, media_url, media_urls, views, encouragements_count, tags, metadata, created_at, users(id, name, avatar, account_type, account_subtype, badge, is_verified), arcs(id, title, status, user_id)';
+  `id, user_id, author_id, author_type, page_id, arc_id, day_number, type, state, title, description, media_url, media_urls, views, encouragements_count, tags, metadata, created_at, users(${USER_BADGE_COLUMNS}), arcs(id, title, status, user_id)`;
 
 const wait = (ms = 250) => new Promise((r) => setTimeout(r, ms));
 
@@ -80,7 +79,7 @@ export function milestoneList(arc) {
 export async function fetchArc(id) {
   if (DEMO) return demoArcs.find((a) => a.id === id) || null;
   return unwrap(
-    await supabase.from('arcs').select('*, users(id, name, avatar, account_type, badge, is_verified)').eq('id', id).maybeSingle(),
+    await supabase.from('arcs').select(`*, users(${USER_BADGE_COLUMNS})`).eq('id', id).maybeSingle(),
   );
 }
 
@@ -113,7 +112,7 @@ export async function fetchRecentArcs(limit = 12) {
     unwrap(
       await supabase
         .from('arcs')
-        .select('id, title, goal, status, milestones, media_url, user_id, created_at, users(id, name, avatar, badge, is_verified)')
+        .select(`id, title, goal, status, milestones, media_url, user_id, created_at, users(${USER_BADGE_COLUMNS})`)
         .is('page_id', null)
         .order('created_at', { ascending: false })
         .limit(limit),
@@ -316,10 +315,28 @@ export async function updateProfile(userId, fields) {
   );
 }
 
-export async function fetchBadges(userId) {
-  if (DEMO) return [{ type: 'fata' }];
-  const { data } = await supabase.from('verified_badges').select('type').eq('user_id', userId);
-  return data || [];
+/** Chiffres publics de la plateforme pour la page d'accueil. */
+export async function fetchPlatformStats() {
+  if (DEMO) return { builders: 1840, projects: 612, proofs: 9430 };
+  const head = (table, apply = (q) => q) =>
+    apply(supabase.from(table).select('id', { count: 'exact', head: true })).then((r) => r.count || 0);
+  const [builders, projects, proofs] = await Promise.all([
+    head('users', (q) => q.not('is_bot', 'is', true)),
+    head('arcs'),
+    head('content', (q) => q.eq('is_deleted', false)),
+  ]);
+  return { builders, projects, proofs };
+}
+
+/** Nombre exact de contenus publiés (paliers contributeur). */
+export async function countUserContent(userId) {
+  if (DEMO) return 24;
+  const { count } = await supabase
+    .from('content')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('is_deleted', false);
+  return count || 0;
 }
 
 // ---------------------------------------------------------------- Recherche
@@ -336,15 +353,15 @@ export async function search(term) {
   }
   const like = `%${q.replace(/[%_]/g, '')}%`;
   const [users, arcs] = await Promise.all([
-    supabase.from('users').select('id, name, avatar, title, badge, is_verified, account_type').ilike('name', like).limit(12),
-    supabase.from('arcs').select('id, title, goal, status, milestones, media_url, user_id, users(id, name, avatar, badge, is_verified)').ilike('title', like).limit(12),
+    supabase.from('users').select(`${USER_BADGE_COLUMNS}, title`).ilike('name', like).limit(12),
+    supabase.from('arcs').select(`id, title, goal, status, milestones, media_url, user_id, users(${USER_BADGE_COLUMNS})`).ilike('title', like).limit(12),
   ]);
   return { users: users.data || [], arcs: arcs.data || [] };
 }
 
 export async function fetchSuggestedUsers(excludeId) {
   if (DEMO) return demoUsers.filter((u) => u.id !== 'u1').slice(0, 4);
-  let query = supabase.from('users').select('id, name, avatar, title, badge, is_verified').not('is_bot', 'is', true).order('created_at', { ascending: false }).limit(8);
+  let query = supabase.from('users').select(`${USER_BADGE_COLUMNS}, title`).not('is_bot', 'is', true).order('created_at', { ascending: false }).limit(8);
   if (excludeId) query = query.neq('id', excludeId);
   const { data } = await query;
   // Écarte les comptes sans vrai nom (anciens profils « undefined undefined »).
@@ -379,76 +396,7 @@ export async function markAllNotificationsRead(userId) {
   await supabase.from('notifications').update({ read: true }).eq('user_id', userId).eq('read', false);
 }
 
-// ---------------------------------------------------------------- Messages privés
-
-export async function fetchInbox(userId) {
-  if (DEMO) return demoInbox;
-  const rows = unwrap(await supabase.rpc('get_dm_inbox')) || [];
-  const otherIds = [...new Set(rows.map((r) => r.other_user_id).filter(Boolean))];
-  const { data: users } = otherIds.length
-    ? await supabase.from('users').select('id, name, avatar, badge, is_verified').in('id', otherIds)
-    : { data: [] };
-  const map = Object.fromEntries((users || []).map((u) => [u.id, u]));
-  return rows
-    .filter((r) => !r.hidden_at)
-    .map((r) => ({
-      id: r.conversation_id,
-      other: map[r.other_user_id] || { id: r.other_user_id, name: 'Membre XERA' },
-      unreadCount: Number(r.unread_count) || 0,
-      muted: r.muted === true,
-      lastMessage: r.last_message || null,
-      lastAt: r.last_message_at || r.updated_at,
-      me: userId,
-    }));
-}
-
-export async function fetchMessages(conversationId) {
-  if (DEMO) return demoMessages;
-  const rows =
-    unwrap(
-      await supabase
-        .from('dm_messages')
-        .select('id, conversation_id, sender_id, body, media_url, media_type, created_at, edited_at, deleted_at, reply_to_id')
-        .eq('conversation_id', conversationId)
-        .order('created_at', { ascending: false })
-        .limit(80),
-    ) || [];
-  return rows.reverse();
-}
-
-export async function sendMessage(conversationId, senderId, body) {
-  if (DEMO) return { id: `m${Date.now()}`, sender_id: senderId, body, created_at: new Date().toISOString() };
-  return unwrap(
-    await supabase
-      .from('dm_messages')
-      .insert({ conversation_id: conversationId, sender_id: senderId, body })
-      .select('id, conversation_id, sender_id, body, created_at')
-      .single(),
-  );
-}
-
-export async function openConversation(otherUserId) {
-  if (DEMO) return 'd1';
-  return unwrap(await supabase.rpc('get_or_create_dm_conversation', { p_other_user_id: otherUserId }));
-}
-
-export async function markConversationRead(conversationId) {
-  if (DEMO) return;
-  // Fonction serveur dédiée : la table dm_participants n'est pas modifiable directement.
-  await supabase.rpc('mark_dm_conversation_read', { p_conversation_id: conversationId });
-}
-
-export function subscribeToConversation(conversationId, onInsert) {
-  if (DEMO) return () => {};
-  const channel = supabase
-    .channel(`dm-live-${conversationId}-${Date.now()}`)
-    .on(
-      'postgres_changes',
-      { event: 'INSERT', schema: 'public', table: 'dm_messages', filter: `conversation_id=eq.${conversationId}` },
-      (payload) => onInsert(payload.new),
-    )
-    .subscribe();
-  return () => supabase.removeChannel(channel);
-}
+// Messagerie : voir services/dm.js
+export { fetchInbox, openConversation } from './dm';
 
 export { demoMe };

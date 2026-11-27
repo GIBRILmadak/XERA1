@@ -826,7 +826,7 @@
         if (options.accessToken) {
           headers["Authorization"] = "Bearer " + options.accessToken;
         }
-        const res = await fetch("/api/payments/status/" + encodeURIComponent(txId), {
+        const res = await fetch((window.XERA_API_BASE || "") + "/api/payments/status/" + encodeURIComponent(txId), {
           headers,
           credentials: "same-origin",
         });
@@ -942,7 +942,7 @@
           headers["Authorization"] = "Bearer " + options.accessToken;
         }
 
-        const res = await fetch("/api/payments/initiate", {
+        const res = await fetch((window.XERA_API_BASE || "") + "/api/payments/initiate", {
           method: "POST",
           headers,
           body: JSON.stringify(body),

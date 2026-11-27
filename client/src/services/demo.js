@@ -10,9 +10,9 @@ const ago = (h) => new Date(now - h * 3600e3).toISOString();
 const img = (seed, w = 900, h = 700) => `https://picsum.photos/seed/${seed}/${w}/${h}`;
 
 export const demoUsers = [
-  { id: 'u1', name: 'Amani Kahindo', username: 'amani', avatar: 'https://i.pravatar.cc/160?img=47', title: 'Développeuse mobile · Goma', bio: 'Je construis des outils pour les petits commerces du Kivu. Une preuve par jour.', banner: img('xera-banner', 1400, 500), badge: 'verified', account_type: 'personal', followers_count: 1284 },
-  { id: 'u2', name: 'Studio Lumbi', username: 'lumbi', avatar: 'https://i.pravatar.cc/160?img=12', title: 'Design produit', account_type: 'enterprise', badge: 'verified' },
-  { id: 'u3', name: 'Jonas Mwamba', username: 'jonas', avatar: 'https://i.pravatar.cc/160?img=33', title: 'Hardware & IoT' },
+  { id: 'u1', name: 'Amani Kahindo', username: 'amani', avatar: 'https://i.pravatar.cc/160?img=47', title: 'Développeuse mobile · Goma', plan: 'medium', plan_status: 'active', account_type: 'personal', bio: 'Je construis des outils pour les petits commerces du Kivu. Une preuve par jour.', banner: img('xera-banner', 1400, 500), badge: 'verified', account_type: 'personal', followers_count: 1284 },
+  { id: 'u2', name: 'Studio Lumbi', username: 'lumbi', avatar: 'https://i.pravatar.cc/160?img=12', title: 'Design produit', bio: 'Studio de design produit à Goma. Nous aidons les bâtisseurs à rendre leurs outils simples à utiliser.', account_type: 'enterprise', badge: 'verified', plan: 'pro', plan_status: 'active', followers_count: 2400 },
+  { id: 'u3', name: 'Jonas Mwamba', username: 'jonas', avatar: 'https://i.pravatar.cc/160?img=33', title: 'Hardware & IoT', account_subtype: 'investor' },
   { id: 'u4', name: 'Grace Neema', username: 'grace', avatar: 'https://i.pravatar.cc/160?img=5', title: 'Agritech' },
   { id: 'u5', name: 'Ilunga Tech', username: 'ilunga', avatar: 'https://i.pravatar.cc/160?img=60', title: 'Énergie solaire' },
 ];
@@ -43,16 +43,18 @@ export const demoNotifications = [
 ];
 
 export const demoInbox = [
-  { id: 'd1', other: byId.u2, unreadCount: 2, lastMessage: { body: 'On peut caler un appel jeudi pour les maquettes ?', created_at: ago(0.4) } },
-  { id: 'd2', other: byId.u3, unreadCount: 0, lastMessage: { body: 'Merci pour le conseil sur le joint 👍', created_at: ago(6) } },
+  { id: 'd1', other: byId.u2, unreadCount: 2, otherLastReadAt: ago(0.1), lastMessage: { body: 'On peut caler un appel jeudi pour les maquettes ?', sender_id: 'u2', created_at: ago(0.4) } },
+  { id: 'd2', other: byId.u3, unreadCount: 0, muted: true, lastMessage: { body: 'Merci pour le conseil sur le joint 👍', sender_id: 'u1', created_at: ago(6) } },
   { id: 'd3', other: byId.u5, unreadCount: 0, lastMessage: { body: 'Tu as utilisé quel régulateur ?', created_at: ago(30) } },
 ];
 
 export const demoMessages = [
   { id: 'm1', sender_id: 'u2', body: "Salut Amani ! On a vu ta preuve d'hier, super boulot sur la synchro.", created_at: ago(3) },
   { id: 'm2', sender_id: 'u1', body: "Merci ! Ça a été long, l'horodatage me rendait fou 😅", created_at: ago(2.8) },
-  { id: 'm3', sender_id: 'u2', body: 'On aimerait te proposer de refaire les écrans de caisse avec toi.', created_at: ago(0.5) },
+  { id: 'm3', sender_id: 'u2', body: 'On aimerait te proposer de refaire les écrans de caisse avec toi.', created_at: ago(0.5), edited_at: ago(0.45) },
+  { id: 'm5', sender_id: 'u1', body: 'Avec plaisir, jeudi 15 h ça me va.', reply_to_id: 'm3', created_at: ago(0.3) },
   { id: 'm4', sender_id: 'u2', body: 'On peut caler un appel jeudi pour les maquettes ?', created_at: ago(0.4) },
+  { id: 'm6', sender_id: 'u2', body: null, deleted_at: ago(0.2), created_at: ago(0.25) },
 ];
 
 // --- Fata : état modifiable par ?fataDemo=new|linked|progress|done|revoked

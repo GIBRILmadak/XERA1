@@ -8,6 +8,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useUi } from '../contexts/UiContext';
 import { fetchEncouraged, fetchFeed, fetchFollowing } from '../services/data';
 import { useUnread } from '../hooks/useUnread';
+import Landing from './Landing';
 
 const FILTERS = [
   { key: 'all', label: 'Tout', icon: 'apps' },
@@ -18,6 +19,13 @@ const FILTERS = [
 ];
 
 export default function Home() {
+  const { user: me, loading } = useAuth();
+  if (loading) return <main className="main" aria-busy="true" />;
+  if (!me) return <Landing />;
+  return <Feed />;
+}
+
+function Feed() {
   const { user } = useAuth();
   const { toast } = useUi();
   const unread = useUnread(user);
@@ -66,25 +74,6 @@ export default function Home() {
       />
       <main className="main">
         <div className="feed-head">
-          {!user && (
-            <section className="card card--glow hero-card">
-              <span className="eyebrow">Proof of Building</span>
-              <h1>Montrez votre progression, jour après jour.</h1>
-              <p>
-                Sur XERA, chaque projet devient un ARC : des jalons, des preuves, des réussites et des obstacles.
-                Votre parcours parle pour vous.
-              </p>
-              <div className="actions">
-                <Link to="/connexion?mode=inscription" className="btn btn--primary btn--lg">
-                  Commencer
-                </Link>
-                <Link to="/explorer" className="btn btn--lg">
-                  <Icon name="explore" /> Explorer
-                </Link>
-              </div>
-            </section>
-          )}
-
           <Link to="/fata" className="fata-strip">
             <img src="/icons/fata.webp" alt="" />
             <div className="grow">
