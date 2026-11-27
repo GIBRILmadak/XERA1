@@ -142,11 +142,11 @@
         },
         {
             "source": "/admin",
-            "destination": "/admin.html"
+            "destination": "/client/dist/index.html"
         },
         {
             "source": "/badges-admin",
-            "destination": "/badges-admin.html"
+            "destination": "/client/dist/index.html"
         },
         {
             "source": "/create-stream",

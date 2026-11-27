@@ -8,6 +8,8 @@ import { setEncouragement } from '../services/data';
 import { useAuth } from '../contexts/AuthContext';
 import { useUi } from '../contexts/UiContext';
 import { PUBLIC_SITE } from '../services/api';
+import { SUPER_ADMIN_ID } from '../services/badges';
+import { supabase } from '../services/supabase';
 
 export function StateBadge({ state }) {
   const meta = STATE_META[state];
@@ -26,6 +28,20 @@ export default function ContentCard({ content, encouraged = false, milestone, in
   const [on, setOn] = useState(encouraged);
   const [count, setCount] = useState(Number(content.encouragements_count ?? content.encouragements ?? 0));
   const [expanded, setExpanded] = useState(false);
+  const [removed, setRemoved] = useState(false);
+  const isAdmin = user?.id === SUPER_ADMIN_ID;
+
+  async function adminHide() {
+    const reason = window.prompt('Motif du masquage (visible par l’équipe)');
+    if (reason === null) return;
+    const { error } = await supabase
+      .from('content')
+      .update({ is_deleted: true, deleted_at: new Date().toISOString(), deleted_reason: reason.trim() || null, deleted_by: user.id })
+      .eq('id', content.id);
+    if (error) return toast('error', 'Masquage impossible', error.message);
+    setRemoved(true);
+    toast('success', 'Contenu masqué', 'Il n’est plus visible publiquement.');
+  }
   const isPagePost = content.author_type === 'PAGE_PRO' && content.page;
   const author = isPagePost ? { id: content.page.id, name: content.page.name, avatar: content.page.avatar_url } : content.users || {};
   const authorLink = isPagePost ? `/page/${content.page.slug || content.page.id}` : `/u/${content.user_id}`;
@@ -89,6 +105,7 @@ export default function ContentCard({ content, encouraged = false, milestone, in
     }
   }
 
+  if (removed) return null;
   return (
     <article ref={cardRef} className="post card" style={{ animationDelay: `${Math.min(index, 6) * 40}ms` }}>
       <header className="post-head">
@@ -171,6 +188,7 @@ export default function ContentCard({ content, encouraged = false, milestone, in
           <Icon name="visibility" size={18} />
           {compact(content.views || 0)}
         </span>
+        {isAdmin && <IconButton icon="shield_person" label="Admin : masquer ce contenu" onClick={adminHide} />}
         <IconButton icon="ios_share" label="Partager" onClick={share} />
       </footer>
     </article>

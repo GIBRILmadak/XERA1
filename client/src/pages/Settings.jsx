@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getMyPages } from '../services/pages';
+import { SUPER_ADMIN_ID } from '../services/badges';
 import { Link, useNavigate } from 'react-router-dom';
 import { TopBar } from '../components/Shell';
 import Icon from '../components/Icon';
@@ -94,6 +95,13 @@ export default function Settings() {
             {LEGACY.map((item) => (
               <Row key={item.to || item.href} {...item} />
             ))}
+          </section>
+        )}
+
+        {user?.id === SUPER_ADMIN_ID && (
+          <section className="card settings-group">
+            <h2>Équipe XERA</h2>
+            <Row to="/admin" icon="admin_panel_settings" title="Administration" sub="Paiements, retraits, badges, modération" />
           </section>
         )}
 

@@ -28,6 +28,7 @@ import ProPage from './pages/ProPage';
 import PageCreate from './pages/PageCreate';
 import Partners from './pages/Partners';
 import Talents from './pages/Talents';
+import Admin from './pages/Admin';
 
 function RequireAuth({ children }) {
   const { user, loading } = useAuth();
@@ -162,6 +163,8 @@ export default function App() {
               <Route path="partenaires" element={<RequireAuth><Partners /></RequireAuth>} />
               <Route path="commissions" element={<Navigate to="/partenaires" replace />} />
               <Route path="talents" element={<Talents />} />
+              <Route path="admin" element={<RequireAuth><Admin /></RequireAuth>} />
+              <Route path="badges-admin" element={<RequireAuth><Admin initialTab="badges" /></RequireAuth>} />
               <Route path="statistiques" element={<RequireAuth><Analytics /></RequireAuth>} />
               <Route path="analytics" element={<Navigate to="/statistiques" replace />} />
               <Route path="verification" element={<Navigate to="/abonnements" replace />} />

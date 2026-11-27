@@ -25,6 +25,9 @@ function target(n) {
   if (n.link && n.link.startsWith('/')) return n.link;
   const legacyLive = String(n.link || '').match(/stream\.html\?id=([^&]+)/);
   if (legacyLive) return `/live/${legacyLive[1]}`;
+  // Anciens liens « page.html?… » : même chemin sans extension (/profile?user=…, /messages…).
+  const legacyPage = String(n.link || '').match(/^(?:https?:\/\/[^/]+)?\/?([a-z-]+)\.html(\?.*)?$/i);
+  if (legacyPage) return `/${legacyPage[1] === 'index' ? '' : legacyPage[1]}${legacyPage[2] || ''}`;
   if (n.type === 'fata') return '/fata';
   if (n.actor?.id) return `/u/${n.actor.id}`;
   return null;
