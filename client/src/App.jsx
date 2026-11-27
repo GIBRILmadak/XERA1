@@ -29,6 +29,7 @@ import PageCreate from './pages/PageCreate';
 import Partners from './pages/Partners';
 import Talents from './pages/Talents';
 import Admin from './pages/Admin';
+import PostView from './pages/PostView';
 
 function RequireAuth({ children }) {
   const { user, loading } = useAuth();
@@ -163,6 +164,7 @@ export default function App() {
               <Route path="partenaires" element={<RequireAuth><Partners /></RequireAuth>} />
               <Route path="commissions" element={<Navigate to="/partenaires" replace />} />
               <Route path="talents" element={<Talents />} />
+              <Route path="share/:id" element={<PostView />} />
               <Route path="admin" element={<RequireAuth><Admin /></RequireAuth>} />
               <Route path="badges-admin" element={<RequireAuth><Admin initialTab="badges" /></RequireAuth>} />
               <Route path="statistiques" element={<RequireAuth><Analytics /></RequireAuth>} />

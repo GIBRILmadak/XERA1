@@ -38,7 +38,7 @@
         },
         {
             "source": "/share/:path*",
-            "destination": "/app-legacy.html"
+            "destination": "/client/dist/index.html"
         },
         {
             "source": "/login",
