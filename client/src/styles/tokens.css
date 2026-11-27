@@ -96,3 +96,20 @@
   --shadow-2: 0 12px 32px rgba(15, 23, 42, 0.1);
   --shadow-3: 0 24px 70px rgba(15, 23, 42, 0.12);
 }
+
+/* Illustrations (aplats, 4 couleurs) */
+:root {
+  --ill-violet: #8b5cf6;
+  --ill-violet-soft: rgba(139, 92, 246, 0.16);
+  --ill-gold: #f5c451;
+  --ill-cool: #38bdf8;
+  --ill-n1: #27272a;
+  --ill-n2: #3f3f46;
+  --ill-n3: #a1a1aa;
+}
+:root[data-theme="light"] {
+  --ill-violet-soft: rgba(139, 92, 246, 0.12);
+  --ill-n1: #ffffff;
+  --ill-n2: #e4e4e7;
+  --ill-n3: #71717a;
+}
