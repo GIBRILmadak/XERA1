@@ -31,6 +31,7 @@ import Talents from './pages/Talents';
 import Admin from './pages/Admin';
 import PostView from './pages/PostView';
 import Legal from './pages/Legal';
+import ProfileSettings from './pages/ProfileSettings';
 
 function RequireAuth({ children }) {
   const { user, loading } = useAuth();
@@ -150,6 +151,7 @@ export default function App() {
               <Route path="messages/:id" element={<RequireAuth><Conversation /></RequireAuth>} />
               <Route path="notifications" element={<RequireAuth><Notifications /></RequireAuth>} />
               <Route path="reglages" element={<Settings />} />
+              <Route path="reglages/profil" element={<RequireAuth><ProfileSettings /></RequireAuth>} />
               <Route path="abonnements" element={<Plans />} />
               <Route path="credits" element={<Credits />} />
               <Route path="espace-createur" element={<RequireAuth><CreatorSpace /></RequireAuth>} />

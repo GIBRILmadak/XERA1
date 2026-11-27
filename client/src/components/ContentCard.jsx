@@ -3,12 +3,13 @@ import { recordInteraction } from '../services/feedAlgo';
 import { Link } from 'react-router-dom';
 import Icon from './Icon';
 import { Avatar, Badge, IconButton, UserName } from './ui';
-import { compact, STATE_META, timeAgo } from '../lib/format';
+import { compact, displayName, STATE_META, timeAgo } from '../lib/format';
 import { countView, isEncouraged, toggleEncouragement } from '../services/data';
 import { useAuth } from '../contexts/AuthContext';
 import { useUi } from '../contexts/UiContext';
 import { PUBLIC_SITE } from '../services/api';
-import { SUPER_ADMIN_ID } from '../services/badges';
+import { SUPER_ADMIN_ID, canReceiveSupport } from '../services/badges';
+import { openSupport } from '../services/payments';
 import { setTraceValidation } from '../services/pages';
 import { useMyPages } from '../hooks/useMyPages';
 import MediaViewer from './MediaViewer';
@@ -257,6 +258,21 @@ export default function ContentCard({ content, encouraged, milestone, index = 0,
           <Icon name="visibility" size={18} />
           {compact(content.views || 0)}
         </span>
+        {!isPagePost && content.users && user?.id !== content.user_id && canReceiveSupport(content.users) && (
+          <IconButton
+            icon="favorite"
+            label="Soutenir ce créateur"
+            className="post-support"
+            onClick={async () => {
+              if (!user) return toast('info', 'Connectez-vous', 'Créez un compte pour soutenir ce créateur.');
+              try {
+                await openSupport({ creatorId: content.user_id, creatorName: displayName(content.users), onSuccess: () => toast('success', 'Soutien envoyé', 'Merci !') });
+              } catch (e) {
+                toast('error', 'Soutien indisponible', e.message);
+              }
+            }}
+          />
+        )}
         {isAdmin && <IconButton icon="shield_person" label="Admin : masquer ce contenu" onClick={adminHide} />}
         <IconButton icon="ios_share" label="Partager" onClick={share} />
       </footer>

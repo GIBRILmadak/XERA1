@@ -12,6 +12,9 @@ import { NameBadges, ProfileBadges } from '../components/Badges';
 import { canReceiveSupport } from '../services/badges';
 import { openSupport } from '../services/payments';
 import { userCertifications } from '../services/pages';
+import { SOCIALS, normalizePrefs, socialHref } from '../lib/profilePrefs';
+
+const SOCIAL_ICONS = { github: '/icons/github.svg', linkedin: '/icons/linkedin.svg', instagram: '/icons/instagram.svg', discord: '/icons/discord.svg', facebook: '/icons/facebook.svg', email: '/icons/email.svg' };
 import {
   countUserContent,
   fetchFollowCounts,
@@ -214,6 +217,9 @@ export default function Profile() {
     );
 
   const wins = (content || []).filter((c) => c.state === 'success').length;
+  const prefs = normalizePrefs(profile.profile_preferences);
+  const socials = SOCIALS.map(([k, label]) => [k, label, socialHref(k, profile.social_links?.[k])]).filter(([, , h]) => h);
+  const hiddenForMe = !isMe && (prefs.privacy.visibility === 'private' || (prefs.privacy.visibility === 'followers' && !following));
 
   return (
     <>
@@ -230,12 +236,14 @@ export default function Profile() {
         }
       />
       <main className="main">
-        <div className="profile-cover">{profile.banner && <img src={profile.banner} alt="" />}</div>
+        <div className={`profile-cover is-${prefs.appearance.bannerStyle}`} style={{ '--pa': prefs.appearance.accent, '--ps': prefs.appearance.secondary }}>
+          {profile.banner && <img src={profile.banner} alt="" />}
+        </div>
         <div className="profile-id">
           <Avatar user={profile} size={92} />
           {isMe && (
             <div className="profile-actions">
-              <Button icon="edit" onClick={() => setEditing(true)}>
+              <Button icon="edit" onClick={() => navigate('/reglages/profil')}>
                 Modifier
               </Button>
             </div>
@@ -257,11 +265,13 @@ export default function Profile() {
             <Button icon="mail" onClick={message}>
               Message
             </Button>
-            {canReceiveSupport(profile) && (
-              <Button icon="favorite" onClick={support} className="support-btn">
-                Soutenir
-              </Button>
-            )}
+            <Button
+              icon={canReceiveSupport(profile) ? 'favorite' : 'lock'}
+              onClick={canReceiveSupport(profile) ? support : () => toast('info', 'Soutien indisponible', 'Ce créateur n’a pas encore activé les soutiens (abonnement Medium ou Pro, ou 1 000 abonnés).')}
+              className={`support-btn${canReceiveSupport(profile) ? '' : ' is-locked'}`}
+            >
+              Soutenir
+            </Button>
           </div>
         )}
         <ProfileBadges user={profile} contentCount={contentCount} followers={counts.followers} />
@@ -276,11 +286,23 @@ export default function Profile() {
           </div>
         )}
         {profile.bio && <p className="profile-bio">{profile.bio}</p>}
+        {prefs.privacy.showSocials && socials.length > 0 && (
+          <div className="profile-socials">
+            {socials.map(([k, label, href]) => (
+              <a key={k} href={href} target={k === 'email' ? undefined : '_blank'} rel="noreferrer" title={label} aria-label={label}>
+                {SOCIAL_ICONS[k] ? <img src={SOCIAL_ICONS[k]} alt="" /> : <Icon name={k === 'site' ? 'language' : 'link'} size={18} />}
+                <span>{label}</span>
+              </a>
+            ))}
+          </div>
+        )}
+        {(isMe || prefs.privacy.showStats) && (
         <div className="profile-counts">
           <span><strong>{compact(counts.followers)}</strong>abonnés</span>
           <span><strong>{compact(counts.following)}</strong>abonnements</span>
           <span><strong>{wins}</strong>{wins > 1 ? 'avancées' : 'avancée'}</span>
         </div>
+        )}
 
         {isMe && (
           <Link to="/fata" className="fata-strip" style={{ marginTop: 18 }}>
@@ -305,7 +327,9 @@ export default function Profile() {
         </div>
 
         <div style={{ marginTop: 16 }}>
-          {tab === 'proofs' ? (
+          {hiddenForMe ? (
+            <EmptyState art="empty" icon="lock" title="Profil privé" text={prefs.privacy.visibility === 'followers' ? 'Suivez ce membre pour voir ses preuves et ses projets.' : 'Ce membre a choisi de garder son activité privée.'} />
+          ) : tab === 'proofs' ? (
             content === null ? (
               <CardSkeleton />
             ) : content.length === 0 ? (

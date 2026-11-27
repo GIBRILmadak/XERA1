@@ -56,7 +56,7 @@ export default function Settings() {
       <TopBar back title="Réglages" />
       <main className="main">
         {user && (
-          <Link to={`/u/${user.id}`} className="card list-item" style={{ padding: 16, marginBottom: 14 }}>
+          <Link to="/reglages/profil" className="card list-item" style={{ padding: 16, marginBottom: 14 }}>
             <Avatar user={user} size={54} />
             <span className="grow">
               <span className="title" style={{ display: 'block', fontSize: 16 }}>{user.name || 'Mon profil'}</span>
