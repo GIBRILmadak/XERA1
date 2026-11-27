@@ -142,11 +142,11 @@ export default function Explore() {
                 <span className="grow"><span className="title" style={{ display: 'block' }}>Lives</span><span className="sub">Projets construits en direct</span></span>
                 <Icon name="open_in_new" />
               </a>
-              <a className="list-item" href="/subscription-plans">
+              <Link className="list-item" to="/abonnements">
                 <span className="lead-icon"><Icon name="workspace_premium" /></span>
                 <span className="grow"><span className="title" style={{ display: 'block' }}>XERA Pro</span><span className="sub">Abonnements et avantages</span></span>
-                <Icon name="open_in_new" />
-              </a>
+                <Icon name="chevron_right" />
+              </Link>
             </div>
           </>
         )}

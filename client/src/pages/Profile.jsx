@@ -10,7 +10,7 @@ import { useUi } from '../contexts/UiContext';
 import { compact, displayName } from '../lib/format';
 import { NameBadges, ProfileBadges } from '../components/Badges';
 import { canReceiveSupport } from '../services/badges';
-import { openSupport } from '../services/support';
+import { openSupport } from '../services/payments';
 import {
   countUserContent,
   fetchFollowCounts,

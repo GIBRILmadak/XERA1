@@ -8,8 +8,6 @@ import { useUi } from '../contexts/UiContext';
 /** Pages encore servies par l'ancienne interface (migration progressive). */
 const LEGACY = [
   { href: '/creator-dashboard', icon: 'monitoring', title: 'Tableau de bord créateur', sub: 'Revenus, audience, retraits' },
-  { href: '/subscription-plans', icon: 'workspace_premium', title: 'Abonnement XERA Pro', sub: 'Plans et paiement Mobile Money' },
-  { href: '/credits', icon: 'toll', title: 'Crédits', sub: 'Solde et achats' },
   { href: '/verification', icon: 'verified', title: 'Vérification du compte', sub: 'Obtenir le badge vérifié' },
   { href: '/analytics', icon: 'insights', title: 'Statistiques', sub: 'Vues et engagement' },
   { href: '/create-stream', icon: 'sensors', title: 'Lancer un live', sub: 'Diffuser votre travail en direct' },
@@ -71,6 +69,7 @@ export default function Settings() {
         <section className="card settings-group">
           <h2>Challenge & partenaires</h2>
           <Row to="/fata" icon="emoji_events" title="Challenge Fata" sub="Compte relié, ARC et étapes" />
+          <Row to="/abonnements" icon="workspace_premium" title="Abonnements XERA" sub="Standard, Medium, Pro, Elite" />
         </section>
 
         {user && (
@@ -84,6 +83,7 @@ export default function Settings() {
 
         <section className="card settings-group">
           <h2>Informations</h2>
+          <Row to="/credits" icon="favorite" title="Remerciements" sub="Ceux grâce à qui XERA1 existe" />
           <Row href="/cgu" icon="gavel" title="Conditions d’utilisation" />
           <Row href="/privacy" icon="shield_person" title="Confidentialité" />
         </section>

@@ -18,6 +18,8 @@ import { Conversation, Inbox } from './pages/Messages';
 import Notifications from './pages/Notifications';
 import Settings from './pages/Settings';
 import Login from './pages/Login';
+import Plans from './pages/Plans';
+import Credits from './pages/Credits';
 
 function RequireAuth({ children }) {
   const { user, loading } = useAuth();
@@ -120,6 +122,10 @@ export default function App() {
               <Route path="messages/:id" element={<RequireAuth><Conversation /></RequireAuth>} />
               <Route path="notifications" element={<RequireAuth><Notifications /></RequireAuth>} />
               <Route path="reglages" element={<Settings />} />
+              <Route path="abonnements" element={<Plans />} />
+              <Route path="credits" element={<Credits />} />
+              <Route path="subscription-plans" element={<Navigate to="/abonnements" replace />} />
+              <Route path="premium-plans" element={<Navigate to="/abonnements" replace />} />
               <Route path="*" element={<NotFound />} />
             </Route>
           </Routes>

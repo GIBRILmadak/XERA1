@@ -85,6 +85,18 @@
             "destination": "/client/dist/index.html"
         },
         {
+            "source": "/abonnements",
+            "destination": "/client/dist/index.html"
+        },
+        {
+            "source": "/subscription-plans",
+            "destination": "/client/dist/index.html"
+        },
+        {
+            "source": "/premium-plans",
+            "destination": "/client/dist/index.html"
+        },
+        {
             "source": "/profile",
             "destination": "/api/profile"
         },
@@ -118,15 +130,11 @@
         },
         {
             "source": "/credits",
-            "destination": "/credits.html"
+            "destination": "/client/dist/index.html"
         },
         {
             "source": "/stream",
             "destination": "/stream.html"
-        },
-        {
-            "source": "/subscription-plans",
-            "destination": "/subscription-plans.html"
         },
         {
             "source": "/verification",
