@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import Icon from './Icon';
 import { displayName, initials } from '../lib/format';
 import { NameBadges } from './Badges';
+import Art from './Illustrations';
 
 export function Avatar({ user, size = 40, ring = false }) {
   const [broken, setBroken] = useState(false);
@@ -77,12 +78,16 @@ export function Badge({ tone, icon, children }) {
   );
 }
 
-export function EmptyState({ icon = 'inbox', title, text, action }) {
+export function EmptyState({ icon = 'inbox', art, title, text, action }) {
   return (
     <div className="empty">
-      <div className="empty-icon">
-        <Icon name={icon} />
-      </div>
+      {art ? (
+        <Art name={art} size={170} className="empty-art" />
+      ) : (
+        <div className="empty-icon">
+          <Icon name={icon} />
+        </div>
+      )}
       <h3>{title}</h3>
       {text && <p>{text}</p>}
       {action}

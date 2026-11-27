@@ -276,12 +276,12 @@
 }
 .lp-float--a {
   left: -6%;
-  top: -8%;
+  top: -6%;
   animation-delay: 900ms, 1.6s;
 }
 .lp-float--b {
   right: -4%;
-  bottom: -10%;
+  bottom: 70px;
   animation-delay: 1100ms, 2.4s;
 }
 .lp-float-icon {
@@ -626,4 +626,141 @@
   .lp-partners {
     margin-top: 72px;
   }
+}
+
+/* Lecteur de démo interactif */
+.lp-player {
+  display: grid;
+  gap: 12px;
+}
+.lp-video-wrap {
+  position: relative;
+  cursor: pointer;
+}
+.lp-bigplay {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.92);
+  color: #050505;
+  animation: pop var(--dur-3) var(--ease-out);
+}
+.lp-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: #121212;
+  border-top: 1px solid #262626;
+  color: #ddd;
+}
+.lp-controls button {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  color: #eee;
+}
+.lp-controls button:hover {
+  background: #222;
+}
+.lp-time {
+  font-size: 11.5px;
+  color: #888;
+  font-variant-numeric: tabular-nums;
+}
+.lp-track {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+.lp-track input {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #fff var(--p), #333 var(--p));
+  cursor: pointer;
+}
+.lp-track input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+}
+.lp-track input::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 0;
+  border-radius: 50%;
+  background: #fff;
+}
+.lp-track i {
+  position: absolute;
+  top: 50%;
+  width: 2px;
+  height: 8px;
+  margin-top: -4px;
+  background: #050505;
+  pointer-events: none;
+}
+.lp-chapters {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+@media (min-width: 640px) {
+  .lp-chapters {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+.lp-chapters button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  text-align: left;
+  color: var(--text-2);
+  transition: all var(--dur-2) var(--ease);
+}
+.lp-chapters button:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+.lp-chapters button.is-on {
+  border-color: var(--text-2);
+  color: var(--text);
+  background: var(--surface-2);
+}
+.lp-chapters strong {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+.lp-chapters small {
+  font-size: 11px;
+  color: var(--text-3);
+}
+.lp-window:fullscreen {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  border-radius: 0;
+  animation: none;
+}
+.lp-window:fullscreen video {
+  height: 100%;
+  object-fit: contain;
 }

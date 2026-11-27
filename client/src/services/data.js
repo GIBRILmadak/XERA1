@@ -15,7 +15,7 @@ import {
 } from './demo';
 
 const CONTENT_COLUMNS =
-  `id, user_id, author_id, author_type, page_id, arc_id, day_number, type, state, title, description, media_url, media_urls, views, encouragements_count, tags, metadata, created_at, users(${USER_BADGE_COLUMNS}), arcs(id, title, status, user_id)`;
+  `id, user_id, author_id, author_type, page_id, arc_id, day_number, type, state, title, description, media_url, media_urls, views, encouragements_count, tags, metadata, is_validated_pro, created_at, users(${USER_BADGE_COLUMNS}), arcs(id, title, status, user_id, stage_level, opportunity_intents)`;
 
 const wait = (ms = 250) => new Promise((r) => setTimeout(r, ms));
 

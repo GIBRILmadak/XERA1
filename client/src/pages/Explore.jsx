@@ -5,6 +5,7 @@ import Icon from '../components/Icon';
 import ArcCard from '../components/ArcCard';
 import { Avatar, EmptyState, IconButton, Skeleton, UserName } from '../components/ui';
 import { useAuth } from '../contexts/AuthContext';
+import { recordSearch } from '../services/feedAlgo';
 import { fetchRecentArcs, fetchSuggestedUsers, search } from '../services/data';
 
 export default function Explore() {
@@ -30,12 +31,13 @@ export default function Explore() {
       return undefined;
     }
     timer.current = setTimeout(() => {
+      if (user) recordSearch(user.id, q);
       search(q)
         .then(setResults)
         .catch(() => setResults({ users: [], arcs: [] }));
     }, 280);
     return () => clearTimeout(timer.current);
-  }, [term, setParams]);
+  }, [term, setParams, user]);
 
   return (
     <>
@@ -61,7 +63,7 @@ export default function Explore() {
 
         {results ? (
           results.users.length + results.arcs.length === 0 ? (
-            <EmptyState icon="search_off" title="Aucun résultat" text={`Rien ne correspond à « ${term} ».`} />
+            <EmptyState art="empty" icon="search_off" title="Aucun résultat" text={`Rien ne correspond à « ${term} ».`} />
           ) : (
             <>
               {results.users.length > 0 && (
@@ -125,7 +127,7 @@ export default function Explore() {
                 ))}
               </div>
             ) : arcs.length === 0 ? (
-              <EmptyState icon="flag" title="Aucun projet public" />
+              <EmptyState art="launch" icon="flag" title="Aucun projet public" />
             ) : (
               <div className="arc-grid">
                 {arcs.map((a) => (
@@ -142,11 +144,11 @@ export default function Explore() {
                 <span className="grow"><span className="title" style={{ display: 'block' }}>Lives</span><span className="sub">Projets construits en direct</span></span>
                 <Icon name="open_in_new" />
               </a>
-              <a className="list-item" href="/subscription-plans">
+              <Link className="list-item" to="/abonnements">
                 <span className="lead-icon"><Icon name="workspace_premium" /></span>
                 <span className="grow"><span className="title" style={{ display: 'block' }}>XERA Pro</span><span className="sub">Abonnements et avantages</span></span>
-                <Icon name="open_in_new" />
-              </a>
+                <Icon name="chevron_right" />
+              </Link>
             </div>
           </>
         )}

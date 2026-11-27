@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { recordInteraction } from '../services/feedAlgo';
 import { Link } from 'react-router-dom';
 import Icon from './Icon';
 import { Avatar, Badge, IconButton, UserName } from './ui';
@@ -30,6 +31,30 @@ export default function ContentCard({ content, encouraged = false, milestone, in
   const media = content.media_url || content.media_urls?.[0];
   const isVideo = content.type === 'video' || /\.(mp4|webm|mov)(\?|$)/i.test(media || '');
   const long = (content.description || '').length > 220;
+  const cardRef = useRef();
+
+  // Vue prolongée (60 % visible pendant 1,5 s) : signal « view » pour l'algorithme.
+  useEffect(() => {
+    if (!user || !cardRef.current || !('IntersectionObserver' in window)) return undefined;
+    let timer;
+    const io = new IntersectionObserver(
+      ([e]) => {
+        clearTimeout(timer);
+        if (e.isIntersecting) {
+          timer = setTimeout(() => {
+            recordInteraction(user.id, content, 'view');
+            io.disconnect();
+          }, 1500);
+        }
+      },
+      { threshold: 0.6 },
+    );
+    io.observe(cardRef.current);
+    return () => {
+      clearTimeout(timer);
+      io.disconnect();
+    };
+  }, [user, content]);
 
   async function toggle() {
     if (!user) {
@@ -37,6 +62,7 @@ export default function ContentCard({ content, encouraged = false, milestone, in
       return;
     }
     const next = !on;
+    if (next) recordInteraction(user.id, content, 'like');
     setOn(next);
     setCount((c) => c + (next ? 1 : -1));
     try {
@@ -62,7 +88,7 @@ export default function ContentCard({ content, encouraged = false, milestone, in
   }
 
   return (
-    <article className="post card" style={{ animationDelay: `${Math.min(index, 6) * 40}ms` }}>
+    <article ref={cardRef} className="post card" style={{ animationDelay: `${Math.min(index, 6) * 40}ms` }}>
       <header className="post-head">
         <Link to={`/u/${content.user_id}`} className="row grow" style={{ minWidth: 0 }}>
           <Avatar user={author} size={42} />

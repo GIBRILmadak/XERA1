@@ -16,6 +16,126 @@ const PARTNERS = [
   { src: '/icons/electrical service.jpeg', alt: 'Electrical Service' },
 ];
 
+const CHAPTERS = [
+  { t: 0, icon: 'dashboard', label: 'Tableau de bord' },
+  { t: 8, icon: 'flag', label: 'Créer un ARC' },
+  { t: 28, icon: 'edit_note', label: 'Détails et couverture' },
+  { t: 50, icon: 'rocket_launch', label: 'Le projet en ligne' },
+];
+
+const fmt = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+
+/** Lecteur de démo interactif : chapitres, progression, son, plein écran. */
+function DemoPlayer() {
+  const video = useRef();
+  const box = useRef();
+  const [playing, setPlaying] = useState(true);
+  const [muted, setMuted] = useState(true);
+  const [time, setTime] = useState(0);
+  const [duration, setDuration] = useState(59);
+  const current = CHAPTERS.reduce((acc, c, i) => (time >= c.t ? i : acc), 0);
+
+  function seek(t) {
+    const v = video.current;
+    if (!v) return;
+    v.currentTime = t;
+    if (v.paused) v.play().catch(() => {});
+  }
+  function toggle() {
+    const v = video.current;
+    if (!v) return;
+    if (v.paused) v.play().catch(() => {});
+    else v.pause();
+  }
+  function toggleSound() {
+    const v = video.current;
+    if (!v) return;
+    v.muted = !v.muted;
+    if (!v.muted && v.paused) v.play().catch(() => {});
+    setMuted(v.muted);
+  }
+  function fullscreen() {
+    const el = box.current;
+    if (document.fullscreenElement) document.exitFullscreen?.();
+    else if (el?.requestFullscreen) el.requestFullscreen().catch(() => {});
+    else video.current?.webkitEnterFullscreen?.();
+  }
+
+  return (
+    <div className="lp-player">
+      <div className="lp-window" ref={box}>
+        <div className="lp-window-bar" aria-hidden="true">
+          <i />
+          <i />
+          <i />
+          <span>xera1.xyz</span>
+        </div>
+        <div className="lp-video-wrap" onClick={toggle}>
+          <video
+            ref={video}
+            src={DEMO_VIDEO}
+            poster={DEMO_POSTER}
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="metadata"
+            aria-label="Démo : créer un projet sur XERA"
+            onPlay={() => setPlaying(true)}
+            onPause={() => setPlaying(false)}
+            onTimeUpdate={(e) => setTime(e.currentTarget.currentTime)}
+            onLoadedMetadata={(e) => setDuration(e.currentTarget.duration || 59)}
+          />
+          {!playing && (
+            <span className="lp-bigplay" aria-hidden="true">
+              <Icon name="play_arrow" filled size={34} />
+            </span>
+          )}
+        </div>
+        <div className="lp-controls">
+          <button onClick={toggle} aria-label={playing ? 'Pause' : 'Lecture'}>
+            <Icon name={playing ? 'pause' : 'play_arrow'} filled />
+          </button>
+          <span className="lp-time">{fmt(time)}</span>
+          <div className="lp-track">
+            <input
+              type="range"
+              min="0"
+              max={duration}
+              step="0.1"
+              value={time}
+              onChange={(e) => seek(Number(e.target.value))}
+              aria-label="Position dans la vidéo"
+              style={{ '--p': `${(time / duration) * 100}%` }}
+            />
+            {CHAPTERS.slice(1).map((c) => (
+              <i key={c.t} style={{ left: `${(c.t / duration) * 100}%` }} />
+            ))}
+          </div>
+          <span className="lp-time">{fmt(duration)}</span>
+          <button onClick={toggleSound} aria-label={muted ? 'Activer le son' : 'Couper le son'}>
+            <Icon name={muted ? 'volume_off' : 'volume_up'} />
+          </button>
+          <button onClick={fullscreen} aria-label="Plein écran">
+            <Icon name="fullscreen" />
+          </button>
+        </div>
+      </div>
+      <div className="lp-chapters" role="list">
+        {CHAPTERS.map((c, i) => (
+          <button key={c.t} role="listitem" className={i === current ? 'is-on' : ''} onClick={() => seek(c.t)}>
+            <Icon name={c.icon} size={18} />
+            <span>
+              <strong>{c.label}</strong>
+              <small>{fmt(c.t)}</small>
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 const STEPS = [
   { icon: 'flag', title: 'Créez un projet', text: 'Un ARC, c’est un objectif, une description et des jalons, du début à la fin.' },
   { icon: 'add_photo_alternate', title: 'Publiez vos preuves', text: 'Chaque jour, une trace : avancée, obstacle ou pause, avec photo ou vidéo.' },
@@ -111,12 +231,10 @@ function DemoModal({ open, onClose }) {
 }
 
 export default function Landing() {
-  const [muted, setMuted] = useState(true);
   const [demo, setDemo] = useState(false);
   const [stats, setStats] = useState(null);
   const [arcs, setArcs] = useState([]);
   const [scrolled, setScrolled] = useState(false);
-  const video = useRef();
   useReveal();
 
   useEffect(() => {
@@ -128,14 +246,6 @@ export default function Landing() {
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
-
-  function toggleSound() {
-    const v = video.current;
-    if (!v) return;
-    v.muted = !v.muted;
-    if (!v.muted) v.play().catch(() => {});
-    setMuted(v.muted);
-  }
 
   return (
     <div className="lp">
@@ -196,29 +306,7 @@ export default function Landing() {
           </div>
 
           <div className="lp-hero-media lp-anim" style={{ '--d': '300ms' }}>
-            <div className="lp-window">
-              <div className="lp-window-bar" aria-hidden="true">
-                <i />
-                <i />
-                <i />
-                <span>xera1.xyz</span>
-              </div>
-              <video
-                ref={video}
-                src={DEMO_VIDEO}
-                poster={DEMO_POSTER}
-                autoPlay
-                muted
-                loop
-                playsInline
-                preload="metadata"
-                aria-label="Démo : créer un projet sur XERA"
-              />
-              <button className="lp-sound" onClick={toggleSound} aria-pressed={!muted}>
-                <Icon name={muted ? 'volume_off' : 'volume_up'} size={18} />
-                {muted ? 'Activer le son' : 'Son activé'}
-              </button>
-            </div>
+            <DemoPlayer />
             <div className="lp-float lp-float--a">
               <span className="lp-float-icon is-success">
                 <Icon name="task_alt" size={18} />

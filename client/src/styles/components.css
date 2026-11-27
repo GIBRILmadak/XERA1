@@ -732,3 +732,70 @@
   --btn-fg: #f472b6;
   --btn-border: rgba(244, 114, 182, 0.4);
 }
+
+/* ---------- Illustrations ---------- */
+.art {
+  display: block;
+  overflow: visible;
+}
+.art .art-bob {
+  animation: art-bob 5s ease-in-out infinite;
+  transform-box: fill-box;
+}
+.art .art-pop {
+  animation: art-pop 3.6s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.art .art-twinkle {
+  animation: art-twinkle 2.6s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.art .art-flame {
+  animation: art-flame 0.5s ease-in-out infinite alternate;
+  transform-box: fill-box;
+  transform-origin: top;
+}
+.art .art-grow {
+  animation: art-grow 2.8s var(--ease-out) infinite alternate;
+  transform-box: fill-box;
+  transform-origin: bottom;
+}
+.art .art-flap {
+  animation: art-bob 3.2s ease-in-out infinite;
+  transform-box: fill-box;
+}
+@keyframes art-bob {
+  50% {
+    transform: translateY(-6px);
+  }
+}
+@keyframes art-pop {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.08);
+  }
+}
+@keyframes art-twinkle {
+  50% {
+    opacity: 0.35;
+    transform: scale(0.8);
+  }
+}
+@keyframes art-flame {
+  to {
+    transform: scaleY(1.25);
+  }
+}
+@keyframes art-grow {
+  from {
+    transform: scaleY(0.75);
+  }
+}
+.empty .empty-art {
+  margin-bottom: 4px;
+}

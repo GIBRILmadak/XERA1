@@ -239,7 +239,7 @@ export default function Fata() {
             <Skeleton height={220} radius={22} />
           </div>
         ) : status === null ? (
-          <EmptyState icon="cloud_off" title="Service indisponible" text="Le statut du challenge n’a pas pu être chargé." action={<Button onClick={load}>Réessayer</Button>} />
+          <EmptyState art="empty" icon="cloud_off" title="Service indisponible" text="Le statut du challenge n’a pas pu être chargé." action={<Button onClick={load}>Réessayer</Button>} />
         ) : (
           <>
             <div className="section-title">

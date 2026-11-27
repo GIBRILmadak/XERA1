@@ -64,7 +64,7 @@ export default function Notifications() {
             ))}
           </div>
         ) : items.length === 0 ? (
-          <EmptyState icon="notifications" title="Tout est calme" text="Les encouragements, abonnements et validations apparaîtront ici." />
+          <EmptyState art="empty" icon="notifications" title="Tout est calme" text="Les encouragements, abonnements et validations apparaîtront ici." />
         ) : (
           <div className="list">
             {items.map((n) => {
