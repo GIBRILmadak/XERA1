@@ -2074,3 +2074,222 @@ video.dm-media {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ================= Pages pro ================= */
+.page-logo {
+  width: 92px;
+  height: 92px;
+  border-radius: 18px;
+  object-fit: cover;
+  border: 4px solid var(--bg);
+  background: var(--surface-2);
+}
+.page-logo--empty {
+  display: grid;
+  place-items: center;
+  color: var(--text-3);
+}
+.pro-tag {
+  font-family: var(--font-body);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.page-post {
+  overflow: hidden;
+}
+.page-post img {
+  width: 100%;
+  max-height: 320px;
+  object-fit: cover;
+}
+.page-post-body {
+  padding: 16px;
+  display: grid;
+  gap: 8px;
+}
+.page-post-body h3 {
+  font-size: 17px;
+}
+.page-post-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+.page-post-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.post-seal {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--gold);
+  font-size: 13px;
+  font-weight: 600;
+}
+.versus {
+  position: relative;
+  overflow: hidden;
+}
+.versus-row {
+  display: grid;
+  grid-template-columns: 40px 1fr 48px;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  font-size: 13.5px;
+}
+.versus-locked {
+  filter: blur(7px);
+  opacity: 0.6;
+  pointer-events: none;
+}
+.versus-unlock {
+  position: absolute;
+  inset: 44px 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-weight: 650;
+  font-size: 14px;
+}
+.chip-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.cert-chip {
+  color: var(--success);
+  border-color: rgba(16, 185, 129, 0.35);
+}
+.wizard-progress {
+  display: flex;
+  gap: 6px;
+  margin: 8px 0 16px;
+}
+.wizard-progress span {
+  flex: 1;
+  height: 4px;
+  border-radius: 4px;
+  background: var(--surface-3);
+  transition: background var(--dur-3) var(--ease);
+}
+.wizard-progress span.is-on {
+  background: var(--text);
+}
+.wizard-hero {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+.wizard-step {
+  animation: fade-up var(--dur-3) var(--ease-out);
+}
+.wizard-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--r-md);
+  display: grid;
+  place-items: center;
+  background: var(--surface-2);
+}
+.partner-locked {
+  display: grid;
+  gap: 14px;
+}
+@media (min-width: 860px) {
+  .partner-locked {
+    grid-template-columns: 1.3fr 1fr;
+    align-items: start;
+  }
+}
+.partner-contacts {
+  display: grid;
+  gap: 8px;
+  font-size: 14px;
+}
+.partner-contacts a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+}
+.partner-code {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+.partner-code > div {
+  display: grid;
+  gap: 2px;
+}
+.partner-code strong {
+  font-family: var(--font-heading);
+  font-size: 26px;
+  letter-spacing: 0.04em;
+}
+.talent-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+@media (min-width: 760px) {
+  .talent-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+.talent-card {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: 6px;
+  padding: 18px 12px 14px;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  animation: fade-up var(--dur-3) var(--ease-out) both;
+  transition: border-color var(--dur-2) var(--ease);
+}
+.talent-card:hover {
+  border-color: var(--border-strong);
+}
+.talent-rank {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-3);
+}
+.talent-name {
+  font-weight: 650;
+  max-width: 100%;
+}
+.talent-title {
+  font-size: 12.5px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.talent-score {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+}

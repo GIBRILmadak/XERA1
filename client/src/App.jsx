@@ -24,6 +24,10 @@ import CreatorSpace from './pages/CreatorSpace';
 import Analytics from './pages/Analytics';
 import Live from './pages/Live';
 import LiveCreate from './pages/LiveCreate';
+import ProPage from './pages/ProPage';
+import PageCreate from './pages/PageCreate';
+import Partners from './pages/Partners';
+import Talents from './pages/Talents';
 
 function RequireAuth({ children }) {
   const { user, loading } = useAuth();
@@ -57,6 +61,16 @@ function LegacyStream() {
   const { search } = useLocation();
   const id = new URLSearchParams(search).get('id');
   return <Navigate to={id ? `/live/${encodeURIComponent(id)}` : '/explorer'} replace />;
+}
+
+/** Anciens liens de pages pro : /pagepro?user=<id> ou /pagepro/<slug>. */
+function LegacyProPage() {
+  const { search } = useLocation();
+  const { slug } = useParams();
+  const params = new URLSearchParams(search);
+  if (params.get('explorer') === '1') return <Navigate to="/talents" replace />;
+  const target = slug || params.get('user') || params.get('id') || params.get('pro');
+  return <Navigate to={target ? `/page/${encodeURIComponent(target)}` : '/explorer'} replace />;
 }
 
 function NotFound() {
@@ -141,6 +155,13 @@ export default function App() {
               <Route path="live/:id" element={<Live />} />
               <Route path="stream" element={<LegacyStream />} />
               <Route path="create-stream" element={<Navigate to="/live/nouveau" replace />} />
+              <Route path="page/:slug" element={<ProPage />} />
+              <Route path="pages/nouvelle" element={<RequireAuth><PageCreate /></RequireAuth>} />
+              <Route path="pagepro" element={<LegacyProPage />} />
+              <Route path="pagepro/:slug" element={<LegacyProPage />} />
+              <Route path="partenaires" element={<RequireAuth><Partners /></RequireAuth>} />
+              <Route path="commissions" element={<Navigate to="/partenaires" replace />} />
+              <Route path="talents" element={<Talents />} />
               <Route path="statistiques" element={<RequireAuth><Analytics /></RequireAuth>} />
               <Route path="analytics" element={<Navigate to="/statistiques" replace />} />
               <Route path="verification" element={<Navigate to="/abonnements" replace />} />

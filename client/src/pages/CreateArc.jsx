@@ -16,6 +16,7 @@ export default function CreateArc() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const fataChallenge = params.get('fata') || '';
+  const pageId = params.get('page') || '';
   const minMilestones = fataChallenge ? 3 : 1;
 
   const [form, setForm] = useState({ title: '', goal: '', description: '', stage_level: 'idee', end: '' });
@@ -51,6 +52,7 @@ export default function CreateArc() {
         start_date: start.toISOString(),
         media_url: cover?.url,
         media_type: cover?.type,
+        page_id: pageId || null,
       });
       // Trace de lancement (jour 0), comme l'ancienne interface. Sans média :
       // elle ne doit jamais compter comme preuve pour un challenge.

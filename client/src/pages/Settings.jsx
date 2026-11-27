@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react';
+import { getMyPages } from '../services/pages';
 import { Link, useNavigate } from 'react-router-dom';
 import { TopBar } from '../components/Shell';
 import Icon from '../components/Icon';
@@ -7,6 +9,19 @@ import { useUi } from '../contexts/UiContext';
 
 /** Pages encore servies par l'ancienne interface (migration progressive). */
 const LEGACY = [{ to: '/live/nouveau', icon: 'sensors', title: 'Lancer un live', sub: 'Diffuser votre travail en direct' }];
+
+/** Lien vers la page pro de l'utilisateur, ou vers la création s'il n'en a pas. */
+function ProPageRow({ userId }) {
+  const [page, setPage] = useState(undefined);
+  useEffect(() => {
+    getMyPages(userId).then((list) => setPage(list[0] || null)).catch(() => setPage(null));
+  }, [userId]);
+  return page ? (
+    <Row to={`/page/${page.slug || page.id}`} icon="apartment" title={page.name} sub="Gérer ma page professionnelle" />
+  ) : (
+    <Row to="/pages/nouvelle" icon="apartment" title="Créer une page pro" sub="La page de votre entreprise ou organisation" />
+  );
+}
 
 function Row({ to, href, icon, title, sub, onClick, trailing, danger }) {
   const content = (
@@ -66,6 +81,9 @@ export default function Settings() {
           <Row to="/fata" icon="emoji_events" title="Challenge Fata" sub="Compte relié, ARC et étapes" />
           <Row to="/abonnements" icon="workspace_premium" title="Abonnements XERA" sub="Standard, Medium, Pro, Elite" />
           <Row to="/espace-createur" icon="account_balance_wallet" title="Espace créateur" sub="Soutiens, portefeuille et retraits" />
+          {user && <ProPageRow userId={user.id} />}
+          <Row to="/partenaires" icon="handshake" title="Console partenaire" sub="Commissions et code de réduction" />
+          <Row to="/talents" icon="person_search" title="Talent Explorer" sub="Les profils classés par élan" />
           <Row to="/statistiques" icon="insights" title="Statistiques" sub="Score d’élan, activité, analyse du compte" />
           <Row to="/abonnements" icon="verified" title="Vérification du compte" sub="Badge vérifié bleu ou Gold" />
         </section>

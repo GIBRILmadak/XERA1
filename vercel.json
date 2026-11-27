@@ -97,6 +97,22 @@
             "destination": "/client/dist/index.html"
         },
         {
+            "source": "/talents",
+            "destination": "/client/dist/index.html"
+        },
+        {
+            "source": "/partenaires",
+            "destination": "/client/dist/index.html"
+        },
+        {
+            "source": "/pages/:path*",
+            "destination": "/client/dist/index.html"
+        },
+        {
+            "source": "/page/:path*",
+            "destination": "/client/dist/index.html"
+        },
+        {
             "source": "/abonnements",
             "destination": "/client/dist/index.html"
         },
@@ -122,7 +138,7 @@
         },
         {
             "source": "/commissions",
-            "destination": "/commissions.html"
+            "destination": "/client/dist/index.html"
         },
         {
             "source": "/admin",
@@ -166,11 +182,11 @@
         },
         {
             "source": "/pagepro",
-            "destination": "/profile.html"
+            "destination": "/client/dist/index.html"
         },
         {
             "source": "/pagepro/:path*",
-            "destination": "/profile.html"
+            "destination": "/client/dist/index.html"
         }
     ],
     "crons": [

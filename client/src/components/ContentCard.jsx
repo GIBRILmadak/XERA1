@@ -26,7 +26,9 @@ export default function ContentCard({ content, encouraged = false, milestone, in
   const [on, setOn] = useState(encouraged);
   const [count, setCount] = useState(Number(content.encouragements_count ?? content.encouragements ?? 0));
   const [expanded, setExpanded] = useState(false);
-  const author = content.users || {};
+  const isPagePost = content.author_type === 'PAGE_PRO' && content.page;
+  const author = isPagePost ? { id: content.page.id, name: content.page.name, avatar: content.page.avatar_url } : content.users || {};
+  const authorLink = isPagePost ? `/page/${content.page.slug || content.page.id}` : `/u/${content.user_id}`;
   const arc = content.arcs;
   const media = content.media_url || content.media_urls?.[0];
   const isVideo = content.type === 'video' || /\.(mp4|webm|mov)(\?|$)/i.test(media || '');
@@ -90,10 +92,18 @@ export default function ContentCard({ content, encouraged = false, milestone, in
   return (
     <article ref={cardRef} className="post card" style={{ animationDelay: `${Math.min(index, 6) * 40}ms` }}>
       <header className="post-head">
-        <Link to={`/u/${content.user_id}`} className="row grow" style={{ minWidth: 0 }}>
+        <Link to={authorLink} className="row grow" style={{ minWidth: 0 }}>
           <Avatar user={author} size={42} />
           <div className="grow">
-            <UserName user={author} className="post-author" />
+            {isPagePost ? (
+              <span className="row post-author" style={{ gap: 6 }}>
+                {author.name}
+                {content.page.is_verified && <img src="/icons/verify_page.svg" alt="Page vérifiée" style={{ width: 16, height: 16 }} />}
+                <span className="pro-tag">PRO</span>
+              </span>
+            ) : (
+              <UserName user={author} className="post-author" />
+            )}
             <div className="post-meta">
               {content.day_number != null && <span>Jour {content.day_number}</span>}
               {content.day_number != null && <span aria-hidden="true">·</span>}
@@ -123,6 +133,11 @@ export default function ContentCard({ content, encouraged = false, milestone, in
           <button className="more" onClick={() => setExpanded((v) => !v)}>
             {expanded ? 'Voir moins' : 'Voir plus'}
           </button>
+        )}
+        {content.is_validated_pro && content.validator && (
+          <Link to={`/page/${content.validator.slug || content.validator.id}`} className="post-seal">
+            <Icon name="workspace_premium" filled size={18} /> Validé par {content.validator.name}
+          </Link>
         )}
         {milestone && (
           <div className="post-milestone">
