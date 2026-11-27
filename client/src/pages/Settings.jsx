@@ -108,8 +108,8 @@ export default function Settings() {
         <section className="card settings-group">
           <h2>Informations</h2>
           <Row to="/credits" icon="favorite" title="Remerciements" sub="Ceux grâce à qui XERA1 existe" />
-          <Row href="/cgu" icon="gavel" title="Conditions d’utilisation" />
-          <Row href="/privacy" icon="shield_person" title="Confidentialité" />
+          <Row to="/cgu" icon="gavel" title="Conditions d’utilisation" />
+          <Row to="/privacy" icon="shield_person" title="Confidentialité" />
         </section>
 
         {user && (

@@ -57,14 +57,50 @@ export async function fetchEncouraged(userId, contentIds) {
   return new Set((data || []).map((r) => r.content_id));
 }
 
-export async function setEncouragement(userId, contentId, on) {
-  if (DEMO) return;
-  if (on) {
-    const { error } = await supabase.from('content_encouragements').insert({ user_id: userId, content_id: contentId });
-    if (error && error.code !== '23505') throw error;
-  } else {
-    unwrap(await supabase.from('content_encouragements').delete().eq('user_id', userId).eq('content_id', contentId));
+/**
+ * Encourager / retirer l'encouragement : fonction toggle_courage de la base
+ * (comme l'ancienne interface) — enregistre ET met à jour encouragements_count.
+ * Renvoie { count, encouraged }.
+ */
+export async function toggleEncouragement(userId, contentId) {
+  if (DEMO) return null;
+  const { data, error } = await supabase.rpc('toggle_courage', { row_id: contentId, user_id_param: userId });
+  if (error) throw error;
+  return { count: Number(data?.count ?? 0), encouraged: Boolean(data?.encouraged) };
+}
+
+// Encouragements de l'utilisateur, chargés par lots (une requête pour toutes les cartes visibles).
+const encQueue = new Map();
+let encTimer = null;
+export function isEncouraged(userId, contentId) {
+  if (DEMO || !userId || !contentId) return Promise.resolve(false);
+  return new Promise((resolve) => {
+    encQueue.set(contentId, [...(encQueue.get(contentId) || []), resolve]);
+    clearTimeout(encTimer);
+    encTimer = setTimeout(async () => {
+      const batch = new Map(encQueue);
+      encQueue.clear();
+      const ids = [...batch.keys()];
+      const { data } = await supabase.from('content_encouragements').select('content_id').eq('user_id', userId).in('content_id', ids);
+      const on = new Set((data || []).map((r) => r.content_id));
+      batch.forEach((resolvers, id) => resolvers.forEach((r) => r(on.has(id))));
+    }, 40);
+  });
+}
+
+/** Vue comptée une fois par publication et par session (increment_views). */
+export function countView(contentId) {
+  if (DEMO || !contentId) return;
+  try {
+    const key = 'xera-viewed';
+    const seen = new Set(JSON.parse(sessionStorage.getItem(key) || '[]'));
+    if (seen.has(contentId)) return;
+    seen.add(contentId);
+    sessionStorage.setItem(key, JSON.stringify([...seen].slice(-500)));
+  } catch {
+    /* compteur au mieux */
   }
+  supabase.rpc('increment_views', { row_id: contentId }).then(() => {});
 }
 
 // ---------------------------------------------------------------- ARC

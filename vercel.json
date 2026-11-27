@@ -29,10 +29,6 @@
             "destination": "/client/dist/medias/:path*"
         },
         {
-            "source": "/index.html",
-            "destination": "/app-legacy.html"
-        },
-        {
             "source": "/",
             "destination": "/api/home"
         },
@@ -42,7 +38,7 @@
         },
         {
             "source": "/login",
-            "destination": "/login.html"
+            "destination": "/client/dist/index.html"
         },
         {
             "source": "/explorer",
@@ -170,15 +166,15 @@
         },
         {
             "source": "/cgu",
-            "destination": "/cgu.html"
+            "destination": "/client/dist/index.html"
         },
         {
             "source": "/privacy",
-            "destination": "/privacy.html"
+            "destination": "/client/dist/index.html"
         },
         {
             "source": "/404",
-            "destination": "/404.html"
+            "destination": "/client/dist/index.html"
         },
         {
             "source": "/pagepro",
@@ -186,6 +182,10 @@
         },
         {
             "source": "/pagepro/:path*",
+            "destination": "/client/dist/index.html"
+        },
+        {
+            "source": "/((?!api/|assets/|icons/|medias/|client/|manifest.json|robots.txt|sw.js|favicon).*)",
             "destination": "/client/dist/index.html"
         }
     ],
@@ -200,5 +200,127 @@
         }
     ],
     "buildCommand": "npm --prefix client ci --no-audit --no-fund && npm --prefix client run build",
-    "outputDirectory": "."
+    "outputDirectory": ".",
+    "redirects": [
+        {
+            "source": "/index.html",
+            "destination": "/",
+            "permanent": false
+        },
+        {
+            "source": "/app-legacy.html",
+            "destination": "/",
+            "permanent": false
+        },
+        {
+            "source": "/login.html",
+            "destination": "/connexion",
+            "permanent": false
+        },
+        {
+            "source": "/profile.html",
+            "destination": "/profile",
+            "permanent": false
+        },
+        {
+            "source": "/profile-personal.html",
+            "destination": "/profile",
+            "permanent": false
+        },
+        {
+            "source": "/messages.html",
+            "destination": "/messages",
+            "permanent": false
+        },
+        {
+            "source": "/stream.html",
+            "destination": "/stream",
+            "permanent": false
+        },
+        {
+            "source": "/create-stream.html",
+            "destination": "/live/nouveau",
+            "permanent": false
+        },
+        {
+            "source": "/creator-dashboard.html",
+            "destination": "/espace-createur",
+            "permanent": false
+        },
+        {
+            "source": "/analytics.html",
+            "destination": "/statistiques",
+            "permanent": false
+        },
+        {
+            "source": "/commissions.html",
+            "destination": "/partenaires",
+            "permanent": false
+        },
+        {
+            "source": "/credits.html",
+            "destination": "/credits",
+            "permanent": false
+        },
+        {
+            "source": "/subscription-plans.html",
+            "destination": "/abonnements",
+            "permanent": false
+        },
+        {
+            "source": "/premium-plans.html",
+            "destination": "/abonnements",
+            "permanent": false
+        },
+        {
+            "source": "/kpay-payments.html",
+            "destination": "/espace-createur",
+            "permanent": false
+        },
+        {
+            "source": "/verification.html",
+            "destination": "/abonnements",
+            "permanent": false
+        },
+        {
+            "source": "/admin.html",
+            "destination": "/admin",
+            "permanent": false
+        },
+        {
+            "source": "/badges-admin.html",
+            "destination": "/badges-admin",
+            "permanent": false
+        },
+        {
+            "source": "/cgu.html",
+            "destination": "/cgu",
+            "permanent": false
+        },
+        {
+            "source": "/privacy.html",
+            "destination": "/privacy",
+            "permanent": false
+        },
+        {
+            "source": "/404.html",
+            "destination": "/",
+            "permanent": false
+        },
+        {
+            "source": "/video.html",
+            "destination": "/",
+            "permanent": false
+        },
+        {
+            "source": "/video-promo.html",
+            "destination": "/",
+            "permanent": false
+        },
+        {
+            "source": "/video-promo-mobile.html",
+            "destination": "/",
+            "permanent": false
+        }
+    ]
 }

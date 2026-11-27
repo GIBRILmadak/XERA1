@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import Icon from '../components/Icon';
 import { Brand } from '../components/Shell';
 import { Button } from '../components/ui';
@@ -20,9 +20,10 @@ function GoogleLogo() {
 }
 
 const SLIDES = [
-  { art: 'launch', title: 'Lancez vos projets', text: 'Un ARC, des jalons, et une preuve à chaque avancée.' },
+  { art: 'signup', title: 'Lancez vos projets', text: 'Un ARC, des jalons, et une preuve à chaque avancée.' },
   { art: 'proof', title: 'Montrez des preuves', text: 'Photos, vidéos, résultats : votre travail parle pour vous.' },
-  { art: 'community', title: 'Attirez les bonnes personnes', text: 'Collaborateurs, investisseurs et soutien de la communauté.' },
+  { art: 'support', title: 'Attirez les bonnes personnes', text: 'Collaborateurs, investisseurs et soutien de la communauté.' },
+  { art: 'milestone', title: 'Franchissez vos jalons', text: 'Chaque étape validée vous rapproche de votre objectif… et du palier suivant.' },
 ];
 
 /** Panneau illustré et animé de la page de connexion / inscription. */
@@ -218,7 +219,7 @@ export default function Login() {
                 </button>
               ) : (
                 <p className="muted" style={{ fontSize: 12.5 }}>
-                  En continuant, vous acceptez les <a href="/cgu" style={{ textDecoration: 'underline' }}>conditions</a> et la <a href="/privacy" style={{ textDecoration: 'underline' }}>politique de confidentialité</a>.
+                  En continuant, vous acceptez les <Link to="/cgu" style={{ textDecoration: 'underline' }}>conditions</Link> et la <Link to="/privacy" style={{ textDecoration: 'underline' }}>politique de confidentialité</Link>.
                 </p>
               )}
             </div>

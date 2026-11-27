@@ -4,13 +4,14 @@ import { Link } from 'react-router-dom';
 import Icon from './Icon';
 import { Avatar, Badge, IconButton, UserName } from './ui';
 import { compact, STATE_META, timeAgo } from '../lib/format';
-import { setEncouragement } from '../services/data';
+import { countView, isEncouraged, toggleEncouragement } from '../services/data';
 import { useAuth } from '../contexts/AuthContext';
 import { useUi } from '../contexts/UiContext';
 import { PUBLIC_SITE } from '../services/api';
 import { SUPER_ADMIN_ID } from '../services/badges';
 import { setTraceValidation } from '../services/pages';
 import { useMyPages } from '../hooks/useMyPages';
+import MediaViewer from './MediaViewer';
 import { supabase } from '../services/supabase';
 
 export function StateBadge({ state }) {
@@ -24,13 +25,29 @@ export function StateBadge({ state }) {
 }
 
 /** Carte d'une preuve (trace de progression) dans le fil. */
-export default function ContentCard({ content, encouraged = false, milestone, index = 0, allowValidation = false }) {
+export default function ContentCard({ content, encouraged, milestone, index = 0, allowValidation = false }) {
   const { user } = useAuth();
   const { toast } = useUi();
-  const [on, setOn] = useState(encouraged);
+  const [on, setOn] = useState(Boolean(encouraged));
+  const [busyEnc, setBusyEnc] = useState(false);
+
+  // État réel relu depuis la base (après actualisation, il reste « encouragé »).
+  useEffect(() => {
+    if (encouraged !== undefined) {
+      setOn(Boolean(encouraged));
+      return undefined;
+    }
+    if (!user) return undefined;
+    let alive = true;
+    isEncouraged(user.id, content.id).then((v) => alive && setOn(v));
+    return () => {
+      alive = false;
+    };
+  }, [user, content.id, encouraged]);
   const [count, setCount] = useState(Number(content.encouragements_count ?? content.encouragements ?? 0));
   const [expanded, setExpanded] = useState(false);
   const [removed, setRemoved] = useState(false);
+  const [viewer, setViewer] = useState(null);
   const [validation, setValidation] = useState({ valid: Boolean(content.is_validated_pro), pageId: content.validated_by_page_id || content.validator?.id || null, validator: content.validator || null });
   // Sceau de validation : le propriétaire d'une page pro peut valider la preuve d'un autre membre.
   const myPages = useMyPages(allowValidation && user && content.author_type !== 'PAGE_PRO' && user.id !== content.user_id ? user.id : null);
@@ -76,6 +93,7 @@ export default function ContentCard({ content, encouraged = false, milestone, in
         clearTimeout(timer);
         if (e.isIntersecting) {
           timer = setTimeout(() => {
+            countView(content.id);
             recordInteraction(user.id, content, 'view');
             io.disconnect();
           }, 1500);
@@ -95,16 +113,25 @@ export default function ContentCard({ content, encouraged = false, milestone, in
       toast('info', 'Connectez-vous', 'Créez un compte pour encourager les bâtisseurs.');
       return;
     }
+    if (busyEnc) return;
     const next = !on;
     if (next) recordInteraction(user.id, content, 'like');
     setOn(next);
-    setCount((c) => c + (next ? 1 : -1));
+    setCount((c) => Math.max(0, c + (next ? 1 : -1)));
+    setBusyEnc(true);
     try {
-      await setEncouragement(user.id, content.id, next);
+      const res = await toggleEncouragement(user.id, content.id);
+      // La base fait foi : état et total renvoyés par toggle_courage.
+      if (res) {
+        setOn(res.encouraged);
+        setCount(res.count);
+      }
     } catch {
       setOn(!next);
-      setCount((c) => c + (next ? -1 : 1));
+      setCount((c) => Math.max(0, c + (next ? -1 : 1)));
       toast('error', 'Action impossible', 'Réessayez dans un instant.');
+    } finally {
+      setBusyEnc(false);
     }
   }
 
@@ -122,8 +149,15 @@ export default function ContentCard({ content, encouraged = false, milestone, in
   }
 
   if (removed) return null;
+  const gallery = [...new Set([media, ...(content.media_urls || [])].filter(Boolean))];
   return (
-    <article ref={cardRef} className="post card" style={{ animationDelay: `${Math.min(index, 6) * 40}ms` }}>
+    <article ref={cardRef} className={`post card is-${content.state || 'pause'}`} style={{ animationDelay: `${Math.min(index, 6) * 40}ms` }}>
+      {content.day_number != null && content.day_number > 0 && (
+        <span className="post-day" title={`Jour ${content.day_number} du projet`}>
+          <small>Jour</small>
+          {content.day_number}
+        </span>
+      )}
       <header className="post-head">
         <Link to={authorLink} className="row grow" style={{ minWidth: 0 }}>
           <Avatar user={author} size={42} />
@@ -180,11 +214,16 @@ export default function ContentCard({ content, encouraged = false, milestone, in
       </div>
 
       {media && (
-        <div className="post-media">
+        <div className={`post-media${gallery.length > 1 ? ' is-gallery' : ''}`}>
           {isVideo ? (
             <video src={media} poster={content.metadata?.poster_url || undefined} controls playsInline preload="metadata" />
           ) : (
-            <img src={media} alt={content.title || 'Preuve'} loading="lazy" />
+            gallery.slice(0, 4).map((src, i) => (
+              <button key={src} type="button" className="post-media-item" onClick={() => setViewer(src)} aria-label="Voir la photo en grand">
+                <img src={src} alt={content.title || 'Preuve'} loading="lazy" />
+                {i === 3 && gallery.length > 4 && <span className="post-media-more">+{gallery.length - 4}</span>}
+              </button>
+            ))
           )}
         </div>
       )}
@@ -202,6 +241,7 @@ export default function ContentCard({ content, encouraged = false, milestone, in
           })}
         </div>
       )}
+      <MediaViewer src={viewer} alt={content.title} onClose={() => setViewer(null)} />
       <footer className="post-actions">
         <button className={`react${on ? ' is-on' : ''}`} onClick={toggle} aria-pressed={on}>
           <Icon name="local_fire_department" filled={on} />

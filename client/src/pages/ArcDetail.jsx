@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { TopBar } from '../components/Shell';
 import Icon from '../components/Icon';
 import ContentCard from '../components/ContentCard';
+import MediaViewer from '../components/MediaViewer';
 import { Avatar, Badge, Button, CardSkeleton, EmptyState, IconLink, Sheet, UserName } from '../components/ui';
 import { useAuth } from '../contexts/AuthContext';
 import { useUi } from '../contexts/UiContext';
@@ -99,6 +100,7 @@ export default function ArcDetail() {
   const [proofs, setProofs] = useState([]);
   const [validations, setValidations] = useState([]);
   const [sheet, setSheet] = useState(false);
+  const [viewer, setViewer] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -146,7 +148,10 @@ export default function ArcDetail() {
       <TopBar back title={arc.title} actions={isOwner && <IconLink to={`/creer/preuve?arc=${arc.id}`} icon="add_photo_alternate" label="Ajouter une preuve" />} />
       <main className="main">
         <section className="arc-hero">
-          <div className="cover">{arc.media_url ? <img src={arc.media_url} alt="" /> : <div className="arc-cover-fallback" style={{ height: '100%' }}><Icon name="flag" size={48} /></div>}</div>
+          <div className="cover" onClick={() => arc.media_url && setViewer(arc.media_url)} role={arc.media_url ? 'button' : undefined} aria-label={arc.media_url ? 'Voir la couverture en grand' : undefined}>
+            {arc.media_url ? <img src={arc.media_url} alt="" /> : <div className="arc-cover-fallback" style={{ height: '100%' }}><Icon name="flag" size={48} /></div>}
+          </div>
+          <MediaViewer src={viewer} alt={arc.title} onClose={() => setViewer(null)} />
         </section>
         <div className="arc-title-block">
           <div className="row" style={{ flexWrap: 'wrap', gap: 6 }}>

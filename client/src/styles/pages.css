@@ -2370,3 +2370,350 @@ video.dm-media {
   border-color: var(--border-strong);
   color: var(--text-2);
 }
+
+/* ================= Pages légales ================= */
+.legal h1 {
+  font-size: 26px;
+  margin: 10px 0 16px;
+}
+.legal h2 {
+  font-size: 18px;
+  margin: 26px 0 8px;
+  scroll-margin-top: 80px;
+}
+.legal h3 {
+  font-size: 15.5px;
+  margin: 16px 0 6px;
+}
+.legal p {
+  color: var(--text-2);
+  margin: 6px 0;
+  line-height: 1.65;
+}
+.legal-li {
+  padding-left: 18px;
+  position: relative;
+}
+.legal-li::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 0.7em;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--text-3);
+}
+.legal-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: var(--r-md);
+  display: grid;
+  place-items: center;
+  background: var(--surface-2);
+  margin-top: 8px;
+}
+.legal-toc {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.legal-toc a {
+  color: var(--text-2);
+  font-size: 14px;
+}
+.legal-toc a:hover {
+  color: var(--text);
+}
+
+/* ================= Messagerie façon WhatsApp ================= */
+.is-chat .app,
+.chat {
+  --wa-me: #005c4b;
+  --wa-me-text: #e9fff5;
+  --wa-other: #202c33;
+  --wa-bg: #0b141a;
+  --wa-doodle: rgba(255, 255, 255, 0.035);
+}
+:root[data-theme="light"] .chat {
+  --wa-me: #d9fdd3;
+  --wa-me-text: #111b21;
+  --wa-other: #ffffff;
+  --wa-bg: #efeae2;
+  --wa-doodle: rgba(0, 0, 0, 0.045);
+}
+.chat {
+  background-color: var(--wa-bg);
+  background-image:
+    radial-gradient(var(--wa-doodle) 1.4px, transparent 1.4px),
+    radial-gradient(var(--wa-doodle) 1px, transparent 1px);
+  background-size:
+    26px 26px,
+    13px 13px;
+  background-position:
+    0 0,
+    6px 9px;
+}
+.chat-log {
+  gap: 2px;
+  padding-top: 12px;
+}
+.chat-day {
+  padding: 5px 12px;
+  border-radius: 8px;
+  background: var(--wa-other);
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 500;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.14);
+  margin: 12px 0 8px;
+}
+.bubble {
+  position: relative;
+  max-width: min(78%, 520px);
+  padding: 6px 9px 7px 10px;
+  border-radius: 10px;
+  background: var(--wa-other);
+  color: var(--text);
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.16);
+  margin-top: 6px;
+  font-size: 14.5px;
+  line-height: 1.4;
+}
+.bubble.is-cont {
+  margin-top: 1px;
+}
+.bubble:not(.is-cont).is-me {
+  border-top-right-radius: 0;
+}
+.bubble:not(.is-cont):not(.is-me) {
+  border-top-left-radius: 0;
+}
+.bubble:not(.is-cont)::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -7px;
+  border-top: 9px solid var(--wa-other);
+  border-left: 8px solid transparent;
+}
+.bubble.is-me {
+  background: var(--wa-me);
+  color: var(--wa-me-text);
+}
+.bubble.is-me:not(.is-cont)::before {
+  left: auto;
+  right: -7px;
+  border-left: 0;
+  border-top-color: var(--wa-me);
+  border-right: 8px solid transparent;
+}
+.bubble-meta {
+  float: right;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin: 6px 0 -4px 10px;
+  font-size: 11px;
+  opacity: 0.7;
+  white-space: nowrap;
+}
+.bubble-meta em {
+  font-style: normal;
+}
+.ticks {
+  color: inherit;
+  opacity: 0.75;
+}
+.ticks.is-read {
+  color: #53bdeb;
+  opacity: 1;
+}
+.bubble-quote {
+  border-left-color: #06cf9c;
+  background: rgba(0, 0, 0, 0.14);
+}
+.composer {
+  background: var(--wa-bg);
+  border-top: 0;
+}
+.composer textarea {
+  border-radius: 22px;
+  background: var(--wa-other);
+  border-color: transparent;
+}
+.send-btn {
+  border-radius: 50%;
+  background: #00a884;
+  color: #fff;
+}
+.composer-context {
+  background: var(--wa-other);
+}
+.inbox-item .time.is-unread {
+  color: #00a884;
+  font-weight: 600;
+}
+.inbox-item .unread {
+  background: #00a884;
+  color: #fff;
+}
+.inbox-item .ticks {
+  color: var(--text-3);
+}
+.inbox-item .ticks.is-read {
+  color: #53bdeb;
+}
+.chat .bubble {
+  display: block;
+}
+.bubble > .dm-media,
+.bubble > .bubble-quote {
+  margin-bottom: 5px;
+}
+
+/* ================= Style XERA des preuves et des ARC ================= */
+.post {
+  position: relative;
+  border-left: 3px solid var(--state, var(--border-strong));
+  transition:
+    transform var(--dur-2) var(--ease),
+    border-color var(--dur-2) var(--ease);
+}
+.post:hover {
+  transform: translateY(-2px);
+}
+.post.is-success {
+  --state: var(--success);
+}
+.post.is-failure {
+  --state: var(--failure);
+}
+.post.is-pause {
+  --state: var(--pause);
+}
+.post-day {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  display: grid;
+  justify-items: center;
+  line-height: 1;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--state);
+}
+.post-day small {
+  font-family: var(--font-body);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+.post:has(.post-day) .post-head .badge {
+  margin-right: 34px;
+}
+.post-media {
+  margin: 0 12px;
+  border: 0;
+  border-radius: var(--r-md);
+  overflow: hidden;
+  background: #000;
+}
+.post-media.is-gallery {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px;
+  background: var(--bg);
+}
+.post-media-item {
+  position: relative;
+  display: block;
+  width: 100%;
+  cursor: zoom-in;
+  overflow: hidden;
+}
+.post-media-item img {
+  width: 100%;
+  max-height: 560px;
+  object-fit: cover;
+  transition: transform 600ms var(--ease);
+}
+.post-media.is-gallery .post-media-item img {
+  aspect-ratio: 1;
+  height: 100%;
+}
+.post-media-item:hover img {
+  transform: scale(1.03);
+}
+.post-media-more {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-family: var(--font-heading);
+  font-size: 26px;
+  font-weight: 700;
+}
+.post-actions {
+  padding: 8px 10px 10px;
+}
+.post-actions .react {
+  border: 1px solid var(--border);
+}
+.arc-card {
+  position: relative;
+}
+.arc-cover::after {
+  content: "";
+  position: absolute;
+  inset: 40% 0 0;
+  background: linear-gradient(180deg, transparent, rgba(5, 5, 5, 0.55));
+}
+.arc-cover img {
+  transition: transform 800ms var(--ease);
+}
+.arc-card:hover .arc-cover img {
+  transform: scale(1.05);
+}
+.arc-path {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin: 2px 0;
+}
+.arc-path span {
+  flex: 1;
+  height: 3px;
+  background: var(--surface-3);
+  position: relative;
+}
+.arc-path span::after {
+  content: "";
+  position: absolute;
+  right: -5px;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  margin-top: -5px;
+  border-radius: 50%;
+  background: var(--surface-3);
+  border: 2px solid var(--card-bg);
+  z-index: 1;
+}
+.arc-path span.is-done,
+.arc-path span.is-done::after {
+  background: var(--success);
+}
+.arc-path span.is-next::after {
+  background: var(--card-bg);
+  border-color: var(--violet);
+  animation: lp-pulse 2s infinite;
+}
+.arc-hero .cover {
+  cursor: zoom-in;
+}
