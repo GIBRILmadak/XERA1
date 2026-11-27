@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { recordInteraction } from '../services/feedAlgo';
 import { Link } from 'react-router-dom';
 import Icon from './Icon';
-import { Avatar, Badge, IconButton, UserName } from './ui';
+import { Avatar, Badge, Button, IconButton, Sheet, UserName } from './ui';
 import { compact, displayName, STATE_META, timeAgo } from '../lib/format';
-import { countView, isEncouraged, toggleEncouragement } from '../services/data';
+import { countView, deleteContent, isEncouraged, toggleEncouragement, updateContent } from '../services/data';
 import { useAuth } from '../contexts/AuthContext';
 import { useUi } from '../contexts/UiContext';
 import { PUBLIC_SITE } from '../services/api';
@@ -49,6 +49,33 @@ export default function ContentCard({ content, encouraged, milestone, index = 0,
   const [expanded, setExpanded] = useState(false);
   const [removed, setRemoved] = useState(false);
   const [viewer, setViewer] = useState(null);
+  const [menu, setMenu] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [local, setLocal] = useState({});
+  const mine = user && user.id === content.user_id && !content.page;
+
+  async function saveEdit(e) {
+    e.preventDefault();
+    try {
+      await updateContent(content.id, { title: editing.title.trim(), description: editing.description.trim(), state: editing.state });
+      setLocal({ title: editing.title.trim(), description: editing.description.trim(), state: editing.state });
+      setEditing(null);
+      toast('success', 'Preuve modifiée');
+    } catch (err) {
+      toast('error', 'Modification impossible', err.message);
+    }
+  }
+  async function remove() {
+    setMenu(false);
+    if (!window.confirm('Supprimer cette preuve ? Cette action est irréversible.')) return;
+    try {
+      await deleteContent(content.id);
+      setRemoved(true);
+      toast('success', 'Preuve supprimée');
+    } catch (err) {
+      toast('error', 'Suppression impossible', err.message);
+    }
+  }
   const [validation, setValidation] = useState({ valid: Boolean(content.is_validated_pro), pageId: content.validated_by_page_id || content.validator?.id || null, validator: content.validator || null });
   // Sceau de validation : le propriétaire d'une page pro peut valider la preuve d'un autre membre.
   const myPages = useMyPages(allowValidation && user && content.author_type !== 'PAGE_PRO' && user.id !== content.user_id ? user.id : null);
@@ -150,6 +177,7 @@ export default function ContentCard({ content, encouraged, milestone, index = 0,
   }
 
   if (removed) return null;
+  content = { ...content, ...local };
   const gallery = [...new Set([media, ...(content.media_urls || [])].filter(Boolean))];
   return (
     <article ref={cardRef} className={`post card is-${content.state || 'pause'}`} style={{ animationDelay: `${Math.min(index, 6) * 40}ms` }}>
@@ -243,6 +271,36 @@ export default function ContentCard({ content, encouraged, milestone, index = 0,
         </div>
       )}
       <MediaViewer src={viewer} alt={content.title} onClose={() => setViewer(null)} />
+      {mine && (
+        <>
+          <Sheet open={menu} onClose={() => setMenu(false)} title="Ma preuve">
+            <div className="list">
+              <button className="list-item" onClick={() => { setMenu(false); setEditing({ title: content.title || '', description: content.description || '', state: content.state || 'success' }); }}>
+                <Icon name="edit" /> <span className="grow">Modifier</span>
+              </button>
+              <button className="list-item" onClick={remove} style={{ color: 'var(--failure)' }}>
+                <Icon name="delete" /> <span className="grow">Supprimer</span>
+              </button>
+            </div>
+          </Sheet>
+          <Sheet open={Boolean(editing)} onClose={() => setEditing(null)} title="Modifier la preuve">
+            {editing && (
+              <form className="stack" onSubmit={saveEdit}>
+                <div className="tabs">
+                  {Object.entries(STATE_META).map(([k, m]) => (
+                    <button key={k} type="button" className={`tab${editing.state === k ? ' is-active' : ''}`} onClick={() => setEditing({ ...editing, state: k })}>
+                      <Icon name={m.icon} /> {m.label}
+                    </button>
+                  ))}
+                </div>
+                <input className="input" value={editing.title} onChange={(e) => setEditing({ ...editing, title: e.target.value })} maxLength={120} required aria-label="Titre" />
+                <textarea className="textarea" value={editing.description} onChange={(e) => setEditing({ ...editing, description: e.target.value })} maxLength={3000} aria-label="Texte" />
+                <Button variant="primary" block icon="save">Enregistrer</Button>
+              </form>
+            )}
+          </Sheet>
+        </>
+      )}
       <footer className="post-actions">
         <button className={`react${on ? ' is-on' : ''}`} onClick={toggle} aria-pressed={on}>
           <Icon name="local_fire_department" filled={on} />
@@ -274,6 +332,7 @@ export default function ContentCard({ content, encouraged, milestone, index = 0,
           />
         )}
         {isAdmin && <IconButton icon="shield_person" label="Admin : masquer ce contenu" onClick={adminHide} />}
+        {mine && <IconButton icon="more_horiz" label="Gérer ma preuve" onClick={() => setMenu(true)} />}
         <IconButton icon="ios_share" label="Partager" onClick={share} />
       </footer>
     </article>

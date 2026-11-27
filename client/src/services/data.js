@@ -437,3 +437,25 @@ export async function markAllNotificationsRead(userId) {
 export { fetchInbox, openConversation } from './dm';
 
 export { demoMe };
+
+// ---------------------------------------------------------------- Modifier / supprimer (comme l'ancienne interface)
+
+export async function updateContent(contentId, fields) {
+  if (DEMO) return fields;
+  return unwrap(await supabase.from('content').update({ ...fields, updated_at: new Date().toISOString() }).eq('id', contentId).select('id').single());
+}
+
+export async function deleteContent(contentId) {
+  if (DEMO) return;
+  unwrap(await supabase.from('content').delete().eq('id', contentId));
+}
+
+export async function updateArc(arcId, fields) {
+  if (DEMO) return fields;
+  return unwrap(await supabase.from('arcs').update({ ...fields, updated_at: new Date().toISOString() }).eq('id', arcId).select('*').single());
+}
+
+export async function deleteArc(arcId) {
+  if (DEMO) return;
+  unwrap(await supabase.from('arcs').delete().eq('id', arcId));
+}
